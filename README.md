@@ -1,14 +1,16 @@
-# Movie Watch Player
+<p align="center"><img src="logo.svg" alt="CineTab logo" width="96" height="96"></p>
 
-A browser video player for movies stored on your own device. Open a movie in a tab, share that tab (with audio) in Google Meet, Zoom or Teams, and watch it together with friends.
+# CineTab
 
-The movie is never uploaded. The page uses the browser's File API to play the file straight from your disk, so the site is just static HTML/CSS/JS hosted on GitHub Pages.
+**Movie night on any video call.** CineTab plays a movie from your own computer in a browser tab. Share that tab (with audio) in Google Meet, Zoom or Teams and watch it together with friends.
+
+The movie is never uploaded. The page uses the browser's File API to play the file straight from your disk, so the site is just static HTML/CSS/JS hosted on GitHub Pages. The home page explains how it works; choosing or dropping a video switches the same page into the player.
 
 ## Watch together
 
-1. Open the site in **Chrome or Edge** on a desktop and pick a movie (or drag it onto the page).
+1. Open CineTab in **Chrome or Edge** on a desktop and pick a movie (or drag it onto the page).
 2. In Google Meet click **Share screen → Chrome Tab** (Zoom / Teams: **Share** and pick the tab).
-3. Choose this tab and turn on **Also share tab audio**.
+3. Choose the CineTab tab and turn on **Also share tab audio**.
 4. Press play. `F` gives fullscreen inside the tab.
 
 Don't use Picture-in-Picture while sharing: the video moves out of the tab and the people watching see an empty player.

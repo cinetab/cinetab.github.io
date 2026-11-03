@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Movie Watch Player</title>
-  <meta name="description" content="Play movies from your own device in a browser tab, then share the tab with audio in Google Meet, Zoom or Teams to watch together. Nothing is uploaded.">
+  <title>CineTab · Movie night on any video call</title>
+  <meta name="description" content="CineTab plays movies from your own device in a browser tab. Share the tab with audio in Google Meet, Zoom or Teams to watch together. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
-  <link rel="icon" href="movie.png"/>
+  <link rel="icon" href="logo.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <link rel="stylesheet" href="style.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- FontAwesome & Google Icons -->
@@ -14,12 +15,164 @@
 </head>
 <body>
 
+  <!-- ============ HOME PAGE ============ -->
+  <div class="home" id="top">
+
+    <header class="site-header">
+      <a class="brand" href="#top">
+        <img src="logo.svg" alt="" width="34" height="34">
+        <span>Cine<b>Tab</b></span>
+      </a>
+      <nav class="site-nav">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <button class="btn btn-primary btn-sm choose-video"><i class="fa-solid fa-play"></i> Open a movie</button>
+    </header>
+
+    <section class="hero">
+      <div class="hero-text">
+        <span class="eyebrow"><i class="fa-solid fa-lock"></i> Free &middot; Private &middot; No sign-up</span>
+        <h1>Movie night on <span class="gradient-text">any video call.</span></h1>
+        <p class="lead">CineTab plays a movie from your own computer right in this browser tab. Share the tab with audio in Google Meet, Zoom or Teams and everyone watches together.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg choose-video"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+          <a class="btn btn-ghost btn-lg" href="#how">How it works</a>
+        </div>
+        <p class="hero-note">Best in Chrome or Edge on desktop. Your video never leaves your device.</p>
+      </div>
+
+      <div class="hero-visual">
+        <div class="browser-mock" id="home-drop">
+          <div class="mock-tabbar">
+            <span class="mock-dots"><i></i><i></i><i></i></span>
+            <span class="mock-tab"><img src="logo.svg" alt="" width="14" height="14"> CineTab</span>
+            <span class="mock-share"><i class="fa-solid fa-volume-high"></i> Sharing tab audio</span>
+          </div>
+          <div class="mock-body">
+            <div class="drop-icon"><i class="fa-solid fa-film"></i></div>
+            <h2>Drop a movie here</h2>
+            <p>MP4, WebM or MKV &middot; add .srt subtitles anytime</p>
+            <button class="btn btn-primary choose-video"><i class="fa-solid fa-folder-open"></i> Choose video</button>
+          </div>
+        </div>
+        <div class="viewers">
+          <span class="avatar" style="--hue: 210">A</span>
+          <span class="avatar" style="--hue: 260">R</span>
+          <span class="avatar" style="--hue: 330">S</span>
+          <span class="avatar" style="--hue: 160">+3</span>
+          <p>Friends watch on the call &mdash; nothing to install</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="how">
+      <h2 class="section-title">Three steps to movie night</h2>
+      <div class="steps">
+        <article class="step">
+          <span class="step-num">1</span>
+          <h3>Choose a movie</h3>
+          <p>Pick a video from your computer or drag it onto the page. It opens instantly &mdash; nothing is uploaded.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">2</span>
+          <h3>Share this tab</h3>
+          <p>In your meeting choose <b>Share screen &rarr; Chrome Tab</b>, select CineTab and switch on <b>Also share tab audio</b>.</p>
+        </article>
+        <article class="step">
+          <span class="step-num">3</span>
+          <h3>Press play</h3>
+          <p>Everyone sees and hears the movie. Go fullscreen with <kbd>F</kbd> and turn on subtitles with <kbd>C</kbd>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <h2 class="section-title">Everything a movie night needs</h2>
+      <div class="features">
+        <article class="feature">
+          <i class="fa-solid fa-shield-halved"></i>
+          <h3>Stays on your device</h3>
+          <p>The file plays straight from your disk. No uploads, no accounts, no tracking.</p>
+        </article>
+        <article class="feature">
+          <i class="fa-regular fa-closed-captioning"></i>
+          <h3>Subtitles</h3>
+          <p>Drop an .srt or .vtt file on the player and toggle it with one key.</p>
+        </article>
+        <article class="feature">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <h3>Picks up where you left</h3>
+          <p>Reopen the same movie and it resumes from the exact moment you stopped.</p>
+        </article>
+        <article class="feature">
+          <i class="fa-solid fa-keyboard"></i>
+          <h3>Keyboard shortcuts</h3>
+          <p>Space, arrows, J / L, M, F &mdash; control everything without the mouse.</p>
+        </article>
+        <article class="feature">
+          <i class="fa-solid fa-images"></i>
+          <h3>Timeline preview</h3>
+          <p>Hover the progress bar to see a live preview before you jump.</p>
+        </article>
+        <article class="feature">
+          <i class="fa-solid fa-gauge-high"></i>
+          <h3>Speed &amp; Picture-in-Picture</h3>
+          <p>Change playback speed, or pop the movie out when watching solo.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <h2 class="section-title">Questions</h2>
+      <div class="faq">
+        <details>
+          <summary>Do my friends need to install anything?</summary>
+          <p>No. Only you open CineTab. Your friends just join the meeting and watch your shared tab.</p>
+        </details>
+        <details>
+          <summary>Is my movie uploaded anywhere?</summary>
+          <p>Never. CineTab is a static web page &mdash; the browser reads the file from your disk and plays it locally. Closing the tab leaves no copy behind.</p>
+        </details>
+        <details>
+          <summary>My friends can see the movie but can't hear it.</summary>
+          <p>Stop sharing and share again, choosing the <b>Chrome Tab</b> option and turning on <b>Also share tab audio</b>. Sharing a window or the entire screen doesn't send tab audio. Tab audio works in Chrome and Edge.</p>
+        </details>
+        <details>
+          <summary>The file won't play, or plays without sound.</summary>
+          <p>Browsers only decode some formats. MKV files often use AC3/DTS audio that browsers can't play. Convert to MP4 with H.264 video and AAC audio, for example with HandBrake.</p>
+        </details>
+        <details>
+          <summary>Should I use Picture-in-Picture while sharing?</summary>
+          <p>No &mdash; PiP moves the video out of the tab, so people on the call see an empty player. Use fullscreen instead.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <h2>Ready for movie night?</h2>
+      <p>Grab the popcorn, open a movie and share the tab.</p>
+      <button class="btn btn-primary btn-lg choose-video"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+    </section>
+
+    <footer class="site-footer">
+      <a class="brand brand-sm" href="#top">
+        <img src="logo.svg" alt="" width="24" height="24">
+        <span>Cine<b>Tab</b></span>
+      </a>
+      <p>Made for movie nights. Your files stay on your device.</p>
+    </footer>
+  </div>
+
+  <!-- ============ PLAYER ============ -->
+  <div class="player-page" hidden>
   <div class="container show-controls">
 
     <!-- Top Title Bar (YouTube Style) -->
     <div class="top-bar">
       <div class="video-title-container">
-        <i class="fa-solid fa-film"></i>
+        <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title">No Video Loaded</h1>
       </div>
       <button class="share-help-btn" title="How to watch together"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
@@ -67,10 +220,6 @@
         <button id="close-help-btn">Got it</button>
       </div>
     </div>
-
-    <!-- Hidden File Inputs -->
-    <input type="file" id="file-input" accept="video/*,.mkv" hidden>
-    <input type="file" id="subtitle-input" accept=".srt,.vtt" hidden>
 
     <!-- Main Video Element -->
     <video id="main-video" crossorigin="anonymous"></video>
@@ -129,6 +278,11 @@
       </ul>
     </div>
   </div>
+  </div>
+
+  <!-- Hidden File Inputs -->
+  <input type="file" id="file-input" accept="video/*,.mkv" hidden>
+  <input type="file" id="subtitle-input" accept=".srt,.vtt" hidden>
 
   <script src="script.js"></script>
 </body>

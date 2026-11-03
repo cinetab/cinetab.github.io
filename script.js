@@ -32,7 +32,13 @@ subtitleInput = document.querySelector("#subtitle-input"),
 subtitlesBtn = container.querySelector(".subtitles"),
 helpOverlay = document.querySelector("#help-overlay"),
 shareHelpBtn = container.querySelector(".share-help-btn"),
-closeHelpBtn = document.querySelector("#close-help-btn");
+closeHelpBtn = document.querySelector("#close-help-btn"),
+homePage = document.querySelector(".home"),
+playerPage = document.querySelector(".player-page"),
+homeDrop = document.querySelector("#home-drop"),
+playerHomeBtn = container.querySelector(".player-home"),
+chooseVideoBtns = document.querySelectorAll(".choose-video"),
+dropTargets = [uploadBox, homeDrop];
 
 let idleTimer;
 let clickTimeout;
@@ -94,9 +100,38 @@ const savePosition = () => {
     storage.set(currentFileKey, mainVideo.currentTime);
 };
 
+// Home <-> Player views (one page, so the picked file never has to leave this document)
+const showPlayer = () => {
+    homePage.hidden = true;
+    playerPage.hidden = false;
+    document.body.classList.add("watching");
+    if (location.hash !== "#watch") history.pushState(null, "", "#watch");
+};
+
+const showHome = () => {
+    mainVideo.pause();
+    if (document.fullscreenElement) document.exitFullscreen();
+    playerPage.hidden = true;
+    homePage.hidden = false;
+    document.body.classList.remove("watching");
+};
+
+// Browser back button returns to the home page
+window.addEventListener("popstate", () => {
+    if (location.hash === "#watch" && mainVideo.getAttribute("src")) showPlayer();
+    else showHome();
+});
+
+// A reload on #watch has no video any more, so start from home
+if (location.hash === "#watch") history.replaceState(null, "", location.pathname);
+
+playerHomeBtn.addEventListener("click", () => history.back());
+chooseVideoBtns.forEach(btn => btn.addEventListener("click", () => fileInput.click()));
+
 // Load Video File
 const loadVideoFile = (file) => {
     if(!file) return;
+    showPlayer();
     if (currentURL) URL.revokeObjectURL(currentURL);
     removeSubtitles();
     currentURL = URL.createObjectURL(file);
@@ -186,18 +221,20 @@ const handleDroppedFiles = files => {
     if (subtitle) loadSubtitleFile(subtitle);
 };
 
+const setDragOver = isOver => dropTargets.forEach(target => target.classList.toggle("drag-over", isOver));
+
 document.addEventListener("dragover", e => {
     e.preventDefault();
-    uploadBox.classList.add("drag-over");
+    setDragOver(true);
 });
 
 document.addEventListener("dragleave", e => {
-    if (!e.relatedTarget) uploadBox.classList.remove("drag-over");
+    if (!e.relatedTarget) setDragOver(false);
 });
 
 document.addEventListener("drop", e => {
     e.preventDefault();
-    uploadBox.classList.remove("drag-over");
+    setDragOver(false);
     handleDroppedFiles(e.dataTransfer.files);
 });
 
@@ -323,7 +360,7 @@ volumeSlider.addEventListener("change", () => volumeSlider.blur());
 // Play / Pause
 const togglePlay = () => {
     if(mainVideo.paused) {
-        mainVideo.play();
+        mainVideo.play().catch(() => {});
         showFeedback("fa-play", "");
     } else {
         mainVideo.pause();
@@ -543,6 +580,7 @@ mainVideo.addEventListener("click", () => {
 
 // Keyboard Shortcuts
 document.addEventListener("keydown", e => {
+    if (playerPage.hidden) return;
     if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     // A clicked control keeps focus; drop it so Space doesn't also "click" that button
