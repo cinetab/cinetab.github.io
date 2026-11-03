@@ -17,8 +17,8 @@ Don't use Picture-in-Picture while sharing: the video moves out of the tab and t
 
 ## Features
 
-- Plays local files via drag & drop or the file picker (MP4, WebM, and MKV where the browser supports the codecs)
-- Subtitles: drop or pick an `.srt` / `.vtt` file, toggle with `C`
+- Plays video and audio files via drag & drop or the file picker, in almost any format (see below)
+- Subtitles: drop or pick an `.srt` / `.vtt` file, or use the text subtitles inside an MKV; toggle with `C`
 - Remembers where you stopped for each file (stored only in your browser)
 - Hover preview on the timeline, playback speed, Picture-in-Picture, fullscreen
 
@@ -37,13 +37,26 @@ Don't use Picture-in-Picture while sharing: the video moves out of the tab and t
 | `0`–`9` | Jump to 0–90 % |
 | `Shift` + `>` / `<` | Speed up / slow down |
 
-## If a file won't play
+## Supported formats
 
-Browsers can only decode some codecs. If you get the codec error, or a file plays without sound (common with MKV files using AC3/DTS audio), convert it to MP4 with H.264 video and AAC audio, e.g. with HandBrake or:
+| Plays instantly | Converted automatically on first open |
+| --- | --- |
+| MP4, MKV, MOV, M4V, WebM (H.264, HEVC*, VP9, AV1) | AVI, WMV/ASF, FLV, TS/M2TS, MPG, VOB, 3GP |
+| MP3, M4A/AAC, WAV, FLAC, OGG, Opus | DTS, Dolby Digital (AC3/E-AC3) and TrueHD sound, WMA, AIFF, AC3 |
 
-```
-ffmpeg -i input.mkv -c:v copy -c:a aac output.mp4
-```
+\* HEVC needs a GPU decoder in Chrome/Edge; without one the file is converted.
+
+Files the browser can't play, or would play **silently** (browsers skip DTS/AC3 sound in MKVs without an error), are converted with [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm) inside the browser:
+
+- **Container or sound only** (e.g. AVI/TS with H.264, MKV with DTS): the video is copied untouched and only the sound becomes AAC, which takes a few minutes for a full movie.
+- **Old video codecs** (Xvid/DivX, WMV, MPEG-2): the video is re-encoded to H.264 at up to 720p, about 4-5x faster than real time on a typical laptop, so a full movie can take 20-30 minutes.
+
+The input is read straight from disk and the output is written to the browser's private storage (OPFS), so large movies don't need to fit in memory. The three most recent conversions are kept so they reopen instantly; they can be cleared from the home page footer. The converter (~31 MB) is downloaded from jsDelivr the first time it's needed.
+
+| File | Purpose |
+| --- | --- |
+| `converter.js` | Detects files that need converting, manages saved conversions |
+| `converter-worker.js` | Runs ffmpeg.wasm in a Web Worker and writes the MP4 to OPFS |
 
 ## Run locally
 

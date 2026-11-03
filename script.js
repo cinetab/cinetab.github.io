@@ -38,13 +38,35 @@ playerPage = document.querySelector(".player-page"),
 homeDrop = document.querySelector("#home-drop"),
 playerHomeBtn = container.querySelector(".player-home"),
 chooseVideoBtns = document.querySelectorAll(".choose-video"),
-dropTargets = [uploadBox, homeDrop];
+dropTargets = [uploadBox, homeDrop],
+convertOverlay = document.querySelector("#convert-overlay"),
+convertTitle = convertOverlay.querySelector(".convert-title"),
+convertReason = convertOverlay.querySelector(".convert-reason"),
+convertProgress = convertOverlay.querySelector(".convert-progress"),
+convertProgressBar = convertOverlay.querySelector(".convert-progress-bar"),
+convertStatus = convertOverlay.querySelector(".convert-status"),
+convertPlan = convertOverlay.querySelector(".convert-plan"),
+convertSkipBtn = convertOverlay.querySelector(".convert-skip-btn"),
+convertCancelBtn = convertOverlay.querySelector(".convert-cancel-btn"),
+compatBanner = document.querySelector("#compat-banner"),
+compatFixBtn = compatBanner.querySelector(".compat-fix-btn"),
+compatCloseBtn = compatBanner.querySelector(".compat-close-btn"),
+audioTitle = container.querySelector(".audio-title"),
+storageNote = document.querySelector(".storage-note"),
+storageSize = document.querySelector(".storage-size"),
+clearStorageBtn = document.querySelector(".clear-storage-btn");
 
 let idleTimer;
 let clickTimeout;
 let currentURL = null;
 let currentFileKey = null;
 let lastSavedAt = 0;
+let currentFile = null;
+let playbackMode = null; // "native" | "converting" | "converted"
+let conversionJob = null;
+let lastPlan = null;
+let soundChecked = false;
+let retriedWithTranscode = false;
 
 // Hide Controls on Idle
 const hideControls = () => {
@@ -118,7 +140,7 @@ const showHome = () => {
 
 // Browser back button returns to the home page
 window.addEventListener("popstate", () => {
-    if (location.hash === "#watch" && mainVideo.getAttribute("src")) showPlayer();
+    if (location.hash === "#watch" && currentFile) showPlayer();
     else showHome();
 });
 
@@ -129,19 +151,43 @@ playerHomeBtn.addEventListener("click", () => history.back());
 chooseVideoBtns.forEach(btn => btn.addEventListener("click", () => fileInput.click()));
 
 // Load Video File
-const loadVideoFile = (file) => {
-    if(!file) return;
-    showPlayer();
-    if (currentURL) URL.revokeObjectURL(currentURL);
-    removeSubtitles();
-    currentURL = URL.createObjectURL(file);
-    currentFileKey = `resume:${file.name}:${file.size}`;
+const setSource = (source, mode, autoplay = true) => {
+    const oldURL = currentURL;
+    currentURL = URL.createObjectURL(source);
+    playbackMode = mode;
+    soundChecked = false;
+    container.classList.remove("audio-mode");
     mainVideo.src = currentURL;
     previewVideo.src = currentURL;
-    videoTitle.innerText = file.name.replace(/\.[^/.]+$/, "");
+    if (oldURL) URL.revokeObjectURL(oldURL);
+    if (autoplay) mainVideo.play().catch(() => {});
+};
+
+const loadVideoFile = async (file) => {
+    if(!file) return;
+    showPlayer();
+    mainVideo.pause();
+    cancelConversion();
+    removeSubtitles();
+    compatBanner.classList.add("hidden");
+    currentFile = file;
+    retriedWithTranscode = false;
+    currentFileKey = `resume:${file.name}:${file.size}`;
+    videoTitle.innerText = audioTitle.innerText = file.name.replace(/\.[^/.]+$/, "");
     uploadOverlay.classList.add("hidden");
     errorOverlay.classList.add("hidden");
-    mainVideo.play().catch(() => {});
+
+    // Converted before? Play the saved copy straight away
+    const saved = await Converter.getCached(file);
+    if (file !== currentFile) return;
+    if (saved) return playConverted(saved);
+
+    // Sound formats like DTS play silently instead of failing, so catch them up front
+    const silentAudio = await Converter.findSilentAudio(file);
+    if (file !== currentFile) return;
+    if (silentAudio) return startConversion("audio", silentAudio);
+
+    setSource(file, "native");
     showFeedback("fa-play", "Playing");
 };
 
@@ -169,13 +215,8 @@ const removeSubtitles = () => {
     subtitlesBtn.classList.remove("active");
 };
 
-const loadSubtitleFile = async (file) => {
-    if (!file) return;
-    if (!mainVideo.getAttribute("src")) {
-        showFeedback("fa-closed-captioning", "Open a video first");
-        return;
-    }
-    let text = (await file.text()).replace(/^\uFEFF/, "");
+const applySubtitles = (text, label) => {
+    text = text.replace(/^\uFEFF/, "");
     if (!text.startsWith("WEBVTT")) text = srtToVtt(text);
     // Lift cues a few lines up so they don't sit under the control bar
     text = text.replace(/^(.*-->.*)$/gm, line => /line:/.test(line) ? line : `${line} line:-4`);
@@ -183,13 +224,22 @@ const loadSubtitleFile = async (file) => {
     removeSubtitles();
     const track = document.createElement("track");
     track.kind = "subtitles";
-    track.label = file.name;
+    track.label = label;
     track.src = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
     track.default = true;
     mainVideo.appendChild(track);
     track.track.mode = "showing";
     subtitlesBtn.classList.add("active");
     showFeedback("fa-closed-captioning", "Subtitles On");
+};
+
+const loadSubtitleFile = async (file) => {
+    if (!file) return;
+    if (!currentFile) {
+        showFeedback("fa-closed-captioning", "Open a video first");
+        return;
+    }
+    applySubtitles(await file.text(), file.name);
 };
 
 const toggleSubtitles = () => {
@@ -238,13 +288,167 @@ document.addEventListener("drop", e => {
     handleDroppedFiles(e.dataTransfer.files);
 });
 
-// Video Error Handling
+// Format Support: files the browser can't play are converted on this computer (see converter.js)
+const showError = message => {
+    uploadOverlay.classList.add("hidden");
+    convertOverlay.classList.add("hidden");
+    errorMessage.innerText = message;
+    errorOverlay.classList.remove("hidden");
+};
+
+const setConvertProgress = (ratio, text) => {
+    convertProgress.classList.toggle("indeterminate", ratio === null);
+    convertProgressBar.style.width = ratio === null ? "" : `${Math.round(ratio * 100)}%`;
+    convertStatus.innerText = text;
+};
+
+const timeLeft = (ratio, startedAt) => {
+    const elapsed = (Date.now() - startedAt) / 1000;
+    if (ratio < 0.02 || elapsed < 3) return "";
+    const minutes = Math.round(elapsed * (1 - ratio) / ratio / 60);
+    if (minutes < 1) return " · less than a minute left";
+    if (minutes < 60) return ` · about ${minutes} min left`;
+    return ` · about ${Math.floor(minutes / 60)} h ${minutes % 60} min left`;
+};
+
+const describePlan = plan => {
+    const parts = [];
+    if (plan.video) parts.push(`Video: ${Converter.codecName(plan.video.codec)} ${plan.video.copy ? "kept as is" : "→ H.264 (re-encoding video is the slow part)"}`);
+    if (plan.audio) parts.push(`Sound: ${Converter.codecName(plan.audio.codec)} ${plan.audio.copy ? "kept as is" : "→ AAC"}`);
+    if (plan.subtitles) parts.push("Subtitles: included");
+    return parts.join(" · ");
+};
+
+const cancelConversion = () => {
+    if (conversionJob) conversionJob.cancel();
+    conversionJob = null;
+    convertOverlay.classList.add("hidden");
+};
+
+const playConverted = ({ file, subtitles, plan, cached }) => {
+    lastPlan = plan;
+    setSource(file, "converted", !playerPage.hidden);
+    if (subtitles) applySubtitles(subtitles, "Subtitles");
+    showFeedback(cached ? "fa-bolt" : "fa-circle-check", cached ? "Saved copy" : "Ready");
+    refreshStorageNote();
+};
+
+const startConversion = (reason, detail = null, forceVideoTranscode = false) => {
+    if (!Converter.isSupported) {
+        return showError("This browser can't play this file and can't run CineTab's converter. Try the latest Chrome or Edge.");
+    }
+    cancelConversion();
+    const file = currentFile;
+    playbackMode = "converting";
+    compatBanner.classList.add("hidden");
+    container.classList.remove("audio-mode");
+    [mainVideo, previewVideo].forEach(video => {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+    });
+
+    const ext = (file.name.match(/\.([^.]+)$/) || [, ""])[1].toUpperCase();
+    convertTitle.innerText = reason === "audio" ? "Fixing the sound" : "Making this file playable";
+    convertReason.innerText = {
+        format: `Your browser can't play ${ext || "this kind of"} files directly, so CineTab is converting it to MP4.`,
+        audio: `This file's sound${detail ? ` (${detail})` : ""} isn't supported by your browser, so it would play silently. CineTab is converting just the sound and keeping the video as is.`,
+        video: "Your browser can't show this file's video, so CineTab is converting it."
+    }[reason];
+    convertPlan.innerText = "";
+    convertSkipBtn.hidden = reason !== "audio";
+    setConvertProgress(null, "Starting…");
+    uploadOverlay.classList.add("hidden");
+    errorOverlay.classList.add("hidden");
+    convertOverlay.classList.remove("hidden");
+
+    let convertStartedAt = 0;
+    const job = Converter.convert(file, {
+        forceVideoTranscode,
+        onPlan: plan => convertPlan.innerText = describePlan(plan),
+        onStatus: ({ stage, ratio }) => {
+            if (stage === "download") {
+                setConvertProgress(ratio, `Downloading the converter (31 MB, first time only)… ${Math.round(ratio * 100)}%`);
+            } else if (stage === "probe") {
+                setConvertProgress(null, "Reading the file…");
+            } else if (stage === "convert") {
+                if (!convertStartedAt) convertStartedAt = Date.now();
+                setConvertProgress(ratio, `Converting… ${Math.round(ratio * 100)}%${timeLeft(ratio, convertStartedAt)}`);
+            }
+        }
+    });
+    conversionJob = job;
+    job.promise.then(result => {
+        if (conversionJob !== job) return;
+        conversionJob = null;
+        convertOverlay.classList.add("hidden");
+        playConverted(result);
+    }).catch(err => {
+        if (conversionJob !== job) return;
+        conversionJob = null;
+        playbackMode = null;
+        showError(err.message);
+    });
+};
+
+const looksLikeVideo = file => file.type.startsWith("video/") ||
+    /\.(mp4|m4v|mkv|mov|webm|avi|wmv|flv|ts|m2ts|mts|mpe?g|3gp|ogv)$/i.test(file.name);
+
+// Chrome/Edge count decoded audio bytes, Firefox reports whether it found audio
+const noSoundDecoded = () => {
+    if ("mozHasAudio" in mainVideo) return !mainVideo.mozHasAudio;
+    if ("webkitAudioDecodedByteCount" in mainVideo) return mainVideo.webkitAudioDecodedByteCount === 0;
+    return false;
+};
+
 mainVideo.addEventListener("error", () => {
     if (!mainVideo.getAttribute("src")) return;
-    uploadOverlay.classList.add("hidden");
-    errorMessage.innerText = "This browser can't decode this file's video/audio format. Try Chrome or Edge, or convert it to MP4 (H.264 video + AAC audio).";
-    errorOverlay.classList.remove("hidden");
+    if (playbackMode === "native") return startConversion("format");
+    // A copied video stream still didn't play: convert again, re-encoding the video this time
+    if (playbackMode === "converted" && !retriedWithTranscode && lastPlan && lastPlan.video && lastPlan.video.copy) {
+        retriedWithTranscode = true;
+        return startConversion("video", null, true);
+    }
+    playbackMode = null;
+    showError("Sorry, CineTab couldn't play this file, even after converting it.");
 });
+
+convertCancelBtn.addEventListener("click", () => {
+    cancelConversion();
+    playbackMode = null;
+    uploadOverlay.classList.remove("hidden");
+});
+
+// For sound-only fixes, let people watch right away without sound
+convertSkipBtn.addEventListener("click", () => {
+    cancelConversion();
+    setSource(currentFile, "native");
+    soundChecked = true;
+});
+
+compatFixBtn.addEventListener("click", () => startConversion("audio"));
+compatCloseBtn.addEventListener("click", () => compatBanner.classList.add("hidden"));
+
+// Saved conversions (shown on the home page)
+const refreshStorageNote = async () => {
+    const bytes = await Converter.savedBytes();
+    storageNote.hidden = bytes === 0;
+    storageSize.innerText = bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
+};
+
+clearStorageBtn.addEventListener("click", async () => {
+    if (playbackMode === "converted") {
+        mainVideo.removeAttribute("src");
+        mainVideo.load();
+        currentFile = null;
+        playbackMode = null;
+        uploadOverlay.classList.remove("hidden");
+    }
+    await Converter.clearSaved();
+    refreshStorageNote();
+});
+
+refreshStorageNote();
 
 // Watch Together Help
 shareHelpBtn.addEventListener("click", () => {
@@ -260,6 +464,11 @@ closeErrorBtn.addEventListener("click", () => {
 
 mainVideo.addEventListener("loadedmetadata", () => {
     videoDuration.innerText = formatTime(mainVideo.duration);
+
+    const noPicture = mainVideo.videoWidth === 0;
+    container.classList.toggle("audio-mode", noPicture);
+    // A video file without a picture means the browser couldn't decode its video codec
+    if (noPicture && playbackMode === "native" && looksLikeVideo(currentFile)) return startConversion("video");
 
     const saved = parseFloat(storage.get(currentFileKey));
     if (saved > 10 && saved < mainVideo.duration - 10) {
@@ -319,6 +528,11 @@ mainVideo.addEventListener("timeupdate", e => {
         lastSavedAt = Date.now();
         savePosition();
     }
+
+    if (playbackMode === "native" && !soundChecked && currentTime > 2.5) {
+        soundChecked = true;
+        if (noSoundDecoded()) compatBanner.classList.remove("hidden");
+    }
 });
 
 const draggableProgressBar = e => {
@@ -371,10 +585,14 @@ const togglePlay = () => {
 playPauseBtn.parentNode.addEventListener("click", togglePlay);
 mainVideo.addEventListener("play", () => {
     playPauseBtn.className = "fas fa-pause";
+    container.classList.add("is-playing");
     clearTimeout(idleTimer);
     hideControls();
 });
-mainVideo.addEventListener("pause", () => playPauseBtn.className = "fas fa-play");
+mainVideo.addEventListener("pause", () => {
+    playPauseBtn.className = "fas fa-play";
+    container.classList.remove("is-playing");
+});
 
 // Seek
 const seek = (seconds) => {

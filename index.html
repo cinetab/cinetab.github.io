@@ -53,7 +53,7 @@
           <div class="mock-body">
             <div class="drop-icon"><i class="fa-solid fa-film"></i></div>
             <h2>Drop a movie here</h2>
-            <p>MP4, WebM or MKV &middot; add .srt subtitles anytime</p>
+            <p>MP4, MKV, AVI, WMV, MOV&hellip; or music &middot; add .srt subtitles anytime</p>
             <button class="btn btn-primary choose-video"><i class="fa-solid fa-folder-open"></i> Choose video</button>
           </div>
         </div>
@@ -97,9 +97,14 @@
           <p>The file plays straight from your disk. No uploads, no accounts, no tracking.</p>
         </article>
         <article class="feature">
+          <i class="fa-solid fa-photo-film"></i>
+          <h3>Plays almost anything</h3>
+          <p>MP4, MKV, AVI, WMV, TS, FLV, DTS and Dolby sound, MP3, FLAC&hellip; Formats your browser can't handle are converted on your computer.</p>
+        </article>
+        <article class="feature">
           <i class="fa-regular fa-closed-captioning"></i>
           <h3>Subtitles</h3>
-          <p>Drop an .srt or .vtt file on the player and toggle it with one key.</p>
+          <p>Drop an .srt or .vtt file on the player, or use the ones inside your MKV. Toggle with one key.</p>
         </article>
         <article class="feature">
           <i class="fa-solid fa-clock-rotate-left"></i>
@@ -112,14 +117,9 @@
           <p>Space, arrows, J / L, M, F &mdash; control everything without the mouse.</p>
         </article>
         <article class="feature">
-          <i class="fa-solid fa-images"></i>
-          <h3>Timeline preview</h3>
-          <p>Hover the progress bar to see a live preview before you jump.</p>
-        </article>
-        <article class="feature">
           <i class="fa-solid fa-gauge-high"></i>
-          <h3>Speed &amp; Picture-in-Picture</h3>
-          <p>Change playback speed, or pop the movie out when watching solo.</p>
+          <h3>Preview, speed &amp; PiP</h3>
+          <p>Hover the timeline to preview a scene, change speed, or pop the movie out when watching solo.</p>
         </article>
       </div>
     </section>
@@ -140,8 +140,12 @@
           <p>Stop sharing and share again, choosing the <b>Chrome Tab</b> option and turning on <b>Also share tab audio</b>. Sharing a window or the entire screen doesn't send tab audio. Tab audio works in Chrome and Edge.</p>
         </details>
         <details>
-          <summary>The file won't play, or plays without sound.</summary>
-          <p>Browsers only decode some formats. MKV files often use AC3/DTS audio that browsers can't play. Convert to MP4 with H.264 video and AAC audio, for example with HandBrake.</p>
+          <summary>Which video and audio formats work?</summary>
+          <p>Almost all of them. MP4, MKV, MOV, WebM and music files like MP3, M4A, FLAC and WAV play instantly. AVI, WMV, FLV, TS and movies with DTS or Dolby (AC3) sound are converted automatically on your computer the first time &mdash; usually a few minutes for a movie. Old AVI/WMV video that has to be fully re-encoded takes longer.</p>
+        </details>
+        <details>
+          <summary>Where does the conversion happen?</summary>
+          <p>Right in your browser. The first time, CineTab downloads its converter (about 31 MB, ffmpeg built for the web). Your movie is never uploaded. The converted copies of your three most recent files are kept in this browser's storage so they open instantly next time, and you can clear them at the bottom of this page.</p>
         </details>
         <details>
           <summary>Should I use Picture-in-Picture while sharing?</summary>
@@ -162,6 +166,7 @@
         <span>Cine<b>Tab</b></span>
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
+      <p class="storage-note" hidden>Converted copies in this browser: <span class="storage-size"></span> &middot; <button class="link-btn clear-storage-btn">Clear</button></p>
     </footer>
   </div>
 
@@ -189,7 +194,7 @@
       <div class="upload-box">
         <i class="fa-solid fa-file-video"></i>
         <h2>Select a Movie to Play</h2>
-        <p>Drag & drop your movie file here or browse from device.<br>Drop an .srt / .vtt file anytime to add subtitles.</p>
+        <p>Drag & drop a video or audio file here, or browse from device.<br>Drop an .srt / .vtt file anytime to add subtitles.</p>
         <button id="browse-btn"><i class="fa-solid fa-folder-open"></i> Browse Video</button>
         <p class="privacy-note"><i class="fa-solid fa-lock"></i> Your file plays locally and is never uploaded.</p>
       </div>
@@ -199,10 +204,42 @@
     <div class="error-overlay hidden" id="error-overlay">
       <div class="upload-box">
         <i class="fa-solid fa-triangle-exclamation" style="color: #ff4d4d;"></i>
-        <h2>Codec Error</h2>
+        <h2>Can't Play This File</h2>
         <p id="error-message">Browser failed to decode this video file's video/audio stream.</p>
         <button id="close-error-btn">Try Another File</button>
       </div>
+    </div>
+
+    <!-- Compatibility Conversion Overlay -->
+    <div class="convert-overlay hidden" id="convert-overlay">
+      <div class="upload-box convert-box">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <h2 class="convert-title">Making this file playable</h2>
+        <p class="convert-reason"></p>
+        <div class="convert-progress"><div class="convert-progress-bar"></div></div>
+        <p class="convert-status">Starting&hellip;</p>
+        <p class="convert-plan"></p>
+        <div class="convert-actions">
+          <button class="secondary-btn convert-skip-btn" hidden>Play without sound</button>
+          <button class="secondary-btn convert-cancel-btn">Cancel</button>
+        </div>
+        <p class="privacy-note"><i class="fa-solid fa-lock"></i> Converted on your computer, never uploaded. Saved in this browser so it opens instantly next time.</p>
+      </div>
+    </div>
+
+    <!-- No Sound Banner -->
+    <div class="compat-banner hidden" id="compat-banner">
+      <i class="fa-solid fa-volume-xmark"></i>
+      <span>No sound? This file's audio format may not be supported by your browser.</span>
+      <button class="compat-fix-btn">Fix sound</button>
+      <button class="compat-close-btn" title="Dismiss"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- Audio File Visual -->
+    <div class="audio-visual">
+      <div class="audio-art"><i class="fa-solid fa-music"></i></div>
+      <div class="audio-eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <p class="audio-title"></p>
     </div>
 
     <!-- Watch Together Help Overlay -->
@@ -281,9 +318,10 @@
   </div>
 
   <!-- Hidden File Inputs -->
-  <input type="file" id="file-input" accept="video/*,.mkv" hidden>
+  <input type="file" id="file-input" accept="video/*,audio/*,.mkv,.mka,.avi,.divx,.wmv,.wma,.asf,.flv,.f4v,.mov,.m4v,.ts,.m2ts,.mts,.mpg,.mpeg,.vob,.3gp,.ogv,.rm,.rmvb,.ac3,.dts,.aif,.aiff,.ape,.amr,.wv,.opus,.flac" hidden>
   <input type="file" id="subtitle-input" accept=".srt,.vtt" hidden>
 
+  <script src="converter.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
