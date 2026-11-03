@@ -196,7 +196,8 @@ body.watching {
   transform: scale(1.02);
 }
 
-.upload-box i {
+/* Only the large icon at the top of each box, not icons inside its buttons or text */
+.box-scroll > i {
   font-size: 50px;
   color: #3e97fd;
   margin-bottom: 15px;

@@ -38,7 +38,7 @@ playerPage = document.querySelector(".player-page"),
 homeDrop = document.querySelector("#home-drop"),
 playerHomeBtn = container.querySelector(".player-home"),
 chooseVideoBtns = document.querySelectorAll(".choose-video"),
-dropTargets = [uploadBox, homeDrop],
+dropTargets = [uploadBox, homeDrop].filter(Boolean),
 convertOverlay = document.querySelector("#convert-overlay"),
 convertTitle = convertOverlay.querySelector(".convert-title"),
 convertReason = convertOverlay.querySelector(".convert-reason"),
@@ -53,9 +53,9 @@ compatFixBtn = compatBanner.querySelector(".compat-fix-btn"),
 compatCloseBtn = compatBanner.querySelector(".compat-close-btn"),
 audioTitle = container.querySelector(".audio-title"),
 savedSection = document.querySelector("#saved"),
-savedList = savedSection.querySelector(".saved-list"),
-savedTotal = savedSection.querySelector(".saved-total"),
-clearAllBtn = savedSection.querySelector(".clear-all-btn");
+savedList = document.querySelector("#saved .saved-list"),
+savedTotal = document.querySelector("#saved .saved-total"),
+clearAllBtn = document.querySelector("#saved .clear-all-btn");
 
 let idleTimer;
 let clickTimeout;
@@ -125,8 +125,10 @@ const savePosition = () => {
     storage.set(currentFileKey, mainVideo.currentTime);
 };
 
-// Home <-> Player views (one page, so the picked file never has to leave this document)
+// Home <-> Player views (one page, so the picked file never has to leave this document).
+// The offline build has no home page, only the player.
 const showPlayer = () => {
+    if (!homePage) return;
     homePage.hidden = true;
     playerPage.hidden = false;
     document.body.classList.add("watching");
@@ -144,6 +146,7 @@ const showHome = () => {
 
 // Browser back button returns to the home page
 window.addEventListener("popstate", () => {
+    if (!homePage) return;
     if (location.hash === "#watch" && currentFile) showPlayer();
     else showHome();
 });
@@ -151,7 +154,7 @@ window.addEventListener("popstate", () => {
 // A reload on #watch has no video any more, so start from home
 if (location.hash === "#watch") history.replaceState(null, "", location.pathname);
 
-playerHomeBtn.addEventListener("click", () => history.back());
+if (homePage) playerHomeBtn.addEventListener("click", () => history.back());
 chooseVideoBtns.forEach(btn => btn.addEventListener("click", () => fileInput.click()));
 
 // Load Video File
@@ -502,6 +505,7 @@ const renderSavedItem = item => {
 };
 
 const renderSavedList = async () => {
+    if (!savedSection) return;
     const { items, bytes } = await Converter.listSaved();
     savedSection.hidden = items.length === 0;
     savedTotal.textContent = formatBytes(bytes);
@@ -532,7 +536,7 @@ const playSaved = async key => {
     playConverted(saved);
 };
 
-savedList.addEventListener("click", async e => {
+savedList?.addEventListener("click", async e => {
     const button = e.target.closest("button[data-action]");
     if (!button) return;
     const { action, key } = button.dataset;
@@ -542,7 +546,7 @@ savedList.addEventListener("click", async e => {
     renderSavedList();
 });
 
-clearAllBtn.addEventListener("click", async () => {
+clearAllBtn?.addEventListener("click", async () => {
     if (!confirm("Delete all converted videos from this browser?\nYour original files are not touched, and anything can be converted again later.")) return;
     if (currentSavedKey) unloadPlayer();
     await Converter.clearSaved();
