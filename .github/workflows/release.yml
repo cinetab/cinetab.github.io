@@ -57,7 +57,14 @@ jobs:
         run: |
           asset="CineTab-Player-$GITHUB_REF_NAME.html"
           cp cinetab-offline.html "$asset"
-          gh release create "$GITHUB_REF_NAME" "$asset" \
-            --title "CineTab $GITHUB_REF_NAME" \
-            --notes-file notes.md \
-            --verify-tag
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "CineTab $GITHUB_REF_NAME" \
+              --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" \
+              --title "CineTab $GITHUB_REF_NAME" \
+              --notes-file notes.md \
+              --verify-tag
+          fi
