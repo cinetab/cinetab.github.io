@@ -707,14 +707,44 @@ const seek = (seconds) => {
 skipBackward.addEventListener("click", () => seek(-5));
 skipForward.addEventListener("click", () => seek(5));
 
-// Playback Speed
-speedOptions.querySelectorAll("li[data-speed]").forEach(option => {
-    option.addEventListener("click", () => {
-        mainVideo.playbackRate = option.dataset.speed;
-        speedOptions.querySelector(".active")?.classList.remove("active");
-        option.classList.add("active");
-        showFeedback("fa-gauge-high", `${option.dataset.speed}x`);
-    });
+// Playback Speed (presets, or any value from 0.25x to 4x; browsers mute audio outside that range)
+const speedPresets = speedOptions.querySelectorAll("li[data-speed]"),
+speedCurrent = speedOptions.querySelector(".speed-current"),
+speedSlider = speedOptions.querySelector(".speed-slider"),
+speedInput = speedOptions.querySelector(".speed-input");
+
+// Keep every part of the menu in sync with the actual rate, however it was changed
+const syncSpeedUI = () => {
+    const rate = mainVideo.playbackRate;
+    speedPresets.forEach(option => option.classList.toggle("active", +option.dataset.speed === rate));
+    speedCurrent.textContent = rate === 1 ? "Normal" : `${rate}x`;
+    speedSlider.value = rate;
+    if (document.activeElement !== speedInput) speedInput.value = rate;
+    speedBtn.title = `Playback speed: ${speedCurrent.textContent} (Shift + < / >)`;
+};
+
+const setSpeed = (rate, feedback = true) => {
+    rate = Math.round(Math.min(4, Math.max(0.25, +rate || 1)) * 100) / 100;
+    // defaultPlaybackRate keeps the chosen speed when the next file is opened
+    mainVideo.defaultPlaybackRate = mainVideo.playbackRate = rate;
+    syncSpeedUI();
+    if (feedback) showFeedback("fa-gauge-high", `${rate}x`);
+};
+
+mainVideo.addEventListener("ratechange", syncSpeedUI);
+
+speedPresets.forEach(option => option.addEventListener("click", () => setSpeed(option.dataset.speed)));
+speedSlider.addEventListener("input", () => setSpeed(speedSlider.value, false));
+speedSlider.addEventListener("change", () => {
+    showFeedback("fa-gauge-high", `${mainVideo.playbackRate}x`);
+    speedSlider.blur();
+});
+speedInput.addEventListener("change", () => {
+    setSpeed(speedInput.value);
+    speedInput.value = mainVideo.playbackRate;
+});
+speedInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") speedInput.blur();
 });
 
 // MINIMALIST DOCUMENT PICTURE-IN-PICTURE IMPLEMENTATION
@@ -970,19 +1000,11 @@ document.addEventListener("keydown", e => {
             break;
 
         case "Period":
-            if (e.shiftKey) { // Shift + >
-                let speed = Math.min(2, mainVideo.playbackRate + 0.25);
-                mainVideo.playbackRate = speed;
-                showFeedback("fa-gauge-high", `${speed}x`);
-            }
+            if (e.shiftKey) setSpeed(mainVideo.playbackRate + 0.25); // Shift + >
             break;
 
         case "Comma":
-            if (e.shiftKey) { // Shift + <
-                let speed = Math.max(0.25, mainVideo.playbackRate - 0.25);
-                mainVideo.playbackRate = speed;
-                showFeedback("fa-gauge-high", `${speed}x`);
-            }
+            if (e.shiftKey) setSpeed(mainVideo.playbackRate - 0.25); // Shift + <
             break;
     }
 

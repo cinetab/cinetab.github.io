@@ -322,6 +322,11 @@ body.watching {
   transform: translateY(0);
 }
 
+/* An open menu must sit above the top bar in short players */
+.wrapper:has(.popup-menu.show) {
+  z-index: 5;
+}
+
 /* Timeline */
 .video-timeline {
   height: 8px;
@@ -482,13 +487,9 @@ body.watching {
 
 .popup-menu {
   position: absolute;
-  list-style: none;
-  scrollbar-width: thin;
   right: 0;
   bottom: 50px;
-  min-width: 150px;
-  max-height: 250px;
-  overflow-y: auto;
+  width: 236px;
   opacity: 0;
   border-radius: 8px;
   pointer-events: none;
@@ -498,7 +499,7 @@ body.watching {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
   transition: opacity 0.2s ease, transform 0.2s ease;
   transform: translateY(10px);
-  padding: 6px 0;
+  padding: 4px 0 10px;
 }
 
 .popup-menu.show {
@@ -515,28 +516,73 @@ body.watching {
   padding: 6px 15px;
   letter-spacing: 0.5px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
 }
 
-.popup-menu li:not(.menu-header) {
+.speed-current {
+  color: #3e97fd;
+  text-transform: none;
+}
+
+/* Presets as a compact 3 x 2 grid, so the menu never needs to scroll */
+.speed-presets {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 0 10px;
+}
+
+.speed-presets li {
   cursor: pointer;
   color: #ccc;
   font-size: 13px;
-  padding: 8px 15px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.15s ease;
+  padding: 7px 0;
+  text-align: center;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.popup-menu li:not(.menu-header):hover {
+.speed-presets li:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
 
-.popup-menu li.active {
+.speed-presets li.active {
+  background: rgba(62, 151, 253, 0.18);
   color: #3e97fd;
   font-weight: 600;
+}
+
+.speed-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 10px 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: #888;
+}
+
+/* Beats the control bar's slider rules (fixed width, hidden on phones) */
+.options .speed-custom .speed-slider {
+  display: block;
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  accent-color: #3e97fd;
+  cursor: pointer;
+}
+
+.speed-custom .speed-input {
+  width: 56px;
+  font: inherit;
+  font-size: 12px;
+  color: #fff;
+  padding: 3px 4px;
 }
 
 .container video {
@@ -655,6 +701,22 @@ video::cue {
   }
   .options button.pic-in-pic {
     display: none;
+  }
+  /* Small players: tighter speed menu so it fits above the controls */
+  .popup-menu {
+    bottom: 40px;
+    padding-bottom: 8px;
+  }
+  .popup-menu .menu-header {
+    padding: 4px 12px;
+    margin-bottom: 6px;
+  }
+  .speed-presets li {
+    padding: 4px 0;
+  }
+  .speed-custom {
+    margin-top: 6px;
+    padding-top: 6px;
   }
   .options .video-timer {
     font-size: 11px;

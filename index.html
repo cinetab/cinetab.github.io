@@ -318,15 +318,22 @@
           <!-- Playback Speed Menu -->
           <div class="popup-menu-wrapper playback-content">
             <button class="playback-speed" title="Playback speed (Shift + &lt; / &gt;)"><span class="material-symbols-rounded">slow_motion_video</span></button>
-            <ul class="popup-menu speed-options">
-              <li class="menu-header">Speed</li>
-              <li data-speed="2" title="Play at 2x speed">2x</li>
-              <li data-speed="1.5" title="Play at 1.5x speed">1.5x</li>
-              <li data-speed="1.25" title="Play at 1.25x speed">1.25x</li>
-              <li data-speed="1" title="Play at normal speed" class="active">Normal</li>
-              <li data-speed="0.75" title="Play at 0.75x speed">0.75x</li>
-              <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li>
-            </ul>
+            <div class="popup-menu speed-options">
+              <div class="menu-header"><span>Speed</span><span class="speed-current">Normal</span></div>
+              <ul class="speed-presets">
+                <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li>
+                <li data-speed="0.75" title="Play at 0.75x speed">0.75x</li>
+                <li data-speed="1" title="Play at normal speed" class="active">Normal</li>
+                <li data-speed="1.25" title="Play at 1.25x speed">1.25x</li>
+                <li data-speed="1.5" title="Play at 1.5x speed">1.5x</li>
+                <li data-speed="2" title="Play at 2x speed">2x</li>
+              </ul>
+              <div class="speed-custom">
+                <span>Custom</span>
+                <input type="range" class="speed-slider" min="0.25" max="4" step="0.05" value="1" title="Drag to choose any speed from 0.25x to 4x">
+                <input type="number" class="speed-input" min="0.25" max="4" step="0.05" value="1" title="Type a speed from 0.25 to 4, then press Enter" aria-label="Custom speed">
+              </div>
+            </div>
           </div>
 
           <button class="pic-in-pic" title="Picture in Picture (P)"><span class="material-symbols-rounded">picture_in_picture_alt</span></button>
