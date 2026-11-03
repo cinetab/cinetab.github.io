@@ -37,6 +37,9 @@ homePage = document.querySelector(".home"),
 playerPage = document.querySelector(".player-page"),
 homeDrop = document.querySelector("#home-drop"),
 playerHomeBtn = container.querySelector(".player-home"),
+playerBackBtn = container.querySelector(".player-back"),
+shortcutsBtn = container.querySelector(".shortcuts-btn"),
+shortcutsOverlay = document.querySelector("#shortcuts-overlay"),
 chooseVideoBtns = document.querySelectorAll(".choose-video"),
 dropTargets = [uploadBox, homeDrop].filter(Boolean),
 convertOverlay = document.querySelector("#convert-overlay"),
@@ -69,10 +72,24 @@ let lastPlan = null;
 let soundChecked = false;
 let retriedWithTranscode = false;
 let currentSavedKey = null;
+let currentSource = null; // name and size of the original file being played
+
+// Watch together: room.js fills these in while this browser is in a room
+const together = {
+    following: false, // a guest: playback follows the host, so don't jump to where this file was left
+    stream: null,     // a guest watching the host's stream: controls ask the host instead (see room.js)
+    onFile: null,     // called with each video file opened while in a room
+    openPanel: null,  // the Watch together button opens the room instead of the help
+    beforeHome: null, // the back button asks what to do with the room first
+    onHome: null,     // called whenever the home page is shown
+    onPlayer: null,   // called whenever the player is shown
+    onTitle: null,    // called when the video's title is renamed
+    active: () => false // in a room: going home keeps the video playing for everyone
+};
 
 // Hide Controls on Idle
 const hideControls = () => {
-    if(mainVideo.paused) return;
+    if(together.stream ? together.stream.paused : mainVideo.paused) return;
     idleTimer = setTimeout(() => {
         hideTooltip();
         container.classList.remove("show-controls");
@@ -81,7 +98,8 @@ const hideControls = () => {
 }
 hideControls();
 
-container.addEventListener("mousemove", () => {
+container.addEventListener("pointermove", e => {
+    if (e.pointerType === "touch") return;
     container.classList.add("show-controls");
     container.classList.remove("hide-cursor");
     clearTimeout(idleTimer);
@@ -120,8 +138,12 @@ const storage = {
     remove: key => { try { localStorage.removeItem(key); } catch (e) {} }
 };
 
+// Fullscreen, including Safari's prefixed version
+const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+const exitFullscreen = () => (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+
 const savePosition = () => {
-    if (!currentFileKey || !mainVideo.duration) return;
+    if (!currentFileKey || !mainVideo.duration || together.stream) return;
     storage.set(currentFileKey, mainVideo.currentTime);
 };
 
@@ -132,30 +154,80 @@ const showPlayer = () => {
     homePage.hidden = true;
     playerPage.hidden = false;
     document.body.classList.add("watching");
+    if (together.onPlayer) together.onPlayer();
     if (location.hash !== "#watch") history.pushState(null, "", "#watch");
 };
 
 const showHome = () => {
-    mainVideo.pause();
-    if (document.fullscreenElement) document.exitFullscreen();
+    // A room keeps going while you look at the home page
+    if (!together.active()) mainVideo.pause();
+    if (fullscreenElement()) exitFullscreen();
     playerPage.hidden = true;
     homePage.hidden = false;
     document.body.classList.remove("watching");
     renderSavedList();
+    if (together.onHome) together.onHome();
 };
 
 // Browser back button returns to the home page
 window.addEventListener("popstate", () => {
     if (!homePage) return;
-    if (location.hash === "#watch" && currentFile) showPlayer();
+    if (location.hash === "#watch" && (currentFile || together.active())) showPlayer();
     else showHome();
 });
 
 // A reload on #watch has no video any more, so start from home
 if (location.hash === "#watch") history.replaceState(null, "", location.pathname);
 
-if (homePage) playerHomeBtn.addEventListener("click", () => history.back());
+// The back arrow and the logo go home; in a room, after asking what to do with it
+const goHome = () => {
+    if (together.beforeHome) return together.beforeHome();
+    history.back();
+};
+if (homePage) {
+    playerHomeBtn.addEventListener("click", goHome);
+    playerBackBtn.addEventListener("click", goHome);
+}
 chooseVideoBtns.forEach(btn => btn.addEventListener("click", () => fileInput.click()));
+
+// Video titles can be renamed; the new name is remembered for that file in this browser
+const titleKey = (name, size) => `title:${name}:${size}`;
+const savedTitle = (name, size) => storage.get(titleKey(name, size)) || name.replace(/\.[^/.]+$/, "");
+
+const renameTitle = () => {
+    if (!currentSource || together.stream || videoTitle.querySelector("input")) return;
+    const { name, size } = currentSource;
+    const previous = videoTitle.textContent;
+    const input = document.createElement("input");
+    input.className = "title-input";
+    input.value = previous;
+    input.maxLength = 120;
+    input.setAttribute("aria-label", "Video title");
+    videoTitle.replaceChildren(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = save => {
+        if (done) return;
+        done = true;
+        const typed = input.value.replace(/\s+/g, " ").trim();
+        const original = name.replace(/\.[^/.]+$/, "");
+        const title = !save ? previous : typed || original;
+        videoTitle.textContent = audioTitle.textContent = title;
+        if (!save || title === previous) return;
+        if (title === original) storage.remove(titleKey(name, size));
+        else storage.set(titleKey(name, size), title);
+        if (together.onTitle) together.onTitle();
+        showFeedback("fa-pen", "Renamed");
+    };
+    input.addEventListener("keydown", e => {
+        e.stopPropagation();
+        if (e.key === "Enter") finish(true);
+        if (e.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+};
+videoTitle.addEventListener("click", renameTitle);
 
 // Load Video File
 const setSource = (source, mode, autoplay = true) => {
@@ -179,15 +251,17 @@ const prepareFor = (name, size) => {
     compatBanner.classList.add("hidden");
     retriedWithTranscode = false;
     currentSavedKey = null;
+    currentSource = { name, size };
     currentFileKey = `resume:${name}:${size}`;
-    videoTitle.innerText = audioTitle.innerText = name.replace(/\.[^/.]+$/, "");
-    videoTitle.title = name;
+    videoTitle.innerText = audioTitle.innerText = savedTitle(name, size);
+    videoTitle.title = `${name}\nClick to rename`;
     uploadOverlay.classList.add("hidden");
     errorOverlay.classList.add("hidden");
 };
 
 const loadVideoFile = async (file) => {
     if(!file) return;
+    if (together.onFile) together.onFile(file);
     prepareFor(file.name, file.size);
     currentFile = file;
 
@@ -257,6 +331,7 @@ const applySubtitles = (text, label) => {
 
 const loadSubtitleFile = async (file) => {
     if (!file) return;
+    if (together.stream) return together.stream.loadSubtitles(await file.text());
     if (!currentFile) {
         showFeedback("fa-closed-captioning", "Open a video first");
         return;
@@ -265,6 +340,7 @@ const loadSubtitleFile = async (file) => {
 };
 
 const toggleSubtitles = () => {
+    if (together.stream) return together.stream.toggleSubtitles();
     const track = mainVideo.textTracks[0];
     if (!track) return subtitleInput.click();
     const show = track.mode !== "showing";
@@ -557,6 +633,7 @@ renderSavedList();
 
 // Watch Together Help
 shareHelpBtn.addEventListener("click", () => {
+    if (together.openPanel) return together.openPanel();
     mainVideo.pause();
     helpOverlay.classList.remove("hidden");
 });
@@ -567,7 +644,41 @@ closeErrorBtn.addEventListener("click", () => {
     uploadOverlay.classList.remove("hidden");
 });
 
+// Every dialog has a × in its corner, and Esc closes the topmost one
+const closeButton = dialog => dialog.querySelector(".box-close");
+
+closeButton(helpOverlay).addEventListener("click", () => helpOverlay.classList.add("hidden"));
+closeButton(shortcutsOverlay).addEventListener("click", () => shortcutsOverlay.classList.add("hidden"));
+closeButton(errorOverlay).addEventListener("click", () => closeErrorBtn.click());
+closeButton(convertOverlay).addEventListener("click", () => {
+    if (confirm("Stop converting this file?")) convertCancelBtn.click();
+});
+// The empty player's "Select a movie" box: back to the home page (in a room, just out of the way)
+closeButton(uploadOverlay).hidden = !homePage;
+closeButton(uploadOverlay).addEventListener("click", () => {
+    if (homePage && !together.active()) history.back();
+    else uploadOverlay.classList.add("hidden");
+});
+
+// Keyboard shortcuts list (button, or ?)
+const toggleShortcuts = () => shortcutsOverlay.classList.toggle("hidden");
+shortcutsBtn.addEventListener("click", toggleShortcuts);
+
+document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || playerPage.hidden) return;
+    if (speedOptions.classList.contains("show")) return speedOptions.classList.remove("show");
+    const open = [...document.querySelectorAll("[data-dialog]")]
+        .filter(dialog => !dialog.hidden && !dialog.classList.contains("hidden") && dialog.getClientRects().length)
+        .pop();
+    const close = open && closeButton(open);
+    if (close && !close.hidden) {
+        e.preventDefault();
+        close.click();
+    }
+});
+
 mainVideo.addEventListener("loadedmetadata", () => {
+    if (together.stream) return;
     videoDuration.innerText = formatTime(mainVideo.duration);
 
     const noPicture = mainVideo.videoWidth === 0;
@@ -575,7 +686,7 @@ mainVideo.addEventListener("loadedmetadata", () => {
     // A video file without a picture means the browser couldn't decode its video codec
     if (noPicture && playbackMode === "native" && looksLikeVideo(currentFile)) return startConversion("video");
 
-    const saved = parseFloat(storage.get(currentFileKey));
+    const saved = together.following ? NaN : parseFloat(storage.get(currentFileKey));
     if (saved > 10 && saved < mainVideo.duration - 10) {
         mainVideo.currentTime = saved;
         showFeedback("fa-clock-rotate-left", `Resumed ${formatTime(saved)}`);
@@ -596,10 +707,10 @@ document.addEventListener("click", e => {
 });
 
 // Timeline Hover Live Preview & Seeking
-videoTimeline.addEventListener("mousemove", e => {
-    if (!mainVideo.duration) return;
+const showPreview = e => {
+    if (!mainVideo.duration || together.stream) return;
     let timelineWidth = videoTimeline.clientWidth;
-    let offsetX = e.offsetX;
+    let offsetX = Math.min(timelineWidth, Math.max(0, e.clientX - videoTimeline.getBoundingClientRect().left));
     let targetTime = (offsetX / timelineWidth) * mainVideo.duration;
 
     const thumbWidth = 160;
@@ -615,19 +726,59 @@ videoTimeline.addEventListener("mousemove", e => {
     if (!previewVideo.seeking && Math.abs(previewVideo.currentTime - targetTime) > 0.3) {
         previewVideo.currentTime = targetTime;
     }
-});
+};
+videoTimeline.addEventListener("mousemove", showPreview);
 
-videoTimeline.addEventListener("click", e => {
-    if (!mainVideo.duration) return;
-    let timelineWidth = videoTimeline.clientWidth;
-    mainVideo.currentTime = (e.offsetX / timelineWidth) * mainVideo.duration;
-});
+// In a room's stream the timeline shows, and jumps in, the host's video
+const mediaDuration = () => together.stream ? together.stream.duration : mainVideo.duration;
 
-mainVideo.addEventListener("timeupdate", e => {
-    let {currentTime, duration} = e.target;
+const seekTo = time => {
+    if (together.stream) return together.stream.request({ time });
+    mainVideo.currentTime = time;
+};
+
+// Seeking: click, or drag along the timeline with the mouse or a finger
+let scrubbing = false;
+const timelineRatio = e => {
+    const rect = videoTimeline.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+};
+const scrub = e => {
+    const ratio = timelineRatio(e);
+    progressBar.style.width = `${ratio * 100}%`;
+    currentVidTime.innerText = formatTime(ratio * mediaDuration());
+    if (!together.stream) mainVideo.currentTime = ratio * mainVideo.duration;
+    if (e.pointerType === "touch") showPreview(e);
+};
+videoTimeline.addEventListener("pointerdown", e => {
+    if (!mediaDuration() || e.button > 0) return;
+    scrubbing = true;
+    videoTimeline.setPointerCapture(e.pointerId);
+    videoTimeline.classList.add("scrubbing");
+    scrub(e);
+});
+videoTimeline.addEventListener("pointermove", e => scrubbing && scrub(e));
+const endScrub = e => {
+    if (!scrubbing) return;
+    scrubbing = false;
+    videoTimeline.classList.remove("scrubbing");
+    // The host's stream jumps once, where the mouse or finger let go
+    if (together.stream && e.type === "pointerup") together.stream.request({ time: timelineRatio(e) * mediaDuration() });
+};
+videoTimeline.addEventListener("pointerup", endScrub);
+videoTimeline.addEventListener("pointercancel", endScrub);
+
+const showProgress = (currentTime, duration) => {
+    if (scrubbing) return;
     let percent = (currentTime / duration) * 100;
     progressBar.style.width = `${percent}%`;
     currentVidTime.innerText = formatTime(currentTime);
+};
+
+mainVideo.addEventListener("timeupdate", e => {
+    if (together.stream) return;
+    let {currentTime, duration} = e.target;
+    showProgress(currentTime, duration);
 
     if (Date.now() - lastSavedAt > 5000) {
         lastSavedAt = Date.now();
@@ -640,18 +791,14 @@ mainVideo.addEventListener("timeupdate", e => {
     }
 });
 
-const draggableProgressBar = e => {
-    if (!mainVideo.duration) return;
-    let timelineWidth = videoTimeline.clientWidth;
-    progressBar.style.width = `${e.offsetX}px`;
-    mainVideo.currentTime = (e.offsetX / timelineWidth) * mainVideo.duration;
-    currentVidTime.innerText = formatTime(mainVideo.currentTime);
-}
-
 // Volume Controls
+// Sliders fill with the accent colour up to their thumb
+const paintRange = input => input.style.setProperty("--fill", `${(input.value - input.min) / (input.max - input.min) * 100}%`);
+
 const setVolume = (value) => {
     mainVideo.volume = value;
     volumeSlider.value = value;
+    paintRange(volumeSlider);
     volumeBtn.parentNode.title = value == 0 ? "Unmute (M)" : "Mute (M)";
     if(value == 0) {
         volumeBtn.className = "fa-solid fa-volume-xmark";
@@ -679,6 +826,11 @@ volumeSlider.addEventListener("change", () => volumeSlider.blur());
 
 // Play / Pause
 const togglePlay = () => {
+    if (together.stream) {
+        const play = together.stream.paused;
+        if (together.stream.request({ paused: !play })) showFeedback(play ? "fa-play" : "fa-pause", "");
+        return;
+    }
     if(mainVideo.paused) {
         mainVideo.play().catch(() => {});
         showFeedback("fa-play", "");
@@ -689,23 +841,25 @@ const togglePlay = () => {
 };
 
 playPauseBtn.parentNode.addEventListener("click", togglePlay);
-mainVideo.addEventListener("play", () => {
-    playPauseBtn.className = "fas fa-pause";
-    playPauseBtn.parentNode.title = "Pause (Space / K)";
-    container.classList.add("is-playing");
-    clearTimeout(idleTimer);
-    hideControls();
-});
-mainVideo.addEventListener("pause", () => {
-    playPauseBtn.className = "fas fa-play";
-    playPauseBtn.parentNode.title = "Play (Space / K)";
-    container.classList.remove("is-playing");
-});
+
+const showPlaying = playing => {
+    playPauseBtn.className = playing ? "fas fa-pause" : "fas fa-play";
+    playPauseBtn.parentNode.title = playing ? "Pause (Space / K)" : "Play (Space / K)";
+    container.classList.toggle("is-playing", playing);
+    if (playing) {
+        clearTimeout(idleTimer);
+        hideControls();
+    }
+};
+mainVideo.addEventListener("play", () => together.stream || showPlaying(true));
+mainVideo.addEventListener("pause", () => together.stream || showPlaying(false));
 
 // Seek
 const seek = (seconds) => {
-    if (!mainVideo.duration) return;
-    mainVideo.currentTime += seconds;
+    if (!mediaDuration()) return;
+    if (together.stream) {
+        if (!together.stream.request({ time: together.stream.currentTime() + seconds })) return;
+    } else mainVideo.currentTime += seconds;
     showFeedback(seconds > 0 ? "fa-forward" : "fa-backward", `${seconds > 0 ? '+' : ''}${seconds}s`);
 };
 
@@ -724,6 +878,7 @@ const syncSpeedUI = () => {
     speedPresets.forEach(option => option.classList.toggle("active", +option.dataset.speed === rate));
     speedCurrent.textContent = rate === 1 ? "Normal" : `${rate}x`;
     speedSlider.value = rate;
+    paintRange(speedSlider);
     if (document.activeElement !== speedInput) speedInput.value = rate;
     speedBtn.title = `Playback speed: ${speedCurrent.textContent} (Shift + < / >)`;
 };
@@ -737,6 +892,8 @@ const setSpeed = (rate, feedback = true) => {
 };
 
 mainVideo.addEventListener("ratechange", syncSpeedUI);
+paintRange(volumeSlider);
+paintRange(speedSlider);
 
 speedPresets.forEach(option => option.addEventListener("click", () => setSpeed(option.dataset.speed)));
 speedSlider.addEventListener("input", () => setSpeed(speedSlider.value, false));
@@ -907,22 +1064,71 @@ const toggleCustomPiP = async () => {
 
 pipBtn.addEventListener("click", toggleCustomPiP);
 
+// The whole player page goes fullscreen, so a room's chat can stay open beside the video.
+// Phones turn sideways for a wide video; the iPhone can only show the video itself fullscreen.
+const isTouch = matchMedia("(pointer: coarse)").matches;
+
 const toggleFullscreen = () => {
-    if(document.fullscreenElement) return document.exitFullscreen();
-    container.requestFullscreen();
+    if (fullscreenElement()) return exitFullscreen();
+    const enter = playerPage.requestFullscreen || playerPage.webkitRequestFullscreen;
+    if (!enter) return mainVideo.webkitEnterFullscreen && mainVideo.webkitEnterFullscreen();
+    Promise.resolve(enter.call(playerPage)).then(() => {
+        const wide = (mainVideo.videoWidth || 16) >= (mainVideo.videoHeight || 9);
+        if (isTouch && wide && screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {});
+    }).catch(() => {});
 };
 
 // Keep the button & layout in sync even when leaving fullscreen with Esc
-document.addEventListener("fullscreenchange", () => {
-    const isFullscreen = document.fullscreenElement === container;
+const onFullscreenChange = () => {
+    const isFullscreen = fullscreenElement() === playerPage;
     container.classList.toggle("fullscreen", isFullscreen);
     fullScreenBtn.className = isFullscreen ? "fa-solid fa-compress" : "fa-solid fa-expand";
     fullScreenBtn.parentNode.title = isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)";
-});
+    if (!isFullscreen && screen.orientation && screen.orientation.unlock) {
+        try { screen.orientation.unlock(); } catch (e) {}
+    }
+};
+document.addEventListener("fullscreenchange", onFullscreenChange);
+document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 fullScreenBtn.parentNode.addEventListener("click", toggleFullscreen);
 
+// Touch: a tap shows or hides the controls (instead of pausing); a double tap on the left or
+// right third jumps back or forward 10 seconds, in the middle it toggles fullscreen
+let lastTap = { at: 0, x: 0 };
+let tapTimer = null;
+let touchedAt = 0;
+
+const toggleControls = () => {
+    clearTimeout(idleTimer);
+    if (container.classList.contains("show-controls")) {
+        hideTooltip();
+        container.classList.remove("show-controls");
+    } else {
+        container.classList.add("show-controls");
+        hideControls();
+    }
+};
+
+mainVideo.addEventListener("pointerup", e => {
+    if (e.pointerType !== "touch") return;
+    touchedAt = Date.now();
+    const rect = mainVideo.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (touchedAt - lastTap.at < 300 && Math.abs(x - lastTap.x) < 60) {
+        clearTimeout(tapTimer);
+        lastTap.at = 0;
+        if (x < rect.width / 3) seek(-10);
+        else if (x > rect.width * 2 / 3) seek(10);
+        else toggleFullscreen();
+        return;
+    }
+    lastTap = { at: touchedAt, x };
+    tapTimer = setTimeout(toggleControls, 300);
+});
+
 mainVideo.addEventListener("click", () => {
+    if (Date.now() - touchedAt < 700) return;
     if (clickTimeout) {
         clearTimeout(clickTimeout);
         clickTimeout = null;
@@ -1011,16 +1217,17 @@ document.addEventListener("keydown", e => {
         case "Comma":
             if (e.shiftKey) setSpeed(mainVideo.playbackRate - 0.25); // Shift + <
             break;
+
+        case "Slash":
+            if (e.shiftKey) toggleShortcuts(); // ?
+            break;
     }
 
-    if (e.code.startsWith("Digit") && !e.shiftKey && mainVideo.duration) {
+    if (e.code.startsWith("Digit") && !e.shiftKey && mediaDuration()) {
         const digit = parseInt(e.key);
         if (!isNaN(digit)) {
-            mainVideo.currentTime = (digit / 10) * mainVideo.duration;
+            seekTo((digit / 10) * mediaDuration());
             showFeedback("fa-forward", `${digit * 10}%`);
         }
     }
 });
-
-videoTimeline.addEventListener("mousedown", () => videoTimeline.addEventListener("mousemove", draggableProgressBar));
-document.addEventListener("mouseup", () => videoTimeline.removeEventListener("mousemove", draggableProgressBar));

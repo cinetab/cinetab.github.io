@@ -113,7 +113,70 @@ body.watching {
 
 .container.show-controls .video-title {
   pointer-events: auto;
-  cursor: default;
+  cursor: text;
+}
+
+/* The title can be renamed: click it */
+.video-title {
+  padding: 2px 8px;
+  margin-left: -8px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.container.show-controls .video-title:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.video-title:hover::after {
+  content: "\f303";
+  margin-left: 8px;
+  font: 900 11px "Font Awesome 6 Free";
+  opacity: 0.7;
+}
+
+.video-title:has(input) {
+  padding: 0;
+  margin-left: 0;
+  overflow: visible;
+}
+
+.video-title:has(input)::after {
+  content: none;
+}
+
+.title-input {
+  width: min(420px, 55vw);
+  padding: 4px 10px;
+  font: inherit;
+  color: #fff;
+  border-radius: 8px;
+  border: 1px solid #3e97fd;
+  background: rgba(0, 0, 0, 0.55);
+  outline: none;
+}
+
+/* Back to the home page */
+.player-back {
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.player-back:hover {
+  border-color: #3e97fd;
+  background: #3e97fd;
 }
 
 .video-title-container {
@@ -153,54 +216,90 @@ body.watching {
 .upload-overlay, .error-overlay, .help-overlay, .convert-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 15, 17, 0.95);
+  background: rgba(10, 10, 13, 0.82);
+  backdrop-filter: blur(6px);
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
+  transition: opacity 0.3s ease;
 }
 
+/* The empty player's "Select a movie" box isn't a dialog: Back and the controls stay usable */
+.upload-overlay {
+  z-index: 3;
+}
+
+/* Visible (and clickable) as soon as it opens; hidden only once it has faded out */
 .upload-overlay.hidden, .error-overlay.hidden, .help-overlay.hidden, .convert-overlay.hidden {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0s 0.3s;
 }
 
+/* Dialog card */
 .upload-box {
+  position: relative;
   text-align: center;
   color: #fff;
-  padding: 4px;
   max-height: calc(100% - 32px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 2px dashed rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #1f1f26, #17171c);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   max-width: 420px;
   width: 90%;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .box-scroll {
   min-height: 0;
   overflow-y: auto;
-  padding: 26px;
+  padding: 30px 28px 26px;
   scrollbar-width: thin;
 }
 
 .upload-box.drag-over {
   border-color: #3e97fd;
+  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.35), 0 24px 64px rgba(0, 0, 0, 0.55);
   transform: scale(1.02);
 }
 
 /* Only the large icon at the top of each box, not icons inside its buttons or text */
 .box-scroll > i {
-  font-size: 50px;
+  font-size: 42px;
   color: #3e97fd;
-  margin-bottom: 15px;
+  margin-bottom: 14px;
+}
+
+/* × in the top-right corner of every dialog (Esc does the same) */
+.box-close, .upload-box .box-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 16px;
+  color: #9a9aa8;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.box-close:hover, .upload-box .box-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  transform: none;
 }
 
 .upload-box h2 {
@@ -246,6 +345,47 @@ body.watching {
 
 .help-box {
   max-width: 480px;
+}
+
+/* Keyboard shortcuts list */
+.shortcuts-box {
+  max-width: 460px;
+}
+
+.shortcut-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 18px 0 6px;
+  text-align: left;
+  font-size: 13.5px;
+}
+
+.shortcut-list dt {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+  color: #888;
+}
+
+.shortcut-list dd {
+  color: #ddd;
+}
+
+.shortcut-list kbd {
+  min-width: 26px;
+  padding: 2px 7px;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+  color: #fff;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom-width: 2px;
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .help-box ol {
@@ -461,11 +601,50 @@ body.watching {
   transform: scale(0.92);
 }
 
+/* Volume and speed sliders: blue up to the thumb, like the timeline */
 .options input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   height: 4px;
   width: 75px;
-  accent-color: #3e97fd;
+  border-radius: 2px;
+  background: linear-gradient(to right, #3e97fd var(--fill, 100%), rgba(255, 255, 255, 0.28) var(--fill, 100%));
+  outline: none;
   cursor: pointer;
+}
+
+.options input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: #3e97fd;
+  box-shadow: 0 0 8px rgba(62, 151, 253, 0.55);
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.options input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: #3e97fd;
+  box-shadow: 0 0 8px rgba(62, 151, 253, 0.55);
+}
+
+.options input[type="range"]::-moz-range-track {
+  background: transparent;
+}
+
+.options input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px rgba(62, 151, 253, 0.25), 0 0 8px rgba(62, 151, 253, 0.55);
+}
+
+.options input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px #fff;
 }
 
 .options .video-timer {
@@ -574,16 +753,33 @@ body.watching {
   width: auto;
   flex: 1;
   min-width: 0;
-  accent-color: #3e97fd;
   cursor: pointer;
 }
 
 .speed-custom .speed-input {
   width: 56px;
+  padding: 5px 6px;
   font: inherit;
   font-size: 12px;
+  text-align: center;
   color: #fff;
-  padding: 3px 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  transition: border-color 0.2s ease;
+}
+
+.speed-custom .speed-input:focus {
+  border-color: #3e97fd;
+}
+
+.speed-custom .speed-input::-webkit-inner-spin-button,
+.speed-custom .speed-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .container video {
@@ -700,7 +896,8 @@ video::cue {
     width: 30px;
     font-size: 14px;
   }
-  .options button.pic-in-pic {
+  .options button.pic-in-pic,
+  .options button.shortcuts-btn {
     display: none;
   }
   /* Small players: tighter speed menu so it fits above the controls */
@@ -730,6 +927,132 @@ video::cue {
     padding: 7px 10px;
   }
   .share-help-btn span {
+    display: none;
+  }
+}
+
+/* Controls that are hidden can't be tapped or clicked by accident */
+.container:not(.show-controls) .wrapper,
+.container:not(.show-controls) .top-bar * {
+  pointer-events: none !important;
+}
+
+/* Touch screens: a thicker timeline for fingers (scene preview while dragging); no keyboard list
+   or volume slider, since phones have their own volume buttons */
+@media (pointer: coarse) {
+  .video-timeline {
+    height: 24px;
+    touch-action: none;
+  }
+  .video-timeline .progress-area, .video-timeline:hover .progress-area {
+    height: 5px;
+  }
+  .progress-bar::before {
+    transform: translateY(-50%) scale(1);
+  }
+  .options button.shortcuts-btn, .options .volume-slider {
+    display: none;
+  }
+}
+
+@media (hover: none) {
+  .video-timeline:hover .thumbnail-preview {
+    display: none;
+  }
+}
+
+.video-timeline.scrubbing .thumbnail-preview {
+  display: flex;
+}
+
+/* Phones held upright: the video at the top, edge to edge */
+@media screen and (max-width: 600px) and (orientation: portrait) {
+  .player-page {
+    align-items: flex-start;
+  }
+  .container {
+    width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  /* Room for the "Select a movie" box before a video is open */
+  .container:has(.upload-overlay:not(.hidden)) {
+    aspect-ratio: auto;
+    height: min(75vh, 600px);
+  }
+  .top-bar {
+    padding: 10px 12px;
+  }
+  .video-title-container {
+    gap: 8px;
+  }
+  .player-back {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+  .player-home img {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* Phones held sideways: the player fills the screen, with compact controls */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .player-page {
+    padding: 0;
+  }
+  .container {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .top-bar {
+    padding: 10px 16px;
+  }
+  .video-title {
+    font-size: 14px;
+  }
+  .player-back {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+  .player-home img {
+    width: 22px;
+    height: 22px;
+  }
+  .share-help-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
+  .wrapper {
+    padding: 12px 14px 4px;
+  }
+  .wrapper .video-controls {
+    margin-top: 4px;
+  }
+  .options button {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+  .center-feedback {
+    width: 80px;
+    height: 80px;
+    padding: 14px;
+  }
+  .center-feedback i {
+    font-size: 22px;
+  }
+  .box-scroll {
+    padding: 22px 22px 18px;
+  }
+  /* Short screens: dialogs skip their big icon */
+  .box-scroll > i {
     display: none;
   }
 }
@@ -1051,45 +1374,23 @@ video::cue {
   margin-bottom: 40px;
 }
 
-.steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-}
-
-.step, .feature {
+.feature {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 26px;
 }
 
-.step-num {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-weight: 600;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  margin-bottom: 18px;
-}
-
-.step h3, .feature h3 {
+.feature h3 {
   font-size: 17px;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
-.step p, .feature p {
+.feature p {
   font-size: 14px;
   line-height: 1.65;
   color: var(--text-soft);
-}
-
-.step b {
-  color: #fff;
-  font-weight: 500;
 }
 
 kbd {
@@ -1212,7 +1513,7 @@ kbd {
     gap: 40px;
     padding-top: 32px;
   }
-  .steps, .features {
+  .features {
     grid-template-columns: 1fr 1fr;
   }
   .site-nav {
@@ -1231,7 +1532,7 @@ kbd {
     padding-left: 16px;
     padding-right: 16px;
   }
-  .steps, .features {
+  .features {
     grid-template-columns: 1fr;
   }
   .cta-band {
@@ -1656,3 +1957,1799 @@ kbd {
   border: 1px solid rgba(255, 255, 255, 0.14);
   color: #a9a9b8;
 }
+
+/* =================== WATCH TOGETHER ROOMS =================== */
+/* Home: the two ways to watch together */
+.ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.way {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px;
+}
+
+.way:first-child {
+  border-color: rgba(124, 92, 255, 0.35);
+  background: radial-gradient(30rem 14rem at 0% 0%, rgba(124, 92, 255, 0.14), transparent 70%), var(--card);
+}
+
+.way > .way-badge {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.way h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-right: 56px;
+}
+
+.way h3 i {
+  color: var(--accent);
+  font-size: 17px;
+}
+
+.way-sub {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-soft);
+  margin-bottom: 20px;
+}
+
+.way-steps {
+  list-style: none;
+  counter-reset: way;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 24px;
+  flex: 1;
+}
+
+.way-steps li {
+  counter-increment: way;
+  position: relative;
+  padding-left: 42px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+
+.way-steps li::before {
+  content: counter(way);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.way-steps b {
+  color: #fff;
+  font-weight: 500;
+}
+
+.way-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.way-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #3e97fd, #7c5cff);
+}
+
+@media screen and (max-width: 900px) {
+  .ways {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Player: the "Watch together" dialog offers a room or a video call */
+.together-room {
+  text-align: left;
+  margin: 14px 0 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(62, 151, 253, 0.3);
+  background: rgba(62, 151, 253, 0.08);
+}
+
+.together-room h3, .together-call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+.together-room h3 i, .together-call i {
+  color: #3e97fd;
+  font-size: 14px;
+}
+
+.upload-box .together-room p {
+  margin-bottom: 14px;
+}
+
+.together-room .convert-actions {
+  justify-content: flex-start;
+}
+
+.together-room .convert-actions button {
+  padding: 9px 16px;
+}
+
+/* Watch together button: unread messages and people waiting */
+.room-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: #ff4d6d;
+}
+
+.player-page.room-open .share-help-btn {
+  background: rgba(62, 151, 253, 0.35);
+  border-color: rgba(62, 151, 253, 0.6);
+}
+
+/* Room dialogs over the player */
+.room-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 13, 0.82);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.3s ease;
+}
+
+/* Messages while in a room (chat open beside the video) stay under the top bar and controls,
+   so Back, volume and the rest keep working */
+.room-overlay:not(.room-modal) {
+  z-index: 3;
+}
+
+/* Visible as soon as it opens, so its first field can take focus right away */
+.room-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0s 0.3s;
+}
+
+.room-box {
+  max-width: 440px;
+}
+
+.room-view > i {
+  font-size: 42px;
+  color: #3e97fd;
+  margin-bottom: 14px;
+}
+
+@media screen and (max-width: 600px), screen and (max-height: 500px) {
+  .room-overlay.room-modal {
+    position: fixed;
+    z-index: 70;
+  }
+}
+
+.upload-box .room-status-text {
+  margin-bottom: 18px;
+}
+
+.room-status-progress {
+  margin: 0 0 18px;
+}
+
+.room-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  text-align: left;
+  font-size: 12.5px;
+  color: #ccc;
+}
+
+.room-field input, .room-field select {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: #fff;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.room-field input:focus, .room-field select:focus {
+  border-color: #3e97fd;
+}
+
+.room-field select option {
+  background: #16161b;
+}
+
+.room-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.room-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-box .room-input-btn {
+  padding: 0 13px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.upload-box .room-avatar-btn {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.upload-box .room-avatar-btn:hover {
+  background: transparent;
+  transform: scale(1.06);
+}
+
+/* Small pencil: the avatar can be changed */
+.room-avatar-btn::after {
+  content: "\f303";
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 900 9px "Font Awesome 6 Free";
+  color: #fff;
+  background: #3e97fd;
+  border: 2px solid #1c1c22;
+}
+
+.room-avatar-btn .room-avatar, .room-profile-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.room-box .room-avatar-grid {
+  margin-top: -2px;
+}
+
+.upload-box .room-input-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: none;
+}
+
+.room-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.room-check input {
+  flex-shrink: 0;
+  margin-top: 2px;
+  accent-color: #3e97fd;
+}
+
+.room-box .room-check {
+  margin-bottom: 14px;
+}
+
+.upload-box .room-error {
+  color: #ff8a8a;
+  margin-bottom: 12px;
+}
+
+/* Subtitles over the host's stream, its loading note and chat pop-ups */
+.room-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 13%;
+  z-index: 2;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 2px 10px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: pre-line;
+  font-size: clamp(14px, 2.4vw, 28px);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.room-stream-wait {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #ddd;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* Pop-ups (new messages, people at the door): top right of the screen, left of an open panel */
+.room-toasts {
+  position: fixed;
+  top: 76px;
+  right: 20px;
+  z-index: 1000;
+  width: min(340px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+body > .room-toasts {
+  top: 84px;
+}
+
+.player-page.room-open > .room-toasts {
+  right: 392px;
+}
+
+.room-toast {
+  max-width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  color: #eee;
+  overflow-wrap: anywhere;
+  background: rgba(28, 28, 35, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  animation: room-toast-in 0.25s ease;
+}
+
+.room-toast.clickable {
+  pointer-events: auto;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.room-toast.clickable:hover {
+  border-color: #3e97fd;
+}
+
+.room-toast-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-toast-body b {
+  font-size: 12.5px;
+  color: #fff;
+}
+
+.room-toast-text {
+  color: #d6d6e0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes room-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+
+/* Watching the host's stream: speed and scene previews belong to the host's copy */
+.container.remote .playback-content,
+.container.remote .thumbnail-preview {
+  display: none !important;
+}
+
+/* Room panel beside the video (also in fullscreen, where the whole page is shown) */
+.player-page.room-open {
+  gap: 14px;
+  padding: 12px;
+}
+
+.player-page.room-open .container {
+  width: calc(100% - 374px);
+}
+
+.player-page.room-open .container.fullscreen {
+  flex: 1;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  border-radius: 12px;
+}
+
+.room-panel {
+  position: relative;
+  width: 360px;
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+  color: #e8e8ee;
+  background: #17171c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.room-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 12px 18px;
+}
+
+.room-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-head h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.room-code-label, .room-secret-text code {
+  font-family: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
+  letter-spacing: 1px;
+}
+
+.room-code-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8f8f9e;
+}
+
+.room-state {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #8f8f9e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-icon-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #b8b8c6;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.room-icon-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.room-icon-btn.danger:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.12);
+}
+
+/* Tabs: one thing at a time */
+.room-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 12px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.room-tab-btn {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 4px 6px;
+  border: none;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #9a9aa8;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.room-tab-btn i {
+  font-size: 15px;
+}
+
+.room-tab-btn:hover {
+  color: #fff;
+}
+
+.room-tab-btn.active {
+  color: #fff;
+  background: rgba(62, 151, 253, 0.22);
+}
+
+.room-tab-btn.active i {
+  color: #6fb0ff;
+}
+
+.room-tab-badge {
+  position: absolute;
+  top: 3px;
+  left: calc(50% + 6px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: #ff4d6d;
+}
+
+.room-tab {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+  scrollbar-width: thin;
+}
+
+.room-section-title {
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8f8f9e;
+}
+
+.room-count {
+  margin-left: 4px;
+  color: #c8c8d4;
+}
+
+.room-label {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8f8f9e;
+}
+
+.room-hint {
+  margin-top: 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #8f8f9e;
+}
+
+/* Someone at the door (host) */
+.room-requests {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 12px 0;
+}
+
+.room-requests:empty {
+  display: none;
+}
+
+.room-request {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(62, 151, 253, 0.45);
+  background: rgba(62, 151, 253, 0.1);
+  animation: room-toast-in 0.25s ease;
+}
+
+.room-request p {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.room-request small {
+  font-size: 11.5px;
+  color: #a9a9b8;
+}
+
+.room-small-btn {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room-small-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.room-small-btn.primary {
+  border-color: #3e97fd;
+  background: #3e97fd;
+}
+
+.room-small-btn.primary:hover {
+  background: #2289ff;
+}
+
+/* Chat */
+.room-tab-chat {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.room-tab-chat[hidden] {
+  display: none;
+}
+
+.room-chat {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 8px;
+  scrollbar-width: thin;
+}
+
+/* Few messages sit at the bottom, next to the message box */
+.room-chat > :first-child {
+  margin-top: auto;
+}
+
+.room-msg {
+  display: flex;
+  gap: 10px;
+  animation: room-toast-in 0.2s ease;
+}
+
+.room-msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.room-msg-head b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.room-msg-head time {
+  font-size: 11px;
+  color: #77778a;
+}
+
+.room-msg.self .room-msg-head b {
+  color: #8fb8ff;
+}
+
+.room-msg-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #dcdce6;
+  overflow-wrap: anywhere;
+}
+
+.room-msg-text + .room-msg-text {
+  margin-top: 3px;
+}
+
+.room-msg.system {
+  display: block;
+  align-self: center;
+  max-width: 92%;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  text-align: center;
+  color: #9a9aa8;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.room-chat-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px 12px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  transition: border-color 0.2s ease;
+}
+
+.room-chat-form:focus-within {
+  border-color: #3e97fd;
+}
+
+.room-chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 0;
+  font: inherit;
+  font-size: 13.5px;
+  color: #fff;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+.room-chat-input:disabled {
+  opacity: 0.5;
+}
+
+.room-send-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 13px;
+  color: #fff;
+  background: #3e97fd;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room-send-btn:hover {
+  background: #2289ff;
+}
+
+/* Avatars: an initial on a colour, or an emoji */
+.room-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: hsl(var(--hue, 212) 62% 52%);
+  user-select: none;
+}
+
+.room-avatar.emoji {
+  font-size: 20px;
+  background: hsl(var(--hue, 212) 30% 26%);
+}
+
+.room-avatar.small {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.room-avatar.small.emoji {
+  font-size: 16px;
+}
+
+.room-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  margin: 8px 0 14px;
+}
+
+.room-avatar-option, .upload-box .room-avatar-option {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.room-avatar-option .room-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+}
+
+.room-avatar-option .room-avatar.emoji {
+  font-size: 18px;
+}
+
+.room-avatar-option:hover, .upload-box .room-avatar-option:hover {
+  background: transparent;
+  transform: scale(1.1);
+}
+
+.room-avatar-option.selected {
+  border-color: #fff;
+}
+
+/* People */
+.room-people {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.room-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px;
+  border-radius: 10px;
+}
+
+.room-person:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.room-person-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-person-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-person-you {
+  font-weight: 400;
+  color: #8f8f9e;
+}
+
+.room-person-meta {
+  font-size: 11.5px;
+  color: #8f8f9e;
+}
+
+.room-wide-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: linear-gradient(135deg, #3e97fd, #7c5cff);
+  cursor: pointer;
+}
+
+.room-wide-btn.secondary {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.room-wide-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Invite */
+.room-qr {
+  width: 176px;
+  margin: 4px auto 0;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.room-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.room-qr-hint {
+  margin: 8px 0 16px;
+  font-size: 11.5px;
+  text-align: center;
+  color: #8f8f9e;
+}
+
+.room-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 6px 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.room-secret-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-secret-text code {
+  font-size: 16px;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+/* Switches (settings and invite) */
+.room-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+.room-switch + .room-switch, .room-quality + .room-switch {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.room-switch span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-switch b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room-switch small {
+  font-size: 11.5px;
+  color: #8f8f9e;
+}
+
+.room-switch input {
+  order: 1;
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room-switch input::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+
+.room-switch input:checked {
+  background: #3e97fd;
+}
+
+.room-switch input:checked::after {
+  transform: translateX(16px);
+}
+
+.room-switch input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.room-switch input:focus-visible {
+  outline: 2px solid #8fb8ff;
+  outline-offset: 2px;
+}
+
+.room-tab .room-copy-link {
+  margin-top: 8px;
+}
+
+.room-quality {
+  margin: 0 0 10px;
+}
+
+.room-quality select {
+  font-size: 12.5px;
+  padding: 8px 10px;
+}
+
+/* How a guest watches */
+.room-choice {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  text-align: left;
+  color: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.room-choice i {
+  width: 20px;
+  font-size: 17px;
+  text-align: center;
+  color: #8fb8ff;
+}
+
+.room-choice span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-choice b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room-choice small {
+  font-size: 11.5px;
+  color: #8f8f9e;
+}
+
+.room-choice:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.room-choice.active {
+  border-color: #3e97fd;
+  background: rgba(62, 151, 253, 0.12);
+}
+
+.room-choice:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Footer: you, and the way out */
+.room-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.room-me {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 4px;
+  border: none;
+  border-radius: 999px;
+  text-align: left;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room-me:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.room-me-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-me-text b {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-me-text small {
+  font-size: 11px;
+  color: #8f8f9e;
+}
+
+.room-leave-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: #e5484d;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room-leave-btn:hover {
+  background: #cf3a3f;
+}
+
+/* Profile editor, over the panel */
+.room-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(10, 10, 13, 0.6);
+  backdrop-filter: blur(3px);
+}
+
+.room-sheet[hidden] {
+  display: none;
+}
+
+.room-sheet-card {
+  position: relative;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 22px 18px 18px;
+  border-radius: 18px 18px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1f1f26;
+  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.5);
+  animation: room-sheet-in 0.2s ease;
+}
+
+@keyframes room-sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+}
+
+.room-sheet-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.room-sheet-card .room-hint {
+  margin: 2px 0 16px;
+}
+
+.room-sheet-card .room-field {
+  margin-bottom: 12px;
+}
+
+.room-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.room-sheet-actions .room-small-btn {
+  padding: 8px 18px;
+}
+
+/* Network check results */
+.room-status-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 18px;
+  text-align: left;
+}
+
+.room-status-list li {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.room-status-list i {
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.room-status-list .ok i { color: #4ade80; }
+.room-status-list .bad i { color: #ff6b6b; }
+.room-status-list .info i { color: #8fb8ff; }
+
+.room-status-list span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-status-list b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room-status-list small {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #a9a9b8;
+}
+
+.upload-box .room-link-btn {
+  margin-top: 10px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8fb8ff;
+  background: transparent;
+}
+
+.upload-box .room-link-btn:hover {
+  color: #fff;
+  background: transparent;
+  transform: none;
+}
+
+/* A chat message: reply quote, text, reactions; React and Reply appear on hover (or tap) */
+.room-msg-line {
+  position: relative;
+  margin: 0 -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.room-msg-line + .room-msg-line {
+  margin-top: 4px;
+}
+
+.room-msg-line:hover, .room-msg-line.show-tools {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.room-msg-line.flash {
+  animation: room-flash 1.4s ease;
+}
+
+@keyframes room-flash {
+  0%, 40% { background: rgba(62, 151, 253, 0.28); }
+}
+
+.room-msg-quote {
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  margin: 2px 0 4px;
+  padding: 4px 10px;
+  border: none;
+  border-left: 3px solid #3e97fd;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: #a9a9b8;
+  background: rgba(62, 151, 253, 0.08);
+  cursor: pointer;
+}
+
+.room-msg-quote b {
+  font-size: 11.5px;
+  color: #8fb8ff;
+}
+
+.room-msg-quote span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.room-reactions:not(:empty) {
+  margin-top: 4px;
+}
+
+.room-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.room-chip.mine {
+  border-color: #3e97fd;
+  background: rgba(62, 151, 253, 0.2);
+  color: #fff;
+}
+
+.room-msg-tools {
+  position: absolute;
+  top: -12px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #24242c;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.room-msg-line:hover .room-msg-tools,
+.room-msg-line.show-tools .room-msg-tools,
+.room-msg-line:has(.room-react-picker) .room-msg-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.room-msg-tools button, .room-react-picker button {
+  width: 28px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 7px;
+  font-size: 15px;
+  color: #c8c8d4;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-msg-tools button:hover, .room-react-picker button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.room-msg-tools .fa-reply {
+  font-size: 12px;
+}
+
+.room-react-picker {
+  position: absolute;
+  top: 18px;
+  right: 4px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #24242c;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  animation: room-toast-in 0.15s ease;
+}
+
+.room-react-picker button {
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+}
+
+.room-react-picker button:hover {
+  transform: scale(1.15);
+}
+
+/* Replying to a message, above the message box */
+.room-reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 12px 0;
+  padding: 6px 4px 6px 12px;
+  border-radius: 10px;
+  border-left: 3px solid #3e97fd;
+  background: rgba(62, 151, 253, 0.08);
+  font-size: 12px;
+  color: #a9a9b8;
+}
+
+.room-reply-bar > i {
+  color: #8fb8ff;
+}
+
+.room-reply-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-reply-info b {
+  color: #fff;
+  font-weight: 500;
+}
+
+.room-reply-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-reply-bar .room-icon-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.room-reply-bar + .room-chat-form {
+  margin-top: 6px;
+}
+
+/* Phones and narrow windows: chat under the video when upright, over its edge when sideways */
+@media screen and (max-width: 900px) and (orientation: portrait) {
+  .player-page.room-open {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
+  }
+  .player-page.room-open .container,
+  .player-page.room-open .container.fullscreen {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    border-radius: 0;
+  }
+  .room-panel {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border-radius: 0;
+    border-width: 1px 0 0;
+  }
+  .player-page.room-open > .room-toasts {
+    top: 12px;
+    right: 12px;
+  }
+}
+
+/* Phones held sideways: a compact panel beside the video, so it never covers the controls */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .player-page.room-open {
+    padding: 0;
+    gap: 0;
+  }
+  .player-page.room-open .container,
+  .player-page.room-open .container.fullscreen {
+    flex: 1;
+    width: auto;
+    height: 100%;
+    border-radius: 0;
+  }
+  .room-panel {
+    width: min(300px, 42vw);
+    border-radius: 0;
+    border-width: 0 0 0 1px;
+  }
+  .room-head {
+    padding: 8px 6px 6px 12px;
+  }
+  .room-head h2 {
+    font-size: 14px;
+  }
+  .room-state {
+    font-size: 11px;
+  }
+  .room-tabs {
+    margin: 0 8px;
+    padding: 3px;
+  }
+  .room-tab-btn {
+    padding: 6px 4px;
+  }
+  .room-tab-btn span {
+    display: none;
+  }
+  .room-tab-badge {
+    top: 0;
+  }
+  .room-tab {
+    padding: 10px 12px;
+  }
+  .room-chat {
+    gap: 10px;
+    padding: 10px 12px 4px;
+  }
+  .room-chat-form {
+    margin: 6px 8px 8px;
+  }
+  .room-reply-bar {
+    margin: 6px 8px 0;
+  }
+  .room-foot {
+    padding: 6px 8px;
+  }
+  .room-me-text small {
+    display: none;
+  }
+  .room-leave-btn {
+    padding: 7px 12px;
+  }
+  .room-qr {
+    width: 130px;
+  }
+  .room-view > i {
+    display: none;
+  }
+  .player-page.room-open > .room-toasts {
+    top: 12px;
+    right: calc(min(300px, 42vw) + 12px);
+  }
+}
+/* Home: the room you're in (it keeps going), or the last room to get back into */
+.room-home-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 30;
+  transform: translateX(-50%);
+  width: min(660px, calc(100% - 32px));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 24, 30, 0.94);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  animation: room-home-in 0.3s ease;
+}
+
+@keyframes room-home-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+}
+
+.room-home-icon {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #b8c6ff;
+  background: linear-gradient(135deg, rgba(62, 151, 253, 0.25), rgba(124, 92, 255, 0.25));
+}
+
+.room-home-bar.live .room-home-icon {
+  color: #6ee7a8;
+  background: rgba(46, 204, 113, 0.16);
+}
+
+.room-home-bar.live .room-home-icon::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2ecc71;
+  border: 2px solid #18181e;
+  animation: room-live 1.6s ease-in-out infinite;
+}
+
+@keyframes room-live {
+  50% { opacity: 0.35; }
+}
+
+.room-home-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-home-text b {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-home-text small {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.room-home-close {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  font-size: 15px;
+  color: #9a9aa8;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-home-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.home:has(.room-home-bar:not([hidden])) .site-footer {
+  padding-bottom: 110px;
+}
+
+@media screen and (max-width: 600px) {
+  .room-home-bar {
+    bottom: 12px;
+    gap: 10px;
+  }
+  .room-home-icon {
+    display: none;
+  }
+}
+
+/* Settings tab: remembering the room in this browser */
+.room-browser-settings {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.room-home-forget:hover {
+  color: #ff6b6b;
+}
+
+/* Room name in the panel header and dialogs */
+.room-head h2.room-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-field small {
+  color: #8f8f9e;
+}
+
+.room-name-field {
+  margin-bottom: 6px;
+}
+/* =================== /WATCH TOGETHER ROOMS =================== */

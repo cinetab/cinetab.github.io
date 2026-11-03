@@ -1,7 +1,7 @@
 {
   "name": "CineTab – Watch videos together",
   "short_name": "CineTab",
-  "description": "Play videos from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams.",
+  "description": "Play videos from your computer in a browser tab and watch them together on Google Meet, Zoom, Teams or in a private CineTab room.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

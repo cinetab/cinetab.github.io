@@ -62,11 +62,22 @@ const cutSection = (text, start, end) => {
     return text.slice(0, from) + text.slice(to);
 };
 
-// The website's stylesheet minus the home page, its converted-videos list and download links
+// Removes the lines from the one holding `start` through the one holding `end`
+const cutBlock = (text, start, end) => {
+    const startAt = text.indexOf(start);
+    const endAt = text.indexOf(end);
+    if (startAt < 0 || endAt < startAt) throw new Error(`Section not found: ${start}`);
+    const from = text.lastIndexOf("\n", startAt) + 1;
+    const to = text.indexOf("\n", endAt);
+    return text.slice(0, from) + (to < 0 ? "" : text.slice(to + 1));
+};
+
+// The website's stylesheet minus the home page, its converted-videos list, download links and rooms
 const playerStyles = styles => {
     let css = styles.replace(/@import url\([^)]*fonts\.googleapis[^)]*\);\s*/, "");
     css = cutSection(css, "/* =================== HOME PAGE", "/* =================== FORMAT SUPPORT");
     css = cutSection(css, "/* Home: converted videos */", "/* =================== TOOLTIPS");
+    css = cutBlock(css, "/* =================== WATCH TOGETHER ROOMS", "/* =================== /WATCH TOGETHER ROOMS");
     return css;
 };
 
@@ -96,9 +107,16 @@ const build = async () => {
 
     // Just the player: no home page, and it starts open
     out = cutSection(out, "<!-- ============ HOME PAGE ============ -->", "<!-- ============ PLAYER ============ -->");
+    // Watch-together rooms need the website (and the internet); the Watch together button
+    // keeps its video-call instructions
+    for (const part of ["CHOOSER", "PLAYER", "PANEL"]) {
+        out = cutBlock(out, `<!-- ============ ROOM: ${part} ============ -->`, `<!-- ============ /ROOM: ${part} ============ -->`);
+    }
+    for (const script of ["vendor/qrcode-generator.js", "signaling.js", "room.js"]) swap(`  <script src="${script}"></script>\n`, "");
     swap(`<title>CineTab – Watch videos together on Google Meet, Zoom &amp; Teams</title>`, `<title>CineTab Player</title>`);
     swap(`<body>`, `<body class="watching">`);
     swap(`<div class="player-page" hidden>`, `<div class="player-page">`);
+    swap(`        <button class="player-back" title="Back to home"><i class="fa-solid fa-arrow-left"></i></button>\n`, "");
     swap(`<button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>`,
         `<span class="player-home" title="CineTab Player v${version}"><img src="logo.svg" alt="CineTab" width="26" height="26"></span>`);
 

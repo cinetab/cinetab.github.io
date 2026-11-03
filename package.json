@@ -1,7 +1,7 @@
 {
   "name": "cinetab",
-  "version": "1.0.0",
-  "description": "Play videos from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. Nothing is uploaded.",
+  "version": "1.1.0",
+  "description": "Play videos from your computer in a browser tab and watch them together: share the tab on Google Meet, Zoom or Teams, or invite friends to a private, peer-to-peer CineTab room. Nothing is uploaded.",
   "homepage": "https://cinetab.github.io/",
   "repository": {
     "type": "git",

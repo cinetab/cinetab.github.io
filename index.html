@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CineTab – Watch videos together on Google Meet, Zoom &amp; Teams</title>
-  <meta name="description" content="Play any video from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. A free watch-party player: MP4, MKV, AVI and more. Nothing is uploaded.">
+  <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.0.0">
+  <meta name="version" content="1.1.0">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -18,14 +18,14 @@
   <meta property="og:site_name" content="CineTab">
   <meta property="og:url" content="https://cinetab.github.io/">
   <meta property="og:title" content="CineTab – Watch videos together on Google Meet, Zoom &amp; Teams">
-  <meta property="og:description" content="Play any video from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. A free watch-party player: MP4, MKV, AVI and more. Nothing is uploaded.">
+  <meta property="og:description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta property="og:image" content="https://cinetab.github.io/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="CineTab: movie night on any video call. Play a video from your computer in a browser tab and share it with sound.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="CineTab – Watch videos together on Google Meet, Zoom &amp; Teams">
-  <meta name="twitter:description" content="Play any video from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. A free watch-party player: MP4, MKV, AVI and more. Nothing is uploaded.">
+  <meta name="twitter:description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="twitter:image" content="https://cinetab.github.io/og-image.png">
   <script type="application/ld+json">
 {
@@ -43,12 +43,12 @@
       "@id": "https://cinetab.github.io/#app",
       "name": "CineTab",
       "url": "https://cinetab.github.io/",
-      "description": "Play videos and music from your own computer in a browser tab, then share that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. Files are never uploaded.",
+      "description": "Play videos and music from your own computer in a browser tab, then watch together: share that tab with sound in Google Meet, Zoom or Microsoft Teams, or invite friends to a private CineTab room with chat. Files are never uploaded.",
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.0.0",
+      "softwareVersion": "1.1.0",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -61,6 +61,8 @@
       "featureList": [
         "Play local video files in a browser tab",
         "Share a video with sound in Google Meet, Zoom or Microsoft Teams",
+        "Private watch-together rooms with a code, password or QR code, group chat and synced playback",
+        "Stream a local video to friends in the room, peer-to-peer and encrypted",
         "Plays MP4, MKV, MOV, WebM, AVI, WMV, FLV, TS and audio files",
         "Converts unsupported formats in the browser, nothing is uploaded",
         "Subtitles (.srt, .vtt and embedded MKV subtitles)",
@@ -98,12 +100,12 @@
       <div class="hero-text">
         <span class="eyebrow"><i class="fa-solid fa-lock"></i> Free &middot; Private &middot; No sign-up</span>
         <h1>Movie night on <span class="gradient-text">any video call.</span></h1>
-        <p class="lead">CineTab plays a movie from your own computer right in this browser tab. Share the tab with audio in Google Meet, Zoom or Teams and everyone watches together.</p>
+        <p class="lead">CineTab plays a movie from your own computer right in this browser tab. Share the tab with audio in Google Meet, Zoom or Teams, or invite friends to a private CineTab room where everyone watches in sync and chats.</p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
-          <a class="btn btn-ghost btn-lg" href="#how" title="See the three steps to movie night">How it works</a>
+          <button class="btn btn-ghost btn-lg room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join a room</button>
         </div>
-        <p class="hero-note">Best in Chrome or Edge on desktop. Your video never leaves your device.</p>
+        <p class="hero-note">Best in Chrome or Edge on desktop. Your video is never uploaded to any server.</p>
         <p class="hero-note offline-note" data-online-only><i class="fa-solid fa-download"></i> Prefer no website at all? <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file you can open from your computer, even without internet">Download the player as one file</a> and open it from your computer.</p>
       </div>
 
@@ -126,8 +128,21 @@
           <span class="avatar" style="--hue: 260">R</span>
           <span class="avatar" style="--hue: 330">S</span>
           <span class="avatar" style="--hue: 160">+3</span>
-          <p>Friends watch on the call &mdash; nothing to install</p>
+          <p>Friends watch on a call or in a CineTab room &mdash; nothing to install</p>
         </div>
+      </div>
+    </section>
+
+    <section class="section saved-section" id="rooms" hidden>
+      <div class="saved-panel">
+        <div class="saved-header">
+          <div>
+            <h2 class="saved-title"><i class="fa-solid fa-door-open"></i> Your rooms</h2>
+            <p class="saved-sub">Remembered in this browser, so you can get back in with one click</p>
+          </div>
+          <button class="btn btn-ghost btn-sm room-forget-all" title="Delete every remembered room (codes and passwords) from this browser"><i class="fa-solid fa-trash-can"></i> Delete all</button>
+        </div>
+        <ul class="saved-list room-list"></ul>
       </div>
     </section>
 
@@ -145,22 +160,33 @@
     </section>
 
     <section class="section" id="how">
-      <h2 class="section-title">Three steps to movie night</h2>
-      <div class="steps">
-        <article class="step">
-          <span class="step-num">1</span>
-          <h3>Choose a movie</h3>
-          <p>Pick a video from your computer or drag it onto the page. It opens instantly &mdash; nothing is uploaded.</p>
+      <h2 class="section-title">Two ways to watch together</h2>
+      <div class="ways">
+        <article class="way">
+          <span class="way-badge">New</span>
+          <h3><i class="fa-solid fa-door-open"></i> In a CineTab room</h3>
+          <p class="way-sub">No meeting needed. Friends join from their browser with a link, a QR code, or the room code and password.</p>
+          <ol class="way-steps">
+            <li><b>Create a room</b> and open a movie. Pick it from your computer or drag it onto the page.</li>
+            <li><b>Invite friends.</b> Send the link or show the QR code, and let them in as they arrive.</li>
+            <li><b>Press play.</b> Everyone watches your movie in sync, or their own copy of it, and chats beside the video.</li>
+          </ol>
+          <div class="way-actions">
+            <button class="btn btn-primary btn-sm room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create a room</button>
+            <button class="btn btn-ghost btn-sm room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join a room</button>
+          </div>
         </article>
-        <article class="step">
-          <span class="step-num">2</span>
-          <h3>Share this tab</h3>
-          <p>In your meeting choose <b>Share screen &rarr; Chrome Tab</b>, select CineTab and switch on <b>Also share tab audio</b>.</p>
-        </article>
-        <article class="step">
-          <span class="step-num">3</span>
-          <h3>Press play</h3>
-          <p>Everyone sees and hears the movie. Go fullscreen with <kbd>F</kbd> and turn on subtitles with <kbd>C</kbd>.</p>
+        <article class="way">
+          <h3><i class="fa-solid fa-video"></i> On Google Meet, Zoom or Teams</h3>
+          <p class="way-sub">Already on a call? Share the CineTab tab with its sound.</p>
+          <ol class="way-steps">
+            <li><b>Choose a movie.</b> Pick a video from your computer or drag it onto the page. It opens instantly.</li>
+            <li><b>Share this tab.</b> In your meeting choose <b>Share screen &rarr; Chrome Tab</b>, select CineTab and switch on <b>Also share tab audio</b>.</li>
+            <li><b>Press play.</b> Everyone sees and hears the movie. Go fullscreen with <kbd>F</kbd> and turn on subtitles with <kbd>C</kbd>.</li>
+          </ol>
+          <div class="way-actions">
+            <button class="btn btn-ghost btn-sm choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+          </div>
         </article>
       </div>
     </section>
@@ -170,7 +196,7 @@
       <div class="features">
         <article class="feature">
           <i class="fa-solid fa-shield-halved"></i>
-          <h3>Stays on your device</h3>
+          <h3>Never uploaded</h3>
           <p>The file plays straight from your disk. No uploads, no accounts, no tracking.</p>
         </article>
         <article class="feature">
@@ -189,14 +215,14 @@
           <p>Reopen the same movie and it resumes from the exact moment you stopped.</p>
         </article>
         <article class="feature">
-          <i class="fa-solid fa-keyboard"></i>
-          <h3>Keyboard shortcuts</h3>
-          <p>Space, arrows, J / L, M, F &mdash; control everything without the mouse.</p>
+          <i class="fa-solid fa-comments"></i>
+          <h3>Private watch rooms</h3>
+          <p>Invite friends with a code or QR code, stream your movie to them or play in sync, and chat. Peer-to-peer and encrypted.</p>
         </article>
         <article class="feature">
           <i class="fa-solid fa-gauge-high"></i>
           <h3>Preview, speed &amp; PiP</h3>
-          <p>Hover the timeline to preview a scene, change speed, or pop the movie out when watching solo.</p>
+          <p>Hover the timeline to preview a scene, change speed, or pop the movie out when watching solo. Keyboard shortcuts for everything.</p>
         </article>
       </div>
     </section>
@@ -217,12 +243,28 @@
           <p>That's exactly what CineTab does. Pick or drag in any video or music file and it plays right in the tab: MP4, MKV, MOV, WebM, AVI, WMV, FLV, TS, MP3, FLAC and more, with subtitles, playback speed and fullscreen. The file stays on your computer.</p>
         </details>
         <details>
+          <summary>How do I watch together without a video call?</summary>
+          <p>Use a CineTab room. Click <b>Watch together &rarr; Create a room</b>, open a movie and invite friends with the link, the QR code, or the room code and password. You let each person in, then everyone watches your movie streamed from your browser, perfectly in step with you, and can chat beside the video. A friend who has the same movie can play their own copy instead; CineTab keeps it in sync with yours.</p>
+        </details>
+        <details>
+          <summary>Are CineTab rooms private and secure?</summary>
+          <p>Yes. Browsers in a room connect directly to the host's browser (peer-to-peer) and WebRTC encrypts the video, sound and chat end to end. To find each other, browsers swap connection details through a public relay, encrypted with a key made from the room code and password, so the relay can't read them and never sees the password. Nothing is stored anywhere: when the room ends, the chat is gone. You let each person in, can remove anyone and can lock the room. As on any video call, the host and guests can see each other's IP address; guests can't see other guests' addresses.</p>
+        </details>
+        <details>
+          <summary>How many people can join a room?</summary>
+          <p>Up to 12 guests. If you stream your movie, your internet upload is shared between everyone watching the stream, about 2.5&nbsp;Mbit/s each at standard quality, so 3 to 5 viewers is comfortable on most home connections. Guests who play their own copy of the movie use almost no bandwidth. You can lower the stream quality in the room settings.</p>
+        </details>
+        <details>
+          <summary>A friend can't connect to my room.</summary>
+          <p>Check that they typed the code and password exactly and that your CineTab tab is still open. Then use <b>Check my network</b> in the join dialog: it shows what the network allows. Some networks, such as campus, office or hotel Wi-Fi and certain mobile data plans, block direct connections between browsers or keep devices on the same Wi-Fi apart; switching one of you to a different network (for example a phone hotspot) usually fixes it. Streaming needs Chrome or Edge on the host's computer; guests can use Chrome, Edge, Firefox or Safari.</p>
+        </details>
+        <details>
           <summary>Do my friends need to install anything?</summary>
-          <p>No. Only you open CineTab. Your friends just join the meeting and watch your shared tab.</p>
+          <p>No. On a call, your friends just join the meeting and watch your shared tab. In a CineTab room, they open your invite link in their browser, on a computer or a phone.</p>
         </details>
         <details>
           <summary>Is my movie uploaded anywhere?</summary>
-          <p>Never. CineTab is a static web page &mdash; the browser reads the file from your disk and plays it locally. Closing the tab leaves no copy behind.</p>
+          <p>Never to a server. CineTab is a static web page &mdash; the browser reads the file from your disk and plays it locally. In a CineTab room, the video is streamed directly from your browser to your friends' browsers, encrypted, and isn't saved on their side. Closing the tab leaves no copy behind.</p>
         </details>
         <details>
           <summary>My friends can see the movie but can't hear it.</summary>
@@ -249,9 +291,17 @@
 
     <section class="cta-band">
       <h2>Ready for movie night?</h2>
-      <p>Grab the popcorn, open a movie and share the tab.</p>
+      <p>Grab the popcorn, open a movie and invite your friends.</p>
       <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
     </section>
+
+    <div class="room-home-bar" hidden>
+      <span class="room-home-icon"><i class="fa-solid fa-door-open"></i></span>
+      <span class="room-home-text"><b></b><small></small></span>
+      <button class="btn btn-primary btn-sm room-home-action"></button>
+      <button class="room-home-close room-home-forget" title="Delete this room from this browser (its code and password)"><i class="fa-solid fa-trash-can"></i></button>
+      <button class="room-home-close room-home-dismiss" title="Not now"><i class="fa-solid fa-xmark"></i></button>
+    </div>
 
     <footer class="site-footer">
       <a class="brand brand-sm" href="#top" title="CineTab — back to top">
@@ -260,7 +310,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.0.0</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.1.0</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -276,6 +326,7 @@
     <!-- Top Title Bar (YouTube Style) -->
     <div class="top-bar">
       <div class="video-title-container">
+        <button class="player-back" title="Back to home"><i class="fa-solid fa-arrow-left"></i></button>
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
       </div>
@@ -289,8 +340,9 @@
     </div>
 
     <!-- Drop Zone & File Selector Overlay -->
-    <div class="upload-overlay" id="upload-overlay">
+    <div class="upload-overlay" id="upload-overlay" data-dialog>
       <div class="upload-box">
+        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
         <div class="box-scroll">
           <i class="fa-solid fa-file-video"></i>
           <h2>Select a Movie to Play</h2>
@@ -302,8 +354,9 @@
     </div>
 
     <!-- Error Overlay -->
-    <div class="error-overlay hidden" id="error-overlay">
+    <div class="error-overlay hidden" id="error-overlay" data-dialog>
       <div class="upload-box">
+        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
         <div class="box-scroll">
           <i class="fa-solid fa-triangle-exclamation" style="color: #ff4d4d;"></i>
           <h2>Can't Play This File</h2>
@@ -314,8 +367,9 @@
     </div>
 
     <!-- Compatibility Conversion Overlay -->
-    <div class="convert-overlay hidden" id="convert-overlay">
+    <div class="convert-overlay hidden" id="convert-overlay" data-dialog>
       <div class="upload-box convert-box">
+        <button type="button" class="box-close" title="Stop converting (Esc)"><i class="fa-solid fa-xmark"></i></button>
         <div class="box-scroll">
           <i class="fa-solid fa-wand-magic-sparkles"></i>
           <h2 class="convert-title">Making this file playable</h2>
@@ -347,12 +401,50 @@
       <p class="audio-title"></p>
     </div>
 
+    <!-- Keyboard Shortcuts -->
+    <div class="help-overlay hidden" id="shortcuts-overlay" data-dialog>
+      <div class="upload-box shortcuts-box">
+        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
+        <div class="box-scroll">
+          <i class="fa-regular fa-keyboard"></i>
+          <h2>Keyboard shortcuts</h2>
+          <dl class="shortcut-list">
+            <dt><kbd>Space</kbd><kbd>K</kbd></dt><dd>Play / pause</dd>
+            <dt><kbd>&larr;</kbd><kbd>&rarr;</kbd></dt><dd>Back / forward 5 seconds</dd>
+            <dt><kbd>J</kbd><kbd>L</kbd></dt><dd>Back / forward 10 seconds</dd>
+            <dt><kbd>0</kbd>&ndash;<kbd>9</kbd></dt><dd>Jump to 0&ndash;90%</dd>
+            <dt><kbd>&uarr;</kbd><kbd>&darr;</kbd></dt><dd>Volume up / down</dd>
+            <dt><kbd>M</kbd></dt><dd>Mute / unmute</dd>
+            <dt><kbd>Shift</kbd>+<kbd>&lt;</kbd><kbd>&gt;</kbd></dt><dd>Slower / faster</dd>
+            <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
+            <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
+            <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
+            <dt><kbd>?</kbd></dt><dd>This list</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Close a dialog</dd>
+          </dl>
+          <p class="privacy-note">Drop an .srt or .vtt file on the player to add subtitles. Click the title at the top to rename the video.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Watch Together Help Overlay -->
-    <div class="help-overlay hidden" id="help-overlay">
+    <div class="help-overlay hidden" id="help-overlay" data-dialog>
       <div class="upload-box help-box">
+        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
         <div class="box-scroll">
           <i class="fa-solid fa-users"></i>
           <h2>Watch Together</h2>
+          <!-- ============ ROOM: CHOOSER ============ -->
+          <div class="together-room">
+            <h3><i class="fa-solid fa-door-open"></i> In a CineTab room <span class="way-badge">New</span></h3>
+            <p>Invite friends with a link, a QR code or a code and password. They watch your movie in their browser, in sync with you, and everyone can chat. Peer-to-peer and encrypted.</p>
+            <div class="convert-actions">
+              <button class="room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create a room</button>
+              <button class="secondary-btn room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join a room</button>
+            </div>
+          </div>
+          <h3 class="together-call"><i class="fa-solid fa-video"></i> On Google Meet, Zoom or Teams</h3>
+          <!-- ============ /ROOM: CHOOSER ============ -->
           <ol>
             <li>Open your movie here and pause it.</li>
             <li>In Google Meet click <b>Share screen</b> (in Zoom / Teams: <b>Share</b>) and choose <b>Chrome Tab</b> / <b>A tab</b>.</li>
@@ -360,13 +452,91 @@
             <li>Press play. Use <b>F</b> for fullscreen so everyone sees a bigger picture.</li>
           </ol>
           <p>Tab audio sharing works in Chrome and Edge on desktop. Don't use Picture-in-Picture while sharing &mdash; the video leaves this tab and your friends will see a blank player.</p>
-          <button id="close-help-btn" title="Close these instructions">Got it</button>
+          <button id="close-help-btn" title="Close">Got it</button>
         </div>
       </div>
     </div>
 
+    <!-- ============ ROOM: PLAYER ============ -->
+    <!-- Watch-together room dialogs (room.js) -->
+    <div class="room-overlay hidden" id="room-overlay" data-dialog>
+      <div class="upload-box room-box">
+        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
+        <div class="box-scroll">
+
+          <form class="room-view" data-view="create" hidden>
+            <i class="fa-solid fa-door-open"></i>
+            <h2 class="room-create-title">Create a room</h2>
+            <p class="room-create-text">Friends join with a link, a QR code, or the room code and password. They can watch the video you play here, or play their own copy in sync, and chat with everyone.</p>
+            <div class="room-field"><span>Your name and avatar</span>
+              <span class="room-input-row">
+                <button type="button" class="room-avatar-btn" title="Choose an avatar"><span class="room-avatar"></span></button>
+                <input name="name" maxlength="30" autocomplete="nickname" placeholder="Shown to everyone in the room" aria-label="Your name" required>
+              </span>
+            </div>
+            <div class="room-avatar-grid" hidden></div>
+            <label class="room-field"><span>Room name <small>(optional)</small></span><input name="title" maxlength="40" autocomplete="off" placeholder="e.g. Friday movie night"></label>
+            <label class="room-field"><span>Room password</span>
+              <span class="room-input-row">
+                <input name="password" minlength="4" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+                <button type="button" class="room-input-btn room-new-password" title="Make a new random password"><i class="fa-solid fa-rotate"></i></button>
+              </span>
+            </label>
+            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> Hide my IP address from guests (sends everything through a relay server)</label>
+            <label class="room-check"><input type="checkbox" name="remember" checked> Remember this room in this browser, so it's one click to open again (saves the code and password here)</label>
+            <div class="convert-actions">
+              <button type="submit"><i class="fa-solid fa-door-open"></i> Create room</button>
+              <button type="button" class="secondary-btn room-cancel">Cancel</button>
+            </div>
+            <p class="privacy-note"><i class="fa-solid fa-lock"></i> Peer-to-peer and encrypted. Nothing is uploaded, and messages aren't stored.</p>
+            <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
+          </form>
+
+          <form class="room-view" data-view="join" hidden>
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <h2>Join a room</h2>
+            <p>Enter the room code and password from the person hosting it, or open the invite link they sent.</p>
+            <label class="room-field"><span>Room code</span><input name="code" maxlength="15" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC-DEF-GHJ" required></label>
+            <label class="room-field"><span>Password</span><input name="password" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+            <div class="room-field"><span>Your name and avatar</span>
+              <span class="room-input-row">
+                <button type="button" class="room-avatar-btn" title="Choose an avatar"><span class="room-avatar"></span></button>
+                <input name="name" maxlength="30" autocomplete="nickname" placeholder="Shown to everyone in the room" aria-label="Your name" required>
+              </span>
+            </div>
+            <div class="room-avatar-grid" hidden></div>
+            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> Hide my IP address from the host (sends everything through a relay server)</label>
+            <label class="room-check"><input type="checkbox" name="remember" checked> Remember this room in this browser, so it's one click to join next time (saves the code and password here)</label>
+            <p class="room-error" hidden></p>
+            <div class="convert-actions">
+              <button type="submit"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
+              <button type="button" class="secondary-btn room-cancel">Cancel</button>
+            </div>
+            <p class="privacy-note"><i class="fa-solid fa-lock"></i> You connect directly to the host's browser, encrypted. The host can see your IP address, as on any video call.</p>
+            <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
+          </form>
+
+          <div class="room-view" data-view="status" hidden>
+            <i class="room-status-icon fa-solid fa-satellite-dish"></i>
+            <h2 class="room-status-title"></h2>
+            <p class="room-status-text"></p>
+            <ul class="room-status-list" hidden></ul>
+            <div class="convert-progress indeterminate room-status-progress"><div class="convert-progress-bar"></div></div>
+            <div class="convert-actions room-status-actions"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtitles drawn over the host's stream, and chat pop-ups -->
+    <div class="room-cue" hidden></div>
+    <div class="room-stream-wait" hidden><i class="fa-solid fa-circle-notch fa-spin"></i> <span></span></div>
+    <div class="room-toasts" aria-live="polite"></div>
+    <!-- ============ /ROOM: PLAYER ============ -->
+
     <!-- Main Video Element -->
-    <video id="main-video" crossorigin="anonymous"></video>
+    <video id="main-video" crossorigin="anonymous" playsinline webkit-playsinline></video>
 
     <!-- Controls Wrapper -->
     <div class="wrapper">
@@ -374,7 +544,7 @@
         <div class="progress-area">
           <!-- Live Hover Preview Thumbnail Box -->
           <div class="thumbnail-preview">
-            <video id="preview-video" muted preload="auto"></video>
+            <video id="preview-video" muted preload="auto" playsinline webkit-playsinline></video>
             <span class="preview-time">00:00</span>
           </div>
           <div class="progress-bar"></div>
@@ -423,12 +593,126 @@
             </div>
           </div>
 
+          <button class="shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i></button>
           <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
           <button class="fullscreen" title="Fullscreen (F)"><i class="fa-solid fa-expand"></i></button>
         </li>
       </ul>
     </div>
   </div>
+
+  <!-- ============ ROOM: PANEL ============ -->
+  <!-- Watch-together room: chat, people, invite and settings, one at a time (room.js) -->
+  <aside class="room-panel" hidden aria-label="Watch-together room">
+    <header class="room-head">
+      <div class="room-head-text">
+        <h2 class="room-title"></h2>
+        <p class="room-state"></p>
+      </div>
+      <button class="room-icon-btn room-hide-btn" title="Hide the panel (you stay in the room)"><i class="fa-solid fa-xmark"></i></button>
+    </header>
+
+    <nav class="room-tabs" role="tablist" aria-label="Room">
+      <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
+      <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
+      <button class="room-tab-btn" role="tab" data-tab="invite" title="Invite people with a link, QR code, or code and password"><i class="fa-solid fa-user-plus"></i><span>Invite</span></button>
+      <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
+    </nav>
+
+    <ul class="room-requests"></ul>
+
+    <section class="room-tab room-tab-chat" data-tab="chat" role="tabpanel">
+      <ol class="room-chat" aria-live="polite"></ol>
+      <div class="room-reply-bar" hidden>
+        <i class="fa-solid fa-reply"></i>
+        <span class="room-reply-info">Replying to <b></b><span class="room-reply-text"></span></span>
+        <button type="button" class="room-icon-btn" title="Cancel the reply (Esc)"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form class="room-chat-form">
+        <input class="room-chat-input" maxlength="500" autocomplete="off" placeholder="Send a message to everyone" aria-label="Chat message">
+        <button type="submit" class="room-send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+      </form>
+    </section>
+
+    <section class="room-tab" data-tab="people" role="tabpanel" hidden>
+      <p class="room-section-title">In the room <span class="room-count"></span></p>
+      <ul class="room-people"></ul>
+      <button class="room-wide-btn secondary room-invite-more"><i class="fa-solid fa-user-plus"></i> Invite people</button>
+    </section>
+
+    <section class="room-tab" data-tab="invite" role="tabpanel" hidden>
+      <div class="room-qr"></div>
+      <p class="room-qr-hint">Scan with a phone camera to join</p>
+      <div class="room-secret-row">
+        <span class="room-secret-text"><span class="room-label">Room code</span><code class="room-code"></code></span>
+        <button class="room-icon-btn" data-copy="code" title="Copy the room code"><i class="fa-regular fa-copy"></i></button>
+      </div>
+      <div class="room-secret-row">
+        <span class="room-secret-text"><span class="room-label">Password</span><code class="room-password"></code></span>
+        <button class="room-icon-btn" data-copy="password" title="Copy the password"><i class="fa-regular fa-copy"></i></button>
+      </div>
+      <label class="room-switch">
+        <input type="checkbox" class="room-link-password" checked>
+        <span><b>Password in the link and QR code</b><small>Off: people type the password themselves</small></span>
+      </label>
+      <button class="room-wide-btn room-copy-link" title="Copy a link that opens this room"><i class="fa-solid fa-link"></i> Copy invite link</button>
+      <p class="room-hint">Share these only with people you want in the room. The host lets each person in.</p>
+    </section>
+
+    <section class="room-tab" data-tab="settings" role="tabpanel" hidden>
+      <div class="room-host-settings">
+        <label class="room-field room-name-field"><span>Room name</span><input class="room-name-input" maxlength="40" autocomplete="off"></label>
+        <label class="room-switch"><input type="checkbox" data-setting="lobby"><span><b>Ask before letting people in</b><small>You approve each person who knocks</small></span></label>
+        <label class="room-switch"><input type="checkbox" data-setting="control"><span><b>Guests can control playback</b><small>Play, pause and jump for everyone</small></span></label>
+        <label class="room-switch"><input type="checkbox" data-setting="streaming"><span><b>Stream my video</b><small>Guests without the movie watch your stream</small></span></label>
+        <label class="room-field room-quality"><span>Stream quality</span>
+          <select data-setting="quality">
+            <option value="saver">Data saver &middot; 480p, about 1.2 Mbit/s per viewer</option>
+            <option value="standard">Standard &middot; 720p, about 2.5 Mbit/s per viewer</option>
+            <option value="high">High &middot; 1080p, about 5 Mbit/s per viewer</option>
+          </select>
+        </label>
+        <p class="room-hint room-stream-note" hidden></p>
+        <label class="room-switch"><input type="checkbox" data-setting="locked"><span><b>Lock the room</b><small>Nobody new can join</small></span></label>
+      </div>
+      <div class="room-guest-settings">
+        <p class="room-section-title">How you watch</p>
+        <button class="room-choice" data-watch="stream"><i class="fa-solid fa-tower-broadcast"></i><span><b>The host's stream</b><small></small></span></button>
+        <button class="room-choice" data-watch="own"><i class="fa-solid fa-film"></i><span><b>My own copy</b><small></small></span></button>
+      </div>
+      <div class="room-browser-settings">
+        <p class="room-section-title">This browser</p>
+        <label class="room-switch"><input type="checkbox" class="room-remember"><span><b>Remember this room</b><small>Keeps its code and password here for one-click rejoining. Turning it off deletes them.</small></span></label>
+      </div>
+    </section>
+
+    <footer class="room-foot">
+      <button class="room-me" title="Change your name or avatar"><span class="room-avatar"></span><span class="room-me-text"><b class="room-me-name"></b><small>Edit profile</small></span></button>
+      <button class="room-leave-btn"><i class="fa-solid fa-right-from-bracket"></i> <span>Leave</span></button>
+    </footer>
+
+    <!-- Your name and avatar -->
+    <form class="room-sheet" data-dialog hidden>
+      <div class="room-sheet-card">
+        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
+        <h3>Your profile</h3>
+        <p class="room-hint">How everyone in the room sees you.</p>
+        <div class="room-field"><span>Name</span>
+          <span class="room-input-row">
+            <span class="room-avatar room-profile-avatar"></span>
+            <input name="name" maxlength="30" autocomplete="nickname" aria-label="Your name" required>
+          </span>
+        </div>
+        <p class="room-label">Avatar</p>
+        <div class="room-avatar-grid"></div>
+        <div class="room-sheet-actions">
+          <button type="button" class="room-small-btn room-sheet-cancel">Cancel</button>
+          <button type="submit" class="room-small-btn primary">Save</button>
+        </div>
+      </div>
+    </form>
+  </aside>
+  <!-- ============ /ROOM: PANEL ============ -->
   </div>
 
   <!-- Hidden File Inputs -->
@@ -438,5 +722,8 @@
   <script src="tooltips.js"></script>
   <script src="converter.js"></script>
   <script src="script.js"></script>
+  <script src="vendor/qrcode-generator.js"></script>
+  <script src="signaling.js"></script>
+  <script src="room.js"></script>
 </body>
 </html>
