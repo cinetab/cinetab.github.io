@@ -1,0 +1,63 @@
+# Publishes a GitHub Release when a version tag (v1.2.3) is pushed:
+# builds the offline player, takes the notes for that version from CHANGELOG.md
+# and attaches CineTab-Player-v1.2.3.html.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check the tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Build the offline player
+        run: node tools/build-offline.mjs
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="[$version]" '
+            /^## \[/ { printing = index($0, v) > 0; next }
+            /^\[[^]]+\]: / { printing = 0 }
+            printing
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          {
+            echo
+            echo "---"
+            echo "**Use it online:** https://cinetab.github.io/"
+            echo
+            echo "**Use it offline:** download **CineTab-Player-$GITHUB_REF_NAME.html** below and double-click it. It runs from your computer with no server and no internet."
+          } >> notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset="CineTab-Player-$GITHUB_REF_NAME.html"
+          cp cinetab-offline.html "$asset"
+          gh release create "$GITHUB_REF_NAME" "$asset" \
+            --title "CineTab $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --verify-tag

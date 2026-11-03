@@ -1,0 +1,17 @@
+{
+  "name": "CineTab – Watch videos together",
+  "short_name": "CineTab",
+  "description": "Play videos from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f0f11",
+  "theme_color": "#0f0f11",
+  "categories": ["entertainment", "multimedia", "video"],
+  "icons": [
+    { "src": "logo.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

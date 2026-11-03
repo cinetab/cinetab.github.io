@@ -1,0 +1,20 @@
+{
+  "name": "cinetab",
+  "version": "1.0.0",
+  "description": "Play videos from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. Nothing is uploaded.",
+  "homepage": "https://cinetab.github.io/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cinetab/cinetab.github.io.git"
+  },
+  "bugs": "https://github.com/cinetab/cinetab.github.io/issues",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node tools/build-offline.mjs",
+    "serve": "npx --yes serve ."
+  }
+}

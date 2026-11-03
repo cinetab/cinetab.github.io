@@ -1,13 +1,19 @@
 <p align="center"><img src="logo.svg" alt="CineTab logo" width="96" height="96"></p>
 
-# CineTab
+<h1 align="center">CineTab</h1>
+
+<p align="center">
+  <a href="https://github.com/cinetab/cinetab.github.io/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/cinetab/cinetab.github.io?label=release&color=5b78ff"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/cinetab/cinetab.github.io?color=5b78ff"></a>
+  <a href="https://cinetab.github.io/"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fcinetab.github.io%2F&label=cinetab.github.io"></a>
+</p>
 
 **Movie night on any video call.** CineTab plays a movie from your own computer in a browser tab. Share that tab (with audio) in Google Meet, Zoom or Teams and watch it together with friends.
 
 <p align="center">
   <b><a href="https://cinetab.github.io/">Open CineTab</a></b>
   &nbsp;·&nbsp;
-  <b><a href="https://cinetab.github.io/cinetab-offline.html" download>Download the offline player</a></b> (one HTML file)
+  <b><a href="https://github.com/cinetab/cinetab.github.io/releases/latest">Download the offline player</a></b> (one HTML file)
 </p>
 
 The movie is never uploaded. The page uses the browser's File API to play the file straight from your disk, so the site is just static HTML/CSS/JS hosted on GitHub Pages. The home page explains how it works; choosing or dropping a video switches the same page into the player.
@@ -77,6 +83,17 @@ node tools/build-offline.mjs
 
 (Node 18+, no dependencies. It downloads Poppins and Font Awesome and inlines them.)
 
+## Versions and releases
+
+CineTab uses [Semantic Versioning](https://semver.org/). The version lives in `package.json`, is shown in the website footer and inside the offline player, and every release is listed in [CHANGELOG.md](CHANGELOG.md) and on the [Releases page](https://github.com/cinetab/cinetab.github.io/releases), with the offline player attached as `CineTab-Player-vX.Y.Z.html`.
+
+To publish a new version:
+
+1. Bump `version` in `package.json`, and the three places in `index.html` that show it (`<meta name="version">`, `softwareVersion` in the structured data, the footer badge). The build refuses to run if they don't match.
+2. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md`.
+3. Run `node tools/build-offline.mjs`, then commit and push.
+4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The [Release workflow](.github/workflows/release.yml) builds the offline player and publishes the GitHub Release with the changelog notes.
+
 ## Project files
 
 | File | Purpose |
@@ -88,6 +105,9 @@ node tools/build-offline.mjs
 | `converter-worker.js` | Runs ffmpeg.wasm in a Web Worker and writes the MP4 to OPFS |
 | `tools/build-offline.mjs` | Builds `cinetab-offline.html` (player only) |
 | `cinetab-offline.html` | Generated single-file offline player |
+| `package.json`, `CHANGELOG.md` | Version number and release history |
+| `.github/workflows/release.yml` | Publishes a GitHub Release for each version tag |
+| `robots.txt`, `sitemap.xml`, `og-image.png`, `manifest.webmanifest`, `404.html` | Search engines, link previews, install as an app, missing pages |
 
 ## Run locally
 

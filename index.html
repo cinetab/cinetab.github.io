@@ -2,13 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>CineTab · Movie night on any video call</title>
-  <meta name="description" content="CineTab plays movies from your own device in a browser tab. Share the tab with audio in Google Meet, Zoom or Teams to watch together. Nothing is uploaded.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineTab – Watch videos together on Google Meet, Zoom &amp; Teams</title>
+  <meta name="description" content="Play any video from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. A free watch-party player: MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
+  <meta name="application-name" content="CineTab">
+  <meta name="version" content="1.0.0">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+  <!-- ============ SEO ============ -->
+  <link rel="canonical" href="https://cinetab.github.io/">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CineTab">
+  <meta property="og:url" content="https://cinetab.github.io/">
+  <meta property="og:title" content="CineTab – Watch videos together on Google Meet, Zoom &amp; Teams">
+  <meta property="og:description" content="Play any video from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. A free watch-party player: MP4, MKV, AVI and more. Nothing is uploaded.">
+  <meta property="og:image" content="https://cinetab.github.io/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="CineTab: movie night on any video call. Play a video from your computer in a browser tab and share it with sound.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CineTab – Watch videos together on Google Meet, Zoom &amp; Teams">
+  <meta name="twitter:description" content="Play any video from your computer in a browser tab and share it with sound on Google Meet, Zoom or Teams. A free watch-party player: MP4, MKV, AVI and more. Nothing is uploaded.">
+  <meta name="twitter:image" content="https://cinetab.github.io/og-image.png">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://cinetab.github.io/#website",
+      "name": "CineTab",
+      "alternateName": "CineTab Player",
+      "url": "https://cinetab.github.io/"
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://cinetab.github.io/#app",
+      "name": "CineTab",
+      "url": "https://cinetab.github.io/",
+      "description": "Play videos and music from your own computer in a browser tab, then share that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. Files are never uploaded.",
+      "applicationCategory": "MultimediaApplication",
+      "applicationSubCategory": "Video player",
+      "operatingSystem": "Windows, macOS, Linux, ChromeOS",
+      "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
+      "softwareVersion": "1.0.0",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "image": "https://cinetab.github.io/og-image.png",
+      "screenshot": "https://cinetab.github.io/og-image.png",
+      "license": "https://opensource.org/licenses/MIT",
+      "featureList": [
+        "Play local video files in a browser tab",
+        "Share a video with sound in Google Meet, Zoom or Microsoft Teams",
+        "Plays MP4, MKV, MOV, WebM, AVI, WMV, FLV, TS and audio files",
+        "Converts unsupported formats in the browser, nothing is uploaded",
+        "Subtitles (.srt, .vtt and embedded MKV subtitles)",
+        "Resume playback, custom playback speed, Picture-in-Picture",
+        "Offline single-file player"
+      ]
+    }
+  ]
+}
+  </script>
+  <!-- ============ /SEO ============ -->
   <link rel="stylesheet" href="style.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -141,6 +205,18 @@
       <h2 class="section-title">Questions</h2>
       <div class="faq">
         <details>
+          <summary>How do I share a video with sound on Google Meet?</summary>
+          <p>Open your video in CineTab in Chrome or Edge. In Google Meet click <b>Share screen</b>, choose <b>Chrome Tab</b> (or <b>A tab</b>), pick the CineTab tab and switch on <b>Also share tab audio</b>, then press play. Sharing a tab sends smooth video and the movie's sound; sharing a window or your whole screen doesn't send tab audio.</p>
+        </details>
+        <details>
+          <summary>Can I watch a movie together on Zoom or Microsoft Teams?</summary>
+          <p>Yes. In Zoom click <b>Share</b>, pick the browser tab with CineTab and tick <b>Share sound</b>. In Teams choose <b>Share</b>, select the CineTab tab or browser window and turn on <b>Include sound</b>. Everyone on the call watches and hears the movie playing on your computer.</p>
+        </details>
+        <details>
+          <summary>Can I play a video from my computer in a browser tab?</summary>
+          <p>That's exactly what CineTab does. Pick or drag in any video or music file and it plays right in the tab: MP4, MKV, MOV, WebM, AVI, WMV, FLV, TS, MP3, FLAC and more, with subtitles, playback speed and fullscreen. The file stays on your computer.</p>
+        </details>
+        <details>
           <summary>Do my friends need to install anything?</summary>
           <p>No. Only you open CineTab. Your friends just join the meeting and watch your shared tab.</p>
         </details>
@@ -183,6 +259,12 @@
         <span>Cine<b>Tab</b></span>
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
+      <p class="footer-meta">
+        <span class="app-version" title="The version of CineTab you're using">v1.0.0</span>
+        &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
+        &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
+        &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
+      </p>
       <a class="footer-download" data-online-only href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file you can open from your computer"><i class="fa-solid fa-download"></i> Download offline player</a>
     </footer>
   </div>

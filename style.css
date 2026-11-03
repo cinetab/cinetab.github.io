@@ -1630,3 +1630,29 @@ kbd {
 .tooltip.show {
   opacity: 1;
 }
+
+/* Footer: version and project links */
+.footer-meta {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-meta a {
+  color: #a9a9b8;
+  text-decoration: none;
+}
+
+.footer-meta a:hover {
+  color: #fff;
+}
+
+.app-version {
+  font-variant-numeric: tabular-nums;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #a9a9b8;
+}
