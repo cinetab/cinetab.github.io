@@ -4,6 +4,20 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-11-04
+
+### Mobile player
+- Fullscreen pinch-to-zoom: fill the screen or fit the video's aspect ratio
+- Swipe the left and right edges to adjust brightness and volume
+- Swipe down in the middle to exit fullscreen
+- Tap the middle of the video to pause or resume
+
+### Watch-together rooms
+- Voice chat with a muted-by-default microphone control
+- Separate WebRTC voice audio keeps microphone chat independent from movie streaming
+- Microphone permissions, errors and cleanup are handled explicitly
+- Chat messages are aligned separately for you and other participants
+
 ## [1.1.0] - 2026-11-03
 
 Watch together without a video call: CineTab rooms. Sharing the tab on Google Meet, Zoom or Teams
@@ -91,5 +105,6 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.2.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.1.0
 [1.0.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.0.0

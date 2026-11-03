@@ -97,6 +97,7 @@
     meBtn = panel.querySelector(".room-me"),
     leaveBtn = panel.querySelector(".room-leave-btn"),
     leaveLabel = leaveBtn.querySelector("span"),
+    micBtn = panel.querySelector(".room-mic-btn"),
     profileSheet = panel.querySelector(".room-sheet"),
     shareLabel = shareHelpBtn.querySelector("span"),
     badge = el("b", "room-badge");
@@ -115,6 +116,10 @@
     // Chat messages on screen by id: for reactions and replies
     const chatItems = new Map();
     let closeAction = null;
+    let micStream = null;
+    let micEnabled = false;
+    let micBusy = false;
+    const remoteVoiceAudio = new Map();
     let reopening = null;
     let homeBarDismissed = false;
     const createIntro = createText.textContent;
@@ -206,6 +211,9 @@
     };
     const hideOverlay = () => overlay.classList.add("hidden");
     overlayClose.addEventListener("click", () => (closeAction || hideOverlay)());
+    overlay.addEventListener("click", e => {
+        if (e.target === overlay) (closeAction || hideOverlay)();
+    });
 
     const showStatus = ({ icon = "fa-satellite-dish", title, text = "", busy = false, actions = [], list = [], onClose }) => {
         statusIcon.className = `room-status-icon fa-solid ${icon}`;
@@ -653,6 +661,9 @@
     peopleList.addEventListener("click", e => e.target.closest("button[data-edit]") && openProfile());
     profileSheet.querySelector(".box-close").addEventListener("click", closeProfile);
     profileSheet.querySelector(".room-sheet-cancel").addEventListener("click", closeProfile);
+    profileSheet.addEventListener("click", e => {
+        if (e.target === profileSheet) closeProfile();
+    });
     profileSheet.addEventListener("submit", e => {
         e.preventDefault();
         const name = clean(profileName.value, 30);
@@ -673,6 +684,16 @@
     const newConnection = relay => {
         const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceTransportPolicy: relay && RELAY_AVAILABLE ? "relay" : "all" });
         return { pc, channel: pc.createDataChannel("room", { negotiated: true, id: 0 }), rate: {} };
+    };
+
+    const attachRemoteVoice = (peer, track) => {
+        const oldAudio = remoteVoiceAudio.get(peer);
+        if (oldAudio) oldAudio.remove();
+        const audio = new Audio();
+        audio.autoplay = true;
+        audio.srcObject = new MediaStream([track]);
+        remoteVoiceAudio.set(peer, audio);
+        audio.play().catch(() => {});
     };
 
     // Collects every network address before sending connection details, so one message is enough
@@ -744,7 +765,66 @@
         try {
             peer.pc.close();
         } catch (e) {}
+        const audio = remoteVoiceAudio.get(peer);
+        if (audio) {
+            audio.srcObject = null;
+            audio.remove();
+            remoteVoiceAudio.delete(peer);
+        }
     };
+
+    const renderMic = () => {
+        micBtn.classList.toggle("active", micEnabled);
+        micBtn.setAttribute("aria-pressed", String(micEnabled));
+        micBtn.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
+        micBtn.querySelector("i").className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
+        micBtn.querySelector("span").textContent = micEnabled ? "Mic on" : "Mic off";
+    };
+
+    const syncMicrophonePeer = peer => {
+        if (!peer?.voiceSender) return;
+        const track = micEnabled && micStream ? micStream.getAudioTracks()[0] : null;
+        peer.voiceSender.replaceTrack(track).catch(() => {});
+    };
+
+    const syncMicrophone = () => {
+        if (!room) return;
+        if (room.role === "host") room.peers.forEach(syncMicrophonePeer);
+        else syncMicrophonePeer(room.peer);
+    };
+
+    const enableMicrophone = async () => {
+        if (micBusy || micEnabled || !room) return;
+        micBusy = true;
+        micBtn.disabled = true;
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
+            micEnabled = true;
+            renderMic();
+            syncMicrophone();
+            toast("Microphone on");
+        } catch (e) {
+            toast(e.name === "NotAllowedError" ? "Microphone permission was denied" : "Couldn't access the microphone");
+        } finally {
+            micBusy = false;
+            micBtn.disabled = false;
+        }
+    };
+
+    const disableMicrophone = () => {
+        if (!micEnabled) return;
+        micEnabled = false;
+        syncMicrophone();
+        micStream?.getTracks().forEach(track => track.stop());
+        micStream = null;
+        renderMic();
+        toast("Microphone off");
+    };
+
+    micBtn.addEventListener("click", () => micEnabled ? disableMicrophone() : enableMicrophone());
+    renderMic();
 
     const wirePeer = (peer, onMessage, onGone, allowParts) => {
         peer.channel.onmessage = e => receive(peer, e.data, onMessage, allowParts);
@@ -954,7 +1034,7 @@
         for (const peer of room.peers.values()) {
             const on = peer.status === "admitted" && peer.wantsStream;
             setTrack(peer.senders.video, on ? video : null, "video", peer);
-            setTrack(peer.senders.audio, on ? audio : null, "audio", peer);
+            setTrack(peer.senders.mediaAudio, on ? audio : null, "audio", peer);
         }
     };
 
@@ -1138,15 +1218,37 @@
             const key = await Signaling.pairSecret(host.pair, pub, host.signal.salt);
             const sdp = await Signaling.unsealText(key, sealedSdp);
             Object.assign(peer, newConnection(host.relay));
+            peer.pc.ontrack = event => {
+                if (event.transceiver !== peer.voiceTransceiver) {
+                    if (!peer.voiceTransceiver) peer.pendingVoiceTrack = event.track;
+                    return;
+                }
+                attachRemoteVoice(peer, event.track);
+            };
             wirePeer(peer, message => room === host && hostHandle(peer, message), () => dropPeer(peer), false);
             watchRoute(peer, () => {
                 updateStreams();
                 shareMembers();
             });
             await peer.pc.setRemoteDescription({ type: "offer", sdp });
-            for (const transceiver of peer.pc.getTransceivers()) {
-                transceiver.direction = "sendonly";
-                peer.senders[transceiver.receiver.track.kind] = transceiver.sender;
+            const transceivers = peer.pc.getTransceivers();
+            for (const transceiver of transceivers) {
+                if (transceiver.receiver.track.kind === "video") {
+                    transceiver.direction = "sendonly";
+                    peer.senders.video = transceiver.sender;
+                } else if (!peer.senders.mediaAudio) {
+                    transceiver.direction = "sendonly";
+                    peer.senders.mediaAudio = transceiver.sender;
+                } else {
+                    transceiver.direction = "sendrecv";
+                    peer.voiceTransceiver = transceiver;
+                    peer.voiceSender = transceiver.sender;
+                }
+            }
+            syncMicrophonePeer(peer);
+            if (peer.pendingVoiceTrack) {
+                attachRemoteVoice(peer, peer.pendingVoiceTrack);
+                delete peer.pendingVoiceTrack;
             }
             const answer = await peer.pc.createAnswer();
             await peer.pc.setLocalDescription({ type: "answer", sdp: tuneAudio(answer.sdp) });
@@ -1801,6 +1903,13 @@
         const { pc, channel } = peer;
         pc.addTransceiver("video", { direction: "recvonly" });
         pc.addTransceiver("audio", { direction: "recvonly" });
+        peer.voiceTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+        peer.voiceSender = peer.voiceTransceiver.sender;
+        pc.ontrack = event => {
+            if (event.transceiver !== peer.voiceTransceiver) return;
+            attachRemoteVoice(peer, event.track);
+        };
+        syncMicrophonePeer(peer);
         // A slightly bigger buffer: smoother playback matters more than a second of delay here
         pc.getReceivers().forEach(receiver => {
             try {
@@ -1981,6 +2090,7 @@
         const old = room;
         if (!old) return;
         leaveStream();
+        disableMicrophone();
         room = null;
         clearInterval(old.knockTimer);
         clearInterval(old.offerTimer);

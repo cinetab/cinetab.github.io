@@ -245,6 +245,7 @@ const setSource = (source, mode, autoplay = true) => {
 // Resets the player for a new file; `name` and `size` are the original file's
 const prepareFor = (name, size) => {
     showPlayer();
+    enterMobileImmersive();
     mainVideo.pause();
     cancelConversion();
     removeSubtitles();
@@ -257,6 +258,17 @@ const prepareFor = (name, size) => {
     videoTitle.title = `${name}\nClick to rename`;
     uploadOverlay.classList.add("hidden");
     errorOverlay.classList.add("hidden");
+};
+
+// On phones, opening a file is already a user gesture: use it to create an app-like
+// player and request the widest available layout.
+const enterMobileImmersive = () => {
+    if (!isTouch || fullscreenElement() || !playerPage.requestFullscreen) return;
+    Promise.resolve(playerPage.requestFullscreen()).then(() => {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock("landscape").catch(() => {});
+        }
+    }).catch(() => {});
 };
 
 const loadVideoFile = async (file) => {
@@ -646,6 +658,14 @@ closeErrorBtn.addEventListener("click", () => {
 
 // Every dialog has a × in its corner, and Esc closes the topmost one
 const closeButton = dialog => dialog.querySelector(".box-close");
+
+document.querySelectorAll("[data-dialog]:not(#room-overlay)").forEach(dialog => {
+    dialog.addEventListener("click", e => {
+        if (e.target !== dialog) return;
+        const close = closeButton(dialog);
+        if (close && !close.hidden) close.click();
+    });
+});
 
 closeButton(helpOverlay).addEventListener("click", () => helpOverlay.classList.add("hidden"));
 closeButton(shortcutsOverlay).addEventListener("click", () => shortcutsOverlay.classList.add("hidden"));
@@ -1082,6 +1102,7 @@ const toggleFullscreen = () => {
 const onFullscreenChange = () => {
     const isFullscreen = fullscreenElement() === playerPage;
     container.classList.toggle("fullscreen", isFullscreen);
+    if (!isFullscreen) container.classList.remove("pinch-zoomed");
     fullScreenBtn.className = isFullscreen ? "fa-solid fa-compress" : "fa-solid fa-expand";
     fullScreenBtn.parentNode.title = isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)";
     if (!isFullscreen && screen.orientation && screen.orientation.unlock) {
@@ -1093,11 +1114,17 @@ document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 fullScreenBtn.parentNode.addEventListener("click", toggleFullscreen);
 
-// Touch: a tap shows or hides the controls (instead of pausing); a double tap on the left or
-// right third jumps back or forward 10 seconds, in the middle it toggles fullscreen
+// Touch: a tap in the middle pauses or resumes; a double tap on the left or right third
+// jumps back or forward 10 seconds, while a middle double tap enters fullscreen.
 let lastTap = { at: 0, x: 0 };
 let tapTimer = null;
 let touchedAt = 0;
+let pinchStartDistance = 0;
+let pinchScale = 1;
+let pinching = false;
+let mobileSwipe = null;
+let ignoreNextTouchPointerUp = false;
+let mobileBrightness = 1;
 
 const toggleControls = () => {
     clearTimeout(idleTimer);
@@ -1111,7 +1138,11 @@ const toggleControls = () => {
 };
 
 mainVideo.addEventListener("pointerup", e => {
-    if (e.pointerType !== "touch") return;
+    if (e.pointerType !== "touch" || pinching) return;
+    if (ignoreNextTouchPointerUp) {
+        ignoreNextTouchPointerUp = false;
+        return;
+    }
     touchedAt = Date.now();
     const rect = mainVideo.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -1124,8 +1155,102 @@ mainVideo.addEventListener("pointerup", e => {
         return;
     }
     lastTap = { at: touchedAt, x };
-    tapTimer = setTimeout(toggleControls, 300);
+    tapTimer = setTimeout(() => {
+        if (x >= rect.width / 3 && x <= rect.width * 2 / 3) togglePlay();
+        else toggleControls();
+    }, 300);
 });
+
+const pinchDistance = touches => {
+    const [first, second] = touches;
+    return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+};
+
+mainVideo.addEventListener("touchstart", e => {
+    if (e.touches.length !== 2 || !fullscreenElement()) return;
+    pinchStartDistance = pinchDistance(e.touches);
+    pinchScale = 1;
+    pinching = true;
+    clearTimeout(tapTimer);
+}, { passive: true });
+
+mainVideo.addEventListener("touchmove", e => {
+    if (!pinching || e.touches.length !== 2) return;
+    pinchScale = pinchDistance(e.touches) / pinchStartDistance;
+    e.preventDefault();
+}, { passive: false });
+
+mainVideo.addEventListener("touchend", () => {
+    if (!pinching) return;
+    if (pinchScale > 1.08) {
+        container.classList.add("pinch-zoomed");
+        showFeedback("fa-magnifying-glass-plus", "Zoomed to fill");
+    } else if (pinchScale < 0.92) {
+        container.classList.remove("pinch-zoomed");
+        showFeedback("fa-expand", "Fit to screen");
+    }
+    pinchStartDistance = 0;
+    pinchScale = 1;
+    pinching = false;
+    touchedAt = Date.now();
+}, { passive: true });
+
+const mobileBrightnessLayer = container.querySelector(".mobile-brightness");
+const updateMobileBrightness = value => {
+    mobileBrightness = Math.max(0.2, Math.min(1, value));
+    mobileBrightnessLayer.style.opacity = String(1 - mobileBrightness);
+};
+
+mainVideo.addEventListener("touchstart", e => {
+    if (e.touches.length !== 1 || !fullscreenElement() || pinching) return;
+    const touch = e.touches[0];
+    const rect = mainVideo.getBoundingClientRect();
+    const edge = touch.clientX - rect.left;
+    const edgeWidth = rect.width * 0.22;
+    mobileSwipe = {
+        x: touch.clientX,
+        y: touch.clientY,
+        kind: edge <= edgeWidth ? "brightness" : edge >= rect.width - edgeWidth ? "volume" : "dismiss",
+        startValue: edge <= edgeWidth ? mobileBrightness : mainVideo.volume,
+        handled: false
+    };
+}, { passive: true });
+
+mainVideo.addEventListener("touchmove", e => {
+    if (!mobileSwipe || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - mobileSwipe.x;
+    const dy = touch.clientY - mobileSwipe.y;
+    if (Math.abs(dy) < 12 && !mobileSwipe.handled) return;
+
+    if (mobileSwipe.kind === "dismiss" && dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+        mobileSwipe.handled = true;
+        ignoreNextTouchPointerUp = true;
+        exitFullscreen();
+        showFeedback("fa-down-long", "Exited fullscreen");
+    } else if (mobileSwipe.kind === "brightness" && Math.abs(dy) > 12) {
+        mobileSwipe.handled = true;
+        updateMobileBrightness(mobileSwipe.startValue - dy / 300);
+        showFeedback("fa-sun", `${Math.round(mobileBrightness * 100)}% brightness`);
+    } else if (mobileSwipe.kind === "volume" && Math.abs(dy) > 12) {
+        mobileSwipe.handled = true;
+        setVolume(mobileSwipe.startValue - dy / 300);
+        showFeedback(mainVideo.volume ? "fa-volume-high" : "fa-volume-xmark", `${Math.round(mainVideo.volume * 100)}% volume`);
+    }
+    if (mobileSwipe.handled) e.preventDefault();
+}, { passive: false });
+
+mainVideo.addEventListener("touchend", () => {
+    if (mobileSwipe?.handled) ignoreNextTouchPointerUp = true;
+    mobileSwipe = null;
+}, { passive: true });
+
+mainVideo.addEventListener("touchcancel", () => {
+    mobileSwipe = null;
+    pinching = false;
+    pinchStartDistance = 0;
+    pinchScale = 1;
+}, { passive: true });
 
 mainVideo.addEventListener("click", () => {
     if (Date.now() - touchedAt < 700) return;
