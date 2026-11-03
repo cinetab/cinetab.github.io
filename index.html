@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Movie Watch Player</title>
+  <meta name="description" content="Play movies from your own device in a browser tab, then share the tab with audio in Google Meet, Zoom or Teams to watch together. Nothing is uploaded.">
+  <meta name="theme-color" content="#0f0f11">
+  <link rel="icon" href="movie.png"/>
+  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- FontAwesome & Google Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+</head>
+<body>
+
+  <div class="container show-controls">
+
+    <!-- Top Title Bar (YouTube Style) -->
+    <div class="top-bar">
+      <div class="video-title-container">
+        <i class="fa-solid fa-film"></i>
+        <h1 class="video-title">No Video Loaded</h1>
+      </div>
+      <button class="share-help-btn" title="How to watch together"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
+    </div>
+
+    <!-- Center Feedback Badge Animation -->
+    <div class="center-feedback">
+      <i class="fa-solid fa-play"></i>
+      <span></span>
+    </div>
+
+    <!-- Drop Zone & File Selector Overlay -->
+    <div class="upload-overlay" id="upload-overlay">
+      <div class="upload-box">
+        <i class="fa-solid fa-file-video"></i>
+        <h2>Select a Movie to Play</h2>
+        <p>Drag & drop your movie file here or browse from device.<br>Drop an .srt / .vtt file anytime to add subtitles.</p>
+        <button id="browse-btn"><i class="fa-solid fa-folder-open"></i> Browse Video</button>
+        <p class="privacy-note"><i class="fa-solid fa-lock"></i> Your file plays locally and is never uploaded.</p>
+      </div>
+    </div>
+
+    <!-- Error Overlay -->
+    <div class="error-overlay hidden" id="error-overlay">
+      <div class="upload-box">
+        <i class="fa-solid fa-triangle-exclamation" style="color: #ff4d4d;"></i>
+        <h2>Codec Error</h2>
+        <p id="error-message">Browser failed to decode this video file's video/audio stream.</p>
+        <button id="close-error-btn">Try Another File</button>
+      </div>
+    </div>
+
+    <!-- Watch Together Help Overlay -->
+    <div class="help-overlay hidden" id="help-overlay">
+      <div class="upload-box help-box">
+        <i class="fa-solid fa-users"></i>
+        <h2>Watch Together</h2>
+        <ol>
+          <li>Open your movie here and pause it.</li>
+          <li>In Google Meet click <b>Share screen</b> (in Zoom / Teams: <b>Share</b>) and choose <b>Chrome Tab</b> / <b>A tab</b>.</li>
+          <li>Pick this tab and turn on <b>Also share tab audio</b>.</li>
+          <li>Press play. Use <b>F</b> for fullscreen so everyone sees a bigger picture.</li>
+        </ol>
+        <p>Tab audio sharing works in Chrome and Edge on desktop. Don't use Picture-in-Picture while sharing &mdash; the video leaves this tab and your friends will see a blank player.</p>
+        <button id="close-help-btn">Got it</button>
+      </div>
+    </div>
+
+    <!-- Hidden File Inputs -->
+    <input type="file" id="file-input" accept="video/*,.mkv" hidden>
+    <input type="file" id="subtitle-input" accept=".srt,.vtt" hidden>
+
+    <!-- Main Video Element -->
+    <video id="main-video" crossorigin="anonymous"></video>
+
+    <!-- Controls Wrapper -->
+    <div class="wrapper">
+      <div class="video-timeline">
+        <div class="progress-area">
+          <!-- Live Hover Preview Thumbnail Box -->
+          <div class="thumbnail-preview">
+            <video id="preview-video" muted preload="auto"></video>
+            <span class="preview-time">00:00</span>
+          </div>
+          <div class="progress-bar"></div>
+        </div>
+      </div>
+      <ul class="video-controls">
+        <li class="options left">
+          <button class="volume" title="Mute/Unmute (M)"><i class="fa-solid fa-volume-high"></i></button>
+          <input type="range" class="volume-slider" min="0" max="1" step="any" value="1">
+          <div class="video-timer">
+            <p class="current-time">00:00</p>
+            <p class="separator"> / </p>
+            <p class="video-duration">00:00</p>
+          </div>
+        </li>
+
+        <!-- Play/Pause in Center -->
+        <li class="options center">
+          <button class="skip-backward" title="Seek -5s (Left Arrow)"><i class="fas fa-backward"></i></button>
+          <button class="play-pause" title="Play/Pause (Space / K)"><i class="fas fa-play"></i></button>
+          <button class="skip-forward" title="Seek +5s (Right Arrow)"><i class="fas fa-forward"></i></button>
+        </li>
+
+        <li class="options right">
+          <button class="open-file" title="Open Movie File"><i class="fa-solid fa-folder-open"></i></button>
+          <button class="subtitles" title="Subtitles (C) - load .srt / .vtt"><i class="fa-regular fa-closed-captioning"></i></button>
+
+          <!-- Playback Speed Menu -->
+          <div class="popup-menu-wrapper playback-content">
+            <button class="playback-speed" title="Playback Speed"><span class="material-symbols-rounded">slow_motion_video</span></button>
+            <ul class="popup-menu speed-options">
+              <li class="menu-header">Speed</li>
+              <li data-speed="2">2x</li>
+              <li data-speed="1.5">1.5x</li>
+              <li data-speed="1.25">1.25x</li>
+              <li data-speed="1" class="active">Normal</li>
+              <li data-speed="0.75">0.75x</li>
+              <li data-speed="0.5">0.5x</li>
+            </ul>
+          </div>
+
+          <button class="pic-in-pic" title="Picture in Picture (P)"><span class="material-symbols-rounded">picture_in_picture_alt</span></button>
+          <button class="fullscreen" title="Fullscreen (F)"><i class="fa-solid fa-expand"></i></button>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
