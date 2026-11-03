@@ -5,9 +5,9 @@
 **Movie night on any video call.** CineTab plays a movie from your own computer in a browser tab. Share that tab (with audio) in Google Meet, Zoom or Teams and watch it together with friends.
 
 <p align="center">
-  <b><a href="https://ranjan-sarkar.github.io/cinetab/">Open CineTab</a></b>
+  <b><a href="https://cinetab.github.io/">Open CineTab</a></b>
   &nbsp;·&nbsp;
-  <b><a href="https://ranjan-sarkar.github.io/cinetab/cinetab-offline.html" download>Download the offline player</a></b> (one HTML file)
+  <b><a href="https://cinetab.github.io/cinetab-offline.html" download>Download the offline player</a></b> (one HTML file)
 </p>
 
 The movie is never uploaded. The page uses the browser's File API to play the file straight from your disk, so the site is just static HTML/CSS/JS hosted on GitHub Pages. The home page explains how it works; choosing or dropping a video switches the same page into the player.
