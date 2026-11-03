@@ -52,9 +52,10 @@ compatBanner = document.querySelector("#compat-banner"),
 compatFixBtn = compatBanner.querySelector(".compat-fix-btn"),
 compatCloseBtn = compatBanner.querySelector(".compat-close-btn"),
 audioTitle = container.querySelector(".audio-title"),
-storageNote = document.querySelector(".storage-note"),
-storageSize = document.querySelector(".storage-size"),
-clearStorageBtn = document.querySelector(".clear-storage-btn");
+savedSection = document.querySelector("#saved"),
+savedList = savedSection.querySelector(".saved-list"),
+savedTotal = savedSection.querySelector(".saved-total"),
+clearAllBtn = savedSection.querySelector(".clear-all-btn");
 
 let idleTimer;
 let clickTimeout;
@@ -67,6 +68,7 @@ let conversionJob = null;
 let lastPlan = null;
 let soundChecked = false;
 let retriedWithTranscode = false;
+let currentSavedKey = null;
 
 // Hide Controls on Idle
 const hideControls = () => {
@@ -136,6 +138,7 @@ const showHome = () => {
     playerPage.hidden = true;
     homePage.hidden = false;
     document.body.classList.remove("watching");
+    renderSavedList();
 };
 
 // Browser back button returns to the home page
@@ -163,19 +166,26 @@ const setSource = (source, mode, autoplay = true) => {
     if (autoplay) mainVideo.play().catch(() => {});
 };
 
-const loadVideoFile = async (file) => {
-    if(!file) return;
+// Resets the player for a new file; `name` and `size` are the original file's
+const prepareFor = (name, size) => {
     showPlayer();
     mainVideo.pause();
     cancelConversion();
     removeSubtitles();
     compatBanner.classList.add("hidden");
-    currentFile = file;
     retriedWithTranscode = false;
-    currentFileKey = `resume:${file.name}:${file.size}`;
-    videoTitle.innerText = audioTitle.innerText = file.name.replace(/\.[^/.]+$/, "");
+    currentSavedKey = null;
+    currentFileKey = `resume:${name}:${size}`;
+    videoTitle.innerText = audioTitle.innerText = name.replace(/\.[^/.]+$/, "");
+    videoTitle.title = name;
     uploadOverlay.classList.add("hidden");
     errorOverlay.classList.add("hidden");
+};
+
+const loadVideoFile = async (file) => {
+    if(!file) return;
+    prepareFor(file.name, file.size);
+    currentFile = file;
 
     // Converted before? Play the saved copy straight away
     const saved = await Converter.getCached(file);
@@ -207,12 +217,19 @@ const srtToVtt = text => "WEBVTT\n\n" + text
     .replace(/\r+/g, "")
     .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
 
+const updateSubtitlesTitle = () => {
+    const track = mainVideo.textTracks[0];
+    subtitlesBtn.title = !track ? "Load subtitles from an .srt / .vtt file (C)"
+        : `${track.mode === "showing" ? "Hide" : "Show"} subtitles (C) · Shift + click to load a different file`;
+};
+
 const removeSubtitles = () => {
     mainVideo.querySelectorAll("track").forEach(track => {
         URL.revokeObjectURL(track.src);
         track.remove();
     });
     subtitlesBtn.classList.remove("active");
+    updateSubtitlesTitle();
 };
 
 const applySubtitles = (text, label) => {
@@ -230,6 +247,7 @@ const applySubtitles = (text, label) => {
     mainVideo.appendChild(track);
     track.track.mode = "showing";
     subtitlesBtn.classList.add("active");
+    updateSubtitlesTitle();
     showFeedback("fa-closed-captioning", "Subtitles On");
 };
 
@@ -248,6 +266,7 @@ const toggleSubtitles = () => {
     const show = track.mode !== "showing";
     track.mode = show ? "showing" : "hidden";
     subtitlesBtn.classList.toggle("active", show);
+    updateSubtitlesTitle();
     showFeedback("fa-closed-captioning", show ? "Subtitles On" : "Subtitles Off");
 };
 
@@ -325,12 +344,13 @@ const cancelConversion = () => {
     convertOverlay.classList.add("hidden");
 };
 
-const playConverted = ({ file, subtitles, plan, cached }) => {
+const playConverted = ({ key, file, subtitles, plan, cached }) => {
     lastPlan = plan;
+    currentSavedKey = key || null;
     setSource(file, "converted", !playerPage.hidden);
     if (subtitles) applySubtitles(subtitles, "Subtitles");
     showFeedback(cached ? "fa-bolt" : "fa-circle-check", cached ? "Saved copy" : "Ready");
-    refreshStorageNote();
+    renderSavedList();
 };
 
 const startConversion = (reason, detail = null, forceVideoTranscode = false) => {
@@ -429,26 +449,106 @@ convertSkipBtn.addEventListener("click", () => {
 compatFixBtn.addEventListener("click", () => startConversion("audio"));
 compatCloseBtn.addEventListener("click", () => compatBanner.classList.add("hidden"));
 
-// Saved conversions (shown on the home page)
-const refreshStorageNote = async () => {
-    const bytes = await Converter.savedBytes();
-    storageNote.hidden = bytes === 0;
-    storageSize.innerText = bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
+// Converted Videos (listed on the home page)
+const formatBytes = bytes => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
+
+const summarizePlan = plan => {
+    if (!plan) return "Converted";
+    const parts = [];
+    if (plan.video && !plan.video.copy) parts.push(`${Converter.codecName(plan.video.codec)} video → H.264`);
+    if (plan.audio && !plan.audio.copy) parts.push(`${Converter.codecName(plan.audio.codec)} sound → AAC`);
+    return parts.length ? parts.join(", ") : "Repackaged as MP4";
 };
 
-clearStorageBtn.addEventListener("click", async () => {
-    if (playbackMode === "converted") {
-        mainVideo.removeAttribute("src");
-        mainVideo.load();
-        currentFile = null;
-        playbackMode = null;
-        uploadOverlay.classList.remove("hidden");
-    }
-    await Converter.clearSaved();
-    refreshStorageNote();
+const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+};
+
+const renderSavedItem = item => {
+    const title = item.name.replace(/\.[^/.]+$/, "");
+    const size = formatBytes(item.bytes);
+    const li = el("li", "saved-item");
+
+    const icon = el("span", "saved-icon");
+    icon.appendChild(el("i", `fa-solid ${item.plan && item.plan.video ? "fa-film" : "fa-music"}`));
+
+    const info = el("div", "saved-info");
+    const name = el("p", "saved-name", title);
+    name.title = item.name;
+    const meta = el("p", "saved-meta");
+    const date = new Date(item.created).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    meta.append(el("span", "saved-size", size), ` · ${summarizePlan(item.plan)} · converted ${date}`);
+    info.append(name, meta);
+
+    const play = el("button", "btn btn-primary btn-sm saved-play");
+    play.dataset.action = "play";
+    play.dataset.key = item.key;
+    play.title = `Play “${title}” (opens instantly, no conversion needed)`;
+    play.append(el("i", "fa-solid fa-play"), el("span", null, "Play"));
+
+    const remove = el("button", "icon-btn saved-remove");
+    remove.dataset.action = "remove";
+    remove.dataset.key = item.key;
+    remove.title = `Delete the converted copy of “${title}” (${size}). Your original file is not touched.`;
+    remove.setAttribute("aria-label", remove.title);
+    remove.appendChild(el("i", "fa-solid fa-trash-can"));
+
+    li.append(icon, info, play, remove);
+    return li;
+};
+
+const renderSavedList = async () => {
+    const { items, bytes } = await Converter.listSaved();
+    savedSection.hidden = items.length === 0;
+    savedTotal.textContent = formatBytes(bytes);
+    clearAllBtn.title = `Delete all ${items.length} converted ${items.length === 1 ? "copy" : "copies"} (${formatBytes(bytes)}) from this browser. Your original files are not touched.`;
+    savedList.replaceChildren(...items.map(renderSavedItem));
+};
+
+// Stop playback if the copy being played is about to be deleted
+const unloadPlayer = () => {
+    [mainVideo, previewVideo].forEach(video => {
+        video.removeAttribute("src");
+        video.load();
+    });
+    removeSubtitles();
+    currentFile = null;
+    currentSavedKey = null;
+    playbackMode = null;
+    uploadOverlay.classList.remove("hidden");
+};
+
+const playSaved = async key => {
+    const saved = await Converter.openSaved(key);
+    if (!saved) return renderSavedList();
+    prepareFor(saved.name, saved.sourceSize);
+    currentFile = saved.file;
+    // Already a converted copy, so there is nothing left to retry if it fails
+    retriedWithTranscode = true;
+    playConverted(saved);
+};
+
+savedList.addEventListener("click", async e => {
+    const button = e.target.closest("button[data-action]");
+    if (!button) return;
+    const { action, key } = button.dataset;
+    if (action === "play") return playSaved(key);
+    if (key === currentSavedKey) unloadPlayer();
+    await Converter.removeSaved(key);
+    renderSavedList();
 });
 
-refreshStorageNote();
+clearAllBtn.addEventListener("click", async () => {
+    if (!confirm("Delete all converted videos from this browser?\nYour original files are not touched, and anything can be converted again later.")) return;
+    if (currentSavedKey) unloadPlayer();
+    await Converter.clearSaved();
+    renderSavedList();
+});
+
+renderSavedList();
 
 // Watch Together Help
 shareHelpBtn.addEventListener("click", () => {
@@ -547,6 +647,7 @@ const draggableProgressBar = e => {
 const setVolume = (value) => {
     mainVideo.volume = value;
     volumeSlider.value = value;
+    volumeBtn.parentNode.title = value == 0 ? "Unmute (M)" : "Mute (M)";
     if(value == 0) {
         volumeBtn.className = "fa-solid fa-volume-xmark";
     } else if(value < 0.5) {
@@ -585,12 +686,14 @@ const togglePlay = () => {
 playPauseBtn.parentNode.addEventListener("click", togglePlay);
 mainVideo.addEventListener("play", () => {
     playPauseBtn.className = "fas fa-pause";
+    playPauseBtn.parentNode.title = "Pause (Space / K)";
     container.classList.add("is-playing");
     clearTimeout(idleTimer);
     hideControls();
 });
 mainVideo.addEventListener("pause", () => {
     playPauseBtn.className = "fas fa-play";
+    playPauseBtn.parentNode.title = "Play (Space / K)";
     container.classList.remove("is-playing");
 });
 
@@ -779,6 +882,7 @@ document.addEventListener("fullscreenchange", () => {
     const isFullscreen = document.fullscreenElement === container;
     container.classList.toggle("fullscreen", isFullscreen);
     fullScreenBtn.className = isFullscreen ? "fa-solid fa-compress" : "fa-solid fa-expand";
+    fullScreenBtn.parentNode.title = isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)";
 });
 
 fullScreenBtn.parentNode.addEventListener("click", toggleFullscreen);

@@ -235,7 +235,7 @@ const convert = async ({ file, key, caps, forceVideoTranscode }) => {
     if (useOPFS) {
         if (subtitles) await writeTextFile(dir, `${key}.vtt`, subtitles);
         // Written last: its presence marks a complete, reusable conversion
-        await writeTextFile(dir, `${key}.json`, JSON.stringify({ name: file.name, created: Date.now(), plan }));
+        await writeTextFile(dir, `${key}.json`, JSON.stringify({ name: file.name, sourceSize: file.size, created: Date.now(), plan }));
     } else {
         bytes = FS.readFile("/out.mp4");
         FS.unlink("/out.mp4");

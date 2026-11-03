@@ -19,16 +19,16 @@
   <div class="home" id="top">
 
     <header class="site-header">
-      <a class="brand" href="#top">
+      <a class="brand" href="#top" title="CineTab — back to top">
         <img src="logo.svg" alt="" width="34" height="34">
         <span>Cine<b>Tab</b></span>
       </a>
       <nav class="site-nav">
-        <a href="#how">How it works</a>
-        <a href="#features">Features</a>
-        <a href="#faq">FAQ</a>
+        <a href="#how" title="See the three steps to movie night">How it works</a>
+        <a href="#features" title="What CineTab can do">Features</a>
+        <a href="#faq" title="Common questions">FAQ</a>
       </nav>
-      <button class="btn btn-primary btn-sm choose-video"><i class="fa-solid fa-play"></i> Open a movie</button>
+      <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-play"></i> Open a movie</button>
     </header>
 
     <section class="hero">
@@ -37,8 +37,8 @@
         <h1>Movie night on <span class="gradient-text">any video call.</span></h1>
         <p class="lead">CineTab plays a movie from your own computer right in this browser tab. Share the tab with audio in Google Meet, Zoom or Teams and everyone watches together.</p>
         <div class="hero-actions">
-          <button class="btn btn-primary btn-lg choose-video"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
-          <a class="btn btn-ghost btn-lg" href="#how">How it works</a>
+          <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+          <a class="btn btn-ghost btn-lg" href="#how" title="See the three steps to movie night">How it works</a>
         </div>
         <p class="hero-note">Best in Chrome or Edge on desktop. Your video never leaves your device.</p>
       </div>
@@ -54,16 +54,29 @@
             <div class="drop-icon"><i class="fa-solid fa-film"></i></div>
             <h2>Drop a movie here</h2>
             <p>MP4, MKV, AVI, WMV, MOV&hellip; or music &middot; add .srt subtitles anytime</p>
-            <button class="btn btn-primary choose-video"><i class="fa-solid fa-folder-open"></i> Choose video</button>
+            <button class="btn btn-primary choose-video" title="Pick a video or audio file, or drop one here"><i class="fa-solid fa-folder-open"></i> Choose video</button>
           </div>
         </div>
         <div class="viewers">
-          <span class="avatar" style="--hue: 210">A</span>
+          <span class="avatar" style="--hue: 210" title="Your friends on the call">A</span>
           <span class="avatar" style="--hue: 260">R</span>
           <span class="avatar" style="--hue: 330">S</span>
           <span class="avatar" style="--hue: 160">+3</span>
           <p>Friends watch on the call &mdash; nothing to install</p>
         </div>
+      </div>
+    </section>
+
+    <section class="section saved-section" id="saved" hidden>
+      <div class="saved-panel">
+        <div class="saved-header">
+          <div>
+            <h2 class="saved-title"><i class="fa-solid fa-clock-rotate-left"></i> Your converted videos</h2>
+            <p class="saved-sub">Saved in this browser so they open instantly &middot; <b class="saved-total"></b> used &middot; the 3 most recent are kept</p>
+          </div>
+          <button class="btn btn-ghost btn-sm clear-all-btn" title="Delete every converted copy from this browser (your original files are not touched)"><i class="fa-solid fa-trash-can"></i> Clear all</button>
+        </div>
+        <ul class="saved-list"></ul>
       </div>
     </section>
 
@@ -145,7 +158,7 @@
         </details>
         <details>
           <summary>Where does the conversion happen?</summary>
-          <p>Right in your browser. The first time, CineTab downloads its converter (about 31 MB, ffmpeg built for the web). Your movie is never uploaded. The converted copies of your three most recent files are kept in this browser's storage so they open instantly next time, and you can clear them at the bottom of this page.</p>
+          <p>Right in your browser. The first time, CineTab downloads its converter (about 31 MB, ffmpeg built for the web). Your movie is never uploaded. The converted copies of your three most recent files are kept in this browser's storage so they open instantly next time. They're listed near the top of this page, where you can play or delete them.</p>
         </details>
         <details>
           <summary>Should I use Picture-in-Picture while sharing?</summary>
@@ -157,16 +170,15 @@
     <section class="cta-band">
       <h2>Ready for movie night?</h2>
       <p>Grab the popcorn, open a movie and share the tab.</p>
-      <button class="btn btn-primary btn-lg choose-video"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+      <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
     </section>
 
     <footer class="site-footer">
-      <a class="brand brand-sm" href="#top">
+      <a class="brand brand-sm" href="#top" title="CineTab — back to top">
         <img src="logo.svg" alt="" width="24" height="24">
         <span>Cine<b>Tab</b></span>
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
-      <p class="storage-note" hidden>Converted copies in this browser: <span class="storage-size"></span> &middot; <button class="link-btn clear-storage-btn">Clear</button></p>
     </footer>
   </div>
 
@@ -178,7 +190,7 @@
     <div class="top-bar">
       <div class="video-title-container">
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
-        <h1 class="video-title">No Video Loaded</h1>
+        <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
       </div>
       <button class="share-help-btn" title="How to watch together"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
     </div>
@@ -192,38 +204,44 @@
     <!-- Drop Zone & File Selector Overlay -->
     <div class="upload-overlay" id="upload-overlay">
       <div class="upload-box">
-        <i class="fa-solid fa-file-video"></i>
-        <h2>Select a Movie to Play</h2>
-        <p>Drag & drop a video or audio file here, or browse from device.<br>Drop an .srt / .vtt file anytime to add subtitles.</p>
-        <button id="browse-btn"><i class="fa-solid fa-folder-open"></i> Browse Video</button>
-        <p class="privacy-note"><i class="fa-solid fa-lock"></i> Your file plays locally and is never uploaded.</p>
+        <div class="box-scroll">
+          <i class="fa-solid fa-file-video"></i>
+          <h2>Select a Movie to Play</h2>
+          <p>Drag & drop a video or audio file here, or browse from device.<br>Drop an .srt / .vtt file anytime to add subtitles.</p>
+          <button id="browse-btn" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Browse Video</button>
+          <p class="privacy-note"><i class="fa-solid fa-lock"></i> Your file plays locally and is never uploaded.</p>
+        </div>
       </div>
     </div>
 
     <!-- Error Overlay -->
     <div class="error-overlay hidden" id="error-overlay">
       <div class="upload-box">
-        <i class="fa-solid fa-triangle-exclamation" style="color: #ff4d4d;"></i>
-        <h2>Can't Play This File</h2>
-        <p id="error-message">Browser failed to decode this video file's video/audio stream.</p>
-        <button id="close-error-btn">Try Another File</button>
+        <div class="box-scroll">
+          <i class="fa-solid fa-triangle-exclamation" style="color: #ff4d4d;"></i>
+          <h2>Can't Play This File</h2>
+          <p id="error-message">Browser failed to decode this video file's video/audio stream.</p>
+          <button id="close-error-btn" title="Pick a different file">Try Another File</button>
+        </div>
       </div>
     </div>
 
     <!-- Compatibility Conversion Overlay -->
     <div class="convert-overlay hidden" id="convert-overlay">
       <div class="upload-box convert-box">
-        <i class="fa-solid fa-wand-magic-sparkles"></i>
-        <h2 class="convert-title">Making this file playable</h2>
-        <p class="convert-reason"></p>
-        <div class="convert-progress"><div class="convert-progress-bar"></div></div>
-        <p class="convert-status">Starting&hellip;</p>
-        <p class="convert-plan"></p>
-        <div class="convert-actions">
-          <button class="secondary-btn convert-skip-btn" hidden>Play without sound</button>
-          <button class="secondary-btn convert-cancel-btn">Cancel</button>
+        <div class="box-scroll">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <h2 class="convert-title">Making this file playable</h2>
+          <p class="convert-reason"></p>
+          <div class="convert-progress"><div class="convert-progress-bar"></div></div>
+          <p class="convert-status">Starting&hellip;</p>
+          <p class="convert-plan"></p>
+          <div class="convert-actions">
+            <button class="secondary-btn convert-skip-btn" title="Stop fixing the sound and watch the video silently" hidden>Play without sound</button>
+            <button class="secondary-btn convert-cancel-btn" title="Stop converting and pick another file">Cancel</button>
+          </div>
+          <p class="privacy-note"><i class="fa-solid fa-lock"></i> Converted on your computer, never uploaded. Saved in this browser so it opens instantly next time.</p>
         </div>
-        <p class="privacy-note"><i class="fa-solid fa-lock"></i> Converted on your computer, never uploaded. Saved in this browser so it opens instantly next time.</p>
       </div>
     </div>
 
@@ -231,7 +249,7 @@
     <div class="compat-banner hidden" id="compat-banner">
       <i class="fa-solid fa-volume-xmark"></i>
       <span>No sound? This file's audio format may not be supported by your browser.</span>
-      <button class="compat-fix-btn">Fix sound</button>
+      <button class="compat-fix-btn" title="Convert the sound to a format your browser can play">Fix sound</button>
       <button class="compat-close-btn" title="Dismiss"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
@@ -245,16 +263,18 @@
     <!-- Watch Together Help Overlay -->
     <div class="help-overlay hidden" id="help-overlay">
       <div class="upload-box help-box">
-        <i class="fa-solid fa-users"></i>
-        <h2>Watch Together</h2>
-        <ol>
-          <li>Open your movie here and pause it.</li>
-          <li>In Google Meet click <b>Share screen</b> (in Zoom / Teams: <b>Share</b>) and choose <b>Chrome Tab</b> / <b>A tab</b>.</li>
-          <li>Pick this tab and turn on <b>Also share tab audio</b>.</li>
-          <li>Press play. Use <b>F</b> for fullscreen so everyone sees a bigger picture.</li>
-        </ol>
-        <p>Tab audio sharing works in Chrome and Edge on desktop. Don't use Picture-in-Picture while sharing &mdash; the video leaves this tab and your friends will see a blank player.</p>
-        <button id="close-help-btn">Got it</button>
+        <div class="box-scroll">
+          <i class="fa-solid fa-users"></i>
+          <h2>Watch Together</h2>
+          <ol>
+            <li>Open your movie here and pause it.</li>
+            <li>In Google Meet click <b>Share screen</b> (in Zoom / Teams: <b>Share</b>) and choose <b>Chrome Tab</b> / <b>A tab</b>.</li>
+            <li>Pick this tab and turn on <b>Also share tab audio</b>.</li>
+            <li>Press play. Use <b>F</b> for fullscreen so everyone sees a bigger picture.</li>
+          </ol>
+          <p>Tab audio sharing works in Chrome and Edge on desktop. Don't use Picture-in-Picture while sharing &mdash; the video leaves this tab and your friends will see a blank player.</p>
+          <button id="close-help-btn" title="Close these instructions">Got it</button>
+        </div>
       </div>
     </div>
 
@@ -276,7 +296,7 @@
       <ul class="video-controls">
         <li class="options left">
           <button class="volume" title="Mute/Unmute (M)"><i class="fa-solid fa-volume-high"></i></button>
-          <input type="range" class="volume-slider" min="0" max="1" step="any" value="1">
+          <input type="range" class="volume-slider" min="0" max="1" step="any" value="1" title="Volume (Up / Down arrows)">
           <div class="video-timer">
             <p class="current-time">00:00</p>
             <p class="separator"> / </p>
@@ -286,26 +306,26 @@
 
         <!-- Play/Pause in Center -->
         <li class="options center">
-          <button class="skip-backward" title="Seek -5s (Left Arrow)"><i class="fas fa-backward"></i></button>
-          <button class="play-pause" title="Play/Pause (Space / K)"><i class="fas fa-play"></i></button>
-          <button class="skip-forward" title="Seek +5s (Right Arrow)"><i class="fas fa-forward"></i></button>
+          <button class="skip-backward" title="Back 5 seconds (Left arrow)"><i class="fas fa-backward"></i></button>
+          <button class="play-pause" title="Play (Space / K)"><i class="fas fa-play"></i></button>
+          <button class="skip-forward" title="Forward 5 seconds (Right arrow)"><i class="fas fa-forward"></i></button>
         </li>
 
         <li class="options right">
-          <button class="open-file" title="Open Movie File"><i class="fa-solid fa-folder-open"></i></button>
-          <button class="subtitles" title="Subtitles (C) - load .srt / .vtt"><i class="fa-regular fa-closed-captioning"></i></button>
+          <button class="open-file" title="Open another video or audio file"><i class="fa-solid fa-folder-open"></i></button>
+          <button class="subtitles" title="Load subtitles from an .srt / .vtt file (C)"><i class="fa-regular fa-closed-captioning"></i></button>
 
           <!-- Playback Speed Menu -->
           <div class="popup-menu-wrapper playback-content">
-            <button class="playback-speed" title="Playback Speed"><span class="material-symbols-rounded">slow_motion_video</span></button>
+            <button class="playback-speed" title="Playback speed (Shift + &lt; / &gt;)"><span class="material-symbols-rounded">slow_motion_video</span></button>
             <ul class="popup-menu speed-options">
               <li class="menu-header">Speed</li>
-              <li data-speed="2">2x</li>
-              <li data-speed="1.5">1.5x</li>
-              <li data-speed="1.25">1.25x</li>
-              <li data-speed="1" class="active">Normal</li>
-              <li data-speed="0.75">0.75x</li>
-              <li data-speed="0.5">0.5x</li>
+              <li data-speed="2" title="Play at 2x speed">2x</li>
+              <li data-speed="1.5" title="Play at 1.5x speed">1.5x</li>
+              <li data-speed="1.25" title="Play at 1.25x speed">1.25x</li>
+              <li data-speed="1" title="Play at normal speed" class="active">Normal</li>
+              <li data-speed="0.75" title="Play at 0.75x speed">0.75x</li>
+              <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li>
             </ul>
           </div>
 

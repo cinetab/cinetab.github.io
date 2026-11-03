@@ -63,7 +63,7 @@ const Converter = (() => {
         const file = await (await dir.getFileHandle(`${key}.mp4`)).getFile();
         let subtitles = null;
         try { subtitles = await readText(dir, `${key}.vtt`); } catch (e) {}
-        return { file, subtitles, plan: meta.plan, cached: true };
+        return { key, file, subtitles, plan: meta.plan, name: meta.name, sourceSize: meta.sourceSize, cached: true };
     };
 
     const removeEntry = async key => {
@@ -75,42 +75,59 @@ const Converter = (() => {
         } catch (e) {}
     };
 
+    // Completed conversions (newest first) with the disk space each one uses. `bytes` also
+    // counts leftovers such as a conversion that is still running.
     const listSaved = async () => {
-        const dir = await getDir();
-        const saved = [];
-        let bytes = 0;
-        for await (const [name, handle] of dir.entries()) {
-            if (handle.kind !== "file") continue;
-            const file = await handle.getFile();
-            bytes += file.size;
-            if (name.endsWith(".json")) {
-                try { saved.push({ key: name.slice(0, -5), created: JSON.parse(await file.text()).created || 0 }); } catch (e) {}
+        try {
+            const dir = await getDir();
+            const groups = {};
+            for await (const [name, handle] of dir.entries()) {
+                if (handle.kind !== "file") continue;
+                const key = name.replace(/\.[^.]+$/, "");
+                const group = groups[key] || (groups[key] = { key, bytes: 0, meta: null });
+                const file = await handle.getFile();
+                group.bytes += file.size;
+                if (name.endsWith(".json")) {
+                    try { group.meta = JSON.parse(await file.text()); } catch (e) {}
+                }
             }
+            const all = Object.values(groups);
+            const items = all.filter(group => group.meta).map(({ key, bytes, meta }) => ({
+                key, bytes, name: meta.name, created: meta.created || 0, plan: meta.plan
+            }));
+            items.sort((a, b) => b.created - a.created);
+            return { items, bytes: all.reduce((sum, group) => sum + group.bytes, 0) };
+        } catch (e) {
+            return { items: [], bytes: 0 };
         }
-        return { saved, bytes };
     };
 
     // Keep only the most recent conversions so movies don't quietly fill the disk
     const trimSaved = async keepKey => {
-        try {
-            const { saved } = await listSaved();
-            saved.sort((a, b) => b.created - a.created)
-                .filter(entry => entry.key !== keepKey)
-                .slice(MAX_SAVED - 1)
-                .forEach(entry => removeEntry(entry.key));
-        } catch (e) {}
+        const { items } = await listSaved();
+        items.filter(item => item.key !== keepKey)
+            .slice(MAX_SAVED - 1)
+            .forEach(item => removeEntry(item.key));
     };
 
     const getCached = async file => {
         try { return await readEntry(await getDir(), keyFor(file)); } catch (e) { return null; }
     };
 
-    const savedBytes = async () => {
-        try { return (await listSaved()).bytes; } catch (e) { return 0; }
+    const openSaved = async key => {
+        try { return await readEntry(await getDir(), key); } catch (e) { return null; }
     };
 
+    // Entry by entry, so a conversion that's still running (its file is locked) is left alone
     const clearSaved = async () => {
-        try { await (await navigator.storage.getDirectory()).removeEntry(CACHE_DIR, { recursive: true }); } catch (e) {}
+        try {
+            const dir = await getDir();
+            const names = [];
+            for await (const name of dir.keys()) names.push(name);
+            for (const name of names) {
+                try { await dir.removeEntry(name); } catch (e) {}
+            }
+        } catch (e) {}
     };
 
     // Finds the top-level "moov" box of an MP4/MOV, where its track codecs are listed
@@ -197,5 +214,5 @@ const Converter = (() => {
         return { promise, cancel };
     };
 
-    return { isSupported, convert, getCached, findSilentAudio, savedBytes, clearSaved, codecName };
+    return { isSupported, convert, getCached, findSilentAudio, listSaved, openSaved, removeSaved: removeEntry, clearSaved, codecName };
 })();
