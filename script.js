@@ -74,6 +74,7 @@ let currentSavedKey = null;
 const hideControls = () => {
     if(mainVideo.paused) return;
     idleTimer = setTimeout(() => {
+        hideTooltip();
         container.classList.remove("show-controls");
         container.classList.add("hide-cursor");
     }, 3000);
