@@ -444,6 +444,75 @@ body.watching {
   text-transform: capitalize;
 }
 
+/* Mobile edge gesture feedback: brightness on the left, volume on the right. */
+.mobile-adjustment {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  width: 58px;
+  height: 190px;
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.88);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mobile-brightness-adjustment {
+  left: 16px;
+}
+
+.mobile-volume-adjustment {
+  right: 16px;
+}
+
+.mobile-adjustment.show {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.mobile-adjustment > i {
+  font-size: 18px;
+  height: 20px;
+}
+
+.mobile-adjustment-track {
+  position: relative;
+  width: 8px;
+  height: 130px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.mobile-adjustment-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+  transition: height 0.08s linear;
+}
+
+.mobile-adjustment span {
+  min-width: 46px;
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* Controls Wrapper */
 .wrapper {
   position: absolute;

@@ -1196,21 +1196,43 @@ mainVideo.addEventListener("touchend", () => {
 }, { passive: true });
 
 const mobileBrightnessLayer = container.querySelector(".mobile-brightness");
+const mobileBrightnessAdjustment = container.querySelector(".mobile-brightness-adjustment");
+const mobileVolumeAdjustment = container.querySelector(".mobile-volume-adjustment");
+let mobileAdjustmentTimer = null;
 const updateMobileBrightness = value => {
     mobileBrightness = Math.max(0.2, Math.min(1, value));
     mobileBrightnessLayer.style.opacity = String(1 - mobileBrightness);
 };
+const showMobileAdjustment = (kind, value) => {
+    const adjustment = kind === "brightness" ? mobileBrightnessAdjustment : mobileVolumeAdjustment;
+    const icon = adjustment.querySelector("i");
+    const fill = adjustment.querySelector(".mobile-adjustment-fill");
+    const label = adjustment.querySelector("span");
+    const percent = Math.round(value * 100);
+    icon.className = `fa-solid ${kind === "brightness" ? "fa-sun" : value ? "fa-volume-high" : "fa-volume-xmark"}`;
+    fill.style.height = `${percent}%`;
+    label.textContent = `${percent}%`;
+    mobileBrightnessAdjustment.classList.toggle("show", kind === "brightness");
+    mobileVolumeAdjustment.classList.toggle("show", kind === "volume");
+    clearTimeout(mobileAdjustmentTimer);
+    mobileAdjustmentTimer = setTimeout(() => {
+        mobileBrightnessAdjustment.classList.remove("show");
+        mobileVolumeAdjustment.classList.remove("show");
+    }, 700);
+};
 
 mainVideo.addEventListener("touchstart", e => {
-    if (e.touches.length !== 1 || !fullscreenElement() || pinching) return;
+    const portraitPhone = isTouch && matchMedia("(orientation: portrait)").matches;
+    if (e.touches.length !== 1 || (!fullscreenElement() && !portraitPhone) || pinching) return;
     const touch = e.touches[0];
     const rect = mainVideo.getBoundingClientRect();
     const edge = touch.clientX - rect.left;
     const edgeWidth = rect.width * 0.22;
+    const isFullscreen = Boolean(fullscreenElement());
     mobileSwipe = {
         x: touch.clientX,
         y: touch.clientY,
-        kind: edge <= edgeWidth ? "brightness" : edge >= rect.width - edgeWidth ? "volume" : "dismiss",
+        kind: !isFullscreen ? "dismiss" : edge <= edgeWidth ? "brightness" : edge >= rect.width - edgeWidth ? "volume" : "dismiss",
         startValue: edge <= edgeWidth ? mobileBrightness : mainVideo.volume,
         handled: false
     };
@@ -1223,7 +1245,13 @@ mainVideo.addEventListener("touchmove", e => {
     const dy = touch.clientY - mobileSwipe.y;
     if (Math.abs(dy) < 12 && !mobileSwipe.handled) return;
 
-    if (mobileSwipe.kind === "dismiss" && dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+    const verticalSwipe = Math.abs(dy) > Math.abs(dx) * 1.2;
+    if (mobileSwipe.kind === "dismiss" && !fullscreenElement() && dy < -80 && verticalSwipe) {
+        mobileSwipe.handled = true;
+        ignoreNextTouchPointerUp = true;
+        toggleFullscreen();
+        showFeedback("fa-up-long", "Entered fullscreen");
+    } else if (mobileSwipe.kind === "dismiss" && fullscreenElement() && dy > 80 && verticalSwipe) {
         mobileSwipe.handled = true;
         ignoreNextTouchPointerUp = true;
         exitFullscreen();
@@ -1231,11 +1259,11 @@ mainVideo.addEventListener("touchmove", e => {
     } else if (mobileSwipe.kind === "brightness" && Math.abs(dy) > 12) {
         mobileSwipe.handled = true;
         updateMobileBrightness(mobileSwipe.startValue - dy / 300);
-        showFeedback("fa-sun", `${Math.round(mobileBrightness * 100)}% brightness`);
+        showMobileAdjustment("brightness", mobileBrightness);
     } else if (mobileSwipe.kind === "volume" && Math.abs(dy) > 12) {
         mobileSwipe.handled = true;
         setVolume(mobileSwipe.startValue - dy / 300);
-        showFeedback(mainVideo.volume ? "fa-volume-high" : "fa-volume-xmark", `${Math.round(mainVideo.volume * 100)}% volume`);
+        showMobileAdjustment("volume", mainVideo.volume);
     }
     if (mobileSwipe.handled) e.preventDefault();
 }, { passive: false });

@@ -33,6 +33,7 @@
     const NAME_KEY = "cinetab:room-name";
     const AVATAR_KEY = "cinetab:room-avatar";
     const ROOMS_KEY = "cinetab:rooms";
+    const APPROVED_KEY = "cinetab:room-approved";
     const HOST_SUBTITLES = "Host's subtitles";
 
     // Avatars: your initial on one of these colours ("c0"…"c7"), or one of these emoji.
@@ -85,6 +86,7 @@
     peopleList = panel.querySelector(".room-people"),
     hostSettings = panel.querySelector(".room-host-settings"),
     guestSettings = panel.querySelector(".room-guest-settings"),
+    addMediaChoice = guestSettings.querySelector('[data-watch="add"]'),
     settingInputs = hostSettings.querySelectorAll("[data-setting]"),
     qualityField = hostSettings.querySelector(".room-quality"),
     streamNote = panel.querySelector(".room-stream-note"),
@@ -136,7 +138,8 @@
     const fileKey = file => `${file.name}|${file.size}`;
     const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
     const field = (form, name) => form.elements.namedItem(name);
-    const hasMedia = () => !!mainVideo.getAttribute("src") && mainVideo.readyState > 0 && playbackMode !== "converting";
+    const hasMedia = () => (!!mainVideo.getAttribute("src") || !!mainVideo.srcObject) &&
+        mainVideo.readyState > 0 && playbackMode !== "converting";
     const clock = at => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     const allow = (peer, kind, max, perMs) => {
@@ -884,7 +887,12 @@
     const guests = () => room && room.role === "host" ? [...room.peers.values()].filter(peer => peer.status === "admitted") : [];
     const broadcast = message => guests().forEach(peer => send(peer, message));
 
-    const publicSettings = () => ({ control: room.settings.control, streaming: room.settings.streaming && canStream, title: room.title });
+    const publicSettings = () => ({
+        control: room.settings.control,
+        streaming: room.settings.streaming && canStream,
+        media: room.settings.media === true,
+        title: room.title
+    });
 
     const fileInfo = () => hasMedia() && currentSource ? {
         name: currentSource.name,
@@ -1026,15 +1034,15 @@
     // Each guest who wants the stream gets the host's picture and sound; the rest get nothing
     const updateStreams = () => {
         if (!room || room.role !== "host") return;
-        const source = room.settings.streaming && guests().some(peer => peer.wantsStream) ? captureSource() : null;
+        const source = room.mediaSource || (room.settings.streaming && guests().some(peer => peer.wantsStream) ? captureSource() : null);
         const video = source && hasMedia() ? source.getVideoTracks()[0] || null : null;
         const audio = source && hasMedia() ? source.getAudioTracks()[0] || null : null;
         if (video) video.contentHint = "motion";
         if (audio) audio.contentHint = "music";
         for (const peer of room.peers.values()) {
             const on = peer.status === "admitted" && peer.wantsStream;
-            setTrack(peer.senders.video, on ? video : null, "video", peer);
-            setTrack(peer.senders.mediaAudio, on ? audio : null, "audio", peer);
+        setTrack(peer.mediaVideoSender || peer.senders.video, on ? video : null, "video", peer);
+        setTrack(peer.mediaAudioSender || peer.senders.mediaAudio, on ? audio : null, "audio", peer);
         }
     };
 
@@ -1067,7 +1075,7 @@
         room.settings[key] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
         qualityField.hidden = !room.settings.streaming;
         if (key === "streaming" || key === "quality") updateStreams();
-        if (key === "control" || key === "streaming") {
+        if (key === "control" || key === "streaming" || key === "media") {
             broadcast({ t: "settings", ...publicSettings() });
             shareMembers();
         }
@@ -1086,6 +1094,12 @@
         closePeer(peer);
         renderRequests();
         if (wasIn) {
+            if (room.mediaPeer === peer) {
+                room.mediaPeer = null;
+                room.mediaSource = null;
+                mainVideo.srcObject = null;
+                room.file = null;
+            }
             shareMembers();
             updateStreams();
             if (!quietly) notice(`${peer.name} left`);
@@ -1117,6 +1131,10 @@
         peer.status = "admitted";
         peer.ticket ||= Signaling.newId();
         room.tickets.add(peer.ticket);
+        if (!room.approved.includes(peer.ticket)) {
+            room.approved.push(peer.ticket);
+            saveApprovedTickets(room.code, room.approved);
+        }
         send(peer, {
             ...stateMessage(),
             t: "welcome",
@@ -1173,7 +1191,7 @@
             peer.name = clean(message.name, 30) || "Guest";
             peer.avatar = validAvatar(message.avatar);
             peer.wantsStream = message.stream !== false;
-            if (typeof message.ticket === "string" && room.tickets.has(message.ticket)) {
+            if (typeof message.ticket === "string" && (room.tickets.has(message.ticket) || room.approved.includes(message.ticket))) {
                 peer.ticket = message.ticket;
                 return admit(peer, true);
             }
@@ -1194,6 +1212,20 @@
             if (typeof message.id === "string" && allow(peer, "react", 20, 10000)) applyReaction(peer.id, peer.name, message.id, message.emoji);
         } else if (message.t === "control") {
             if (room.settings.control && allow(peer, "control", 12, 5000)) applyControl(peer, message);
+        } else if (message.t === "media") {
+            if (room.settings.media !== true || !peer.mediaStream) return;
+            const file = validFile(message.file);
+            if (!file) return;
+            room.mediaPeer = peer;
+            room.file = file;
+            room.mediaSource = peer.mediaStream;
+            currentSource = { name: file.name, size: file.size };
+            videoTitle.textContent = audioTitle.textContent = file.title;
+            mainVideo.srcObject = peer.mediaStream;
+            mainVideo.play().catch(() => {});
+            broadcast({ t: "file", file });
+            updateStreams();
+            shareMembers();
         } else if (message.t === "want") {
             peer.wantsStream = message.stream === true;
             updateStreams();
@@ -1218,12 +1250,9 @@
             const key = await Signaling.pairSecret(host.pair, pub, host.signal.salt);
             const sdp = await Signaling.unsealText(key, sealedSdp);
             Object.assign(peer, newConnection(host.relay));
+            const pendingTracks = [];
             peer.pc.ontrack = event => {
-                if (event.transceiver !== peer.voiceTransceiver) {
-                    if (!peer.voiceTransceiver) peer.pendingVoiceTrack = event.track;
-                    return;
-                }
-                attachRemoteVoice(peer, event.track);
+                pendingTracks.push(event);
             };
             wirePeer(peer, message => room === host && hostHandle(peer, message), () => dropPeer(peer), false);
             watchRoute(peer, () => {
@@ -1234,10 +1263,10 @@
             const transceivers = peer.pc.getTransceivers();
             for (const transceiver of transceivers) {
                 if (transceiver.receiver.track.kind === "video") {
-                    transceiver.direction = "sendonly";
+                    transceiver.direction = "sendrecv";
                     peer.senders.video = transceiver.sender;
                 } else if (!peer.senders.mediaAudio) {
-                    transceiver.direction = "sendonly";
+                    transceiver.direction = "sendrecv";
                     peer.senders.mediaAudio = transceiver.sender;
                 } else {
                     transceiver.direction = "sendrecv";
@@ -1245,11 +1274,17 @@
                     peer.voiceSender = transceiver.sender;
                 }
             }
+            peer.mediaStream = new MediaStream();
+            peer.pc.ontrack = event => {
+                if (event.transceiver === peer.voiceTransceiver) return attachRemoteVoice(peer, event.track);
+                peer.mediaStream.addTrack(event.track);
+                if (room.mediaPeer === peer) {
+                    mainVideo.srcObject = peer.mediaStream;
+                    mainVideo.play().catch(() => {});
+                }
+            };
+            pendingTracks.forEach(event => peer.pc.ontrack(event));
             syncMicrophonePeer(peer);
-            if (peer.pendingVoiceTrack) {
-                attachRemoteVoice(peer, peer.pendingVoiceTrack);
-                delete peer.pendingVoiceTrack;
-            }
             const answer = await peer.pc.createAnswer();
             await peer.pc.setLocalDescription({ type: "answer", sdp: tuneAudio(answer.sdp) });
             await gathered(peer.pc);
@@ -1285,13 +1320,15 @@
     };
 
     const startHost = async ({ name, avatar, password, relay, title, code, remember }) => {
+        const hostCode = code || Signaling.newCode();
         const host = room = {
             role: "host",
-            code: code || Signaling.newCode(),
+            code: hostCode,
             title: title || `${name}'s room`,
             password, name, avatar, relay, remember,
             id: Signaling.newId(),
-            settings: { lobby: true, control: true, streaming: canStream, quality: "standard", locked: false },
+            settings: { lobby: true, control: true, streaming: canStream, media: false, quality: "standard", locked: false },
+            approved: approvedTickets(hostCode),
             peers: new Map(),
             knocks: new Map(),
             tickets: new Set(),
@@ -1465,6 +1502,7 @@
         together.stream = streamControls;
         container.classList.add("remote");
         mainVideo.srcObject = room.remote;
+        previewVideo.srcObject = room.remote;
         mainVideo.play().catch(playBlocked);
         room.shownPlaying = null;
         subtitlesBtn.classList.toggle("active", !!room.cues && room.cuesOn);
@@ -1481,6 +1519,7 @@
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
         mainVideo.srcObject = null;
+        previewVideo.srcObject = null;
         videoTitle.textContent = audioTitle.textContent = currentSource ? savedTitle(currentSource.name, currentSource.size) : "No Video Loaded";
         subtitlesBtn.classList.remove("active");
         progressBar.style.width = "0%";
@@ -1561,10 +1600,21 @@
         ownChoice.classList.toggle("active", own);
         ownChoice.querySelector("small").textContent = !file ? `Available when ${host} starts a video`
             : own ? "Playing now, in step with the host · choose another file" : "The same movie on this device · sharpest picture";
+        addMediaChoice.disabled = room.settings.media !== true;
+        addMediaChoice.classList.toggle("active", false);
+        addMediaChoice.querySelector("small").textContent = room.settings.media === true
+            ? "Publish a local video for everyone in the room"
+            : `${host} hasn't enabled guest media`;
     };
 
     streamChoice.addEventListener("click", () => room && room.role === "guest" && !together.stream && setWatching("stream"));
     ownChoice.addEventListener("click", () => room && room.role === "guest" && fileInput.click());
+    addMediaChoice.addEventListener("click", () => {
+        if (room?.role === "guest" && room.settings.media === true) {
+            room.publishMedia = true;
+            fileInput.click();
+        }
+    });
 
     const setWatching = mode => {
         room.watching = mode;
@@ -1616,6 +1666,12 @@
     // A guest opening a file switches to their own copy of the host's movie
     const onGuestFile = file => {
         if (!room || room.phase !== "in") return;
+        if (room.publishMedia) {
+            room.pendingPublish = file;
+            room.ownFor = fileKey(file);
+            room.watching = "own";
+            return;
+        }
         room.ownFor = room.file ? fileKey(room.file) : null;
         room.checkedFor = null;
         if (room.watching !== "own") {
@@ -1702,7 +1758,11 @@
                 clearTimeout(guest.connectTimer);
                 guest.ticket = typeof message.ticket === "string" ? message.ticket.slice(0, 64) : null;
                 guest.hostName = clean(message.host, 30) || "The host";
-                guest.settings = { control: message.settings?.control !== false, streaming: message.settings?.streaming === true };
+                guest.settings = {
+                    control: message.settings?.control !== false,
+                    streaming: message.settings?.streaming === true,
+                    media: message.settings?.media === true
+                };
                 guest.title = clean(message.settings?.title, 40) || `${guest.hostName}'s room`;
                 guest.file = validFile(message.file);
                 guest.state = validState(message);
@@ -1733,7 +1793,11 @@
                 return;
             }
             case "settings":
-                guest.settings = { control: message.control !== false, streaming: message.streaming === true };
+                guest.settings = {
+                    control: message.control !== false,
+                    streaming: message.streaming === true,
+                    media: message.media === true
+                };
                 if (clean(message.title, 40) && clean(message.title, 40) !== guest.title) {
                     guest.title = clean(message.title, 40);
                     renderState();
@@ -1901,8 +1965,10 @@
         });
         const peer = guest.peer = { id: guest.hostId, ...newConnection(guest.relay) };
         const { pc, channel } = peer;
-        pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
+        peer.mediaVideoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
+        peer.mediaVideoSender = peer.mediaVideoTransceiver.sender;
+        peer.mediaAudioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+        peer.mediaAudioSender = peer.mediaAudioTransceiver.sender;
         peer.voiceTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
         peer.voiceSender = peer.voiceTransceiver.sender;
         pc.ontrack = event => {
@@ -1916,7 +1982,9 @@
                 receiver.jitterBufferTarget = 400;
             } catch (e) {}
         });
-        guest.remote = new MediaStream(pc.getReceivers().map(receiver => receiver.track));
+        guest.remote = new MediaStream(pc.getReceivers()
+            .filter(receiver => receiver !== peer.voiceTransceiver.receiver)
+            .map(receiver => receiver.track));
         if (together.stream) mainVideo.srcObject = guest.remote;
         wirePeer(peer, message => room === guest && guestHandle(message), () => lost(peer), true);
         watchRoute(peer, () => {
@@ -1993,11 +2061,12 @@
         send();
     };
 
-    const startGuest = async ({ code, password, name, avatar, relay, remember }) => {
+    const startGuest = async ({ code, password, name, avatar, relay, remember, ticket = null }) => {
         const guest = room = {
             role: "guest", code, password, name, avatar, relay, remember,
             title: "",
             id: Signaling.newId(),
+            ticket,
             phase: "finding",
             settings: { control: true, streaming: false },
             state: null, file: null, cues: null, cuesOn: true, ownCues: false,
@@ -2045,6 +2114,21 @@
             broadcast(stateMessage());
             sendSubtitles();
             updateStreams();
+            return;
+        }
+        if (room.role === "guest" && room.pendingPublish && room.peer) {
+            const file = room.pendingPublish;
+            room.pendingPublish = null;
+            room.publishMedia = false;
+            room.mediaStream = mainVideo.captureStream?.();
+            if (!room.mediaStream) return showFeedback("fa-triangle-exclamation", "Streaming isn't supported here");
+            room.peer.mediaVideoSender?.replaceTrack(room.mediaStream.getVideoTracks()[0] || null).catch(() => {});
+            room.peer.mediaAudioSender?.replaceTrack(room.mediaStream.getAudioTracks()[0] || null).catch(() => {});
+            send(room.peer, {
+                t: "media",
+                file: { name: file.name, size: file.size, duration: mainVideo.duration || 0, title: videoTitle.textContent, audio: container.classList.contains("audio-mode") }
+            });
+            addMessage({ system: true, text: "Your media is now available to everyone in the room." });
             return;
         }
         if (room.phase !== "in" || !ownMatches()) return;
@@ -2187,6 +2271,31 @@
         }
     };
 
+    const approvedTickets = code => {
+        try {
+            const all = JSON.parse(storage.get(APPROVED_KEY) || "{}");
+            return Array.isArray(all[code]) ? all[code].filter(ticket => typeof ticket === "string").slice(0, MAX_GUESTS * 3) : [];
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const saveApprovedTickets = (code, tickets) => {
+        try {
+            const all = JSON.parse(storage.get(APPROVED_KEY) || "{}");
+            all[code] = tickets.slice(-MAX_GUESTS * 3);
+            storage.set(APPROVED_KEY, JSON.stringify(all));
+        } catch (e) {}
+    };
+
+    const deleteApprovedTickets = code => {
+        try {
+            const all = JSON.parse(storage.get(APPROVED_KEY) || "{}");
+            delete all[code];
+            storage.set(APPROVED_KEY, JSON.stringify(all));
+        } catch (e) {}
+    };
+
     const writeRooms = list => {
         storage.set(ROOMS_KEY, JSON.stringify(list.slice(0, 6)));
         renderRooms();
@@ -2194,7 +2303,7 @@
 
     const rememberRoom = () => {
         if (!room || !room.remember || !room.title) return;
-        const entry = { code: room.code, password: room.password, title: room.title, role: room.role, at: Date.now() };
+        const entry = { code: room.code, password: room.password, title: room.title, role: room.role, ticket: room.ticket || null, at: Date.now() };
         writeRooms([entry, ...savedRooms().filter(item => item.code !== room.code)]);
     };
 
@@ -2206,6 +2315,7 @@
         const item = savedRooms().find(saved => saved.code === code);
         if (item && ask && !confirm(`Delete “${roomLabel(item)}” from this browser?\n\nIts code and password are erased here. You can still join again with an invite link.`)) return false;
         writeRooms(savedRooms().filter(saved => saved.code !== code));
+        deleteApprovedTickets(code);
         if (room && room.code === code) {
             room.remember = false;
             rememberSwitch.checked = false;
@@ -2216,6 +2326,7 @@
     forgetAllBtn?.addEventListener("click", () => {
         if (!confirm("Delete all remembered rooms from this browser?\n\nTheir codes and passwords are erased here. You can still join again with an invite link.")) return;
         writeRooms([]);
+        storage.remove(APPROVED_KEY);
         if (room) {
             room.remember = false;
             rememberSwitch.checked = false;
@@ -2230,8 +2341,17 @@
     });
 
     // Hosts open their room again with the same code and password; guests join it
-    const reopen = item => item.role === "host" ? openCreate(item)
-        : openJoin({ code: item.code, password: item.password, remember: true });
+    const reopen = item => {
+        const name = storage.get(NAME_KEY);
+        if (!name || !supported) return item.role === "host" ? openCreate(item) : openJoin({ code: item.code, password: item.password, remember: true });
+        const avatar = storage.get(AVATAR_KEY) || "";
+        if (item.role === "host") {
+            toPlayer();
+            return startHost({ name, avatar, password: item.password, title: item.title, code: item.code, remember: true });
+        }
+        toPlayer();
+        return startGuest({ code: item.code, password: item.password, name, avatar, remember: true, ticket: item.ticket });
+    };
 
     const renderRooms = () => {
         if (!roomList) return;
@@ -2373,7 +2493,7 @@
         field(createForm, "name").focus();
     };
 
-    const openJoin = ({ code = "", password = "", remember = true } = {}) => {
+    const openJoin = ({ code = "", password = "", remember = true, ticket = null } = {}) => {
         toPlayer();
         if (room) return showPanel(true);
         if (!supported) return unsupported();
@@ -2421,7 +2541,9 @@
         if (error) return;
         storage.set(NAME_KEY, name);
         storage.set(AVATAR_KEY, joinPicker.value);
-        startGuest({ code, password, name, avatar: joinPicker.value, relay: field(joinForm, "relay").checked, remember: field(joinForm, "remember").checked });
+        const saved = savedRooms().find(item => item.code === code);
+        startGuest({ code, password, name, avatar: joinPicker.value, relay: field(joinForm, "relay").checked,
+            remember: field(joinForm, "remember").checked, ticket: saved?.ticket || null });
     });
 
     // Invite links (#join=CODE&pw=PASSWORD): the part after # never reaches the web server, and
@@ -2448,5 +2570,9 @@
     document.addEventListener("fullscreenchange", onFullscreen);
     document.addEventListener("webkitfullscreenchange", onFullscreen);
     renderRooms();
+    const openedInvite = new URLSearchParams(location.hash.slice(1)).has("join");
     joinFromLink();
+    if (!openedInvite && !location.hash && savedRooms().length && storage.get(NAME_KEY)) {
+        setTimeout(() => !room && reopen(savedRooms()[0]), 0);
+    }
 })();

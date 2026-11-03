@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.2.0">
+  <meta name="version" content="1.2.1">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -48,7 +48,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.2.0",
+      "softwareVersion": "1.2.1",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -310,7 +310,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.2.0</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.2.1</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -336,6 +336,16 @@
     <!-- Center Feedback Badge Animation -->
     <div class="center-feedback">
       <i class="fa-solid fa-play"></i>
+      <span></span>
+    </div>
+    <div class="mobile-adjustment mobile-brightness-adjustment" aria-hidden="true">
+      <i class="fa-solid fa-sun"></i>
+      <div class="mobile-adjustment-track"><div class="mobile-adjustment-fill"></div></div>
+      <span></span>
+    </div>
+    <div class="mobile-adjustment mobile-volume-adjustment" aria-hidden="true">
+      <i class="fa-solid fa-volume-high"></i>
+      <div class="mobile-adjustment-track"><div class="mobile-adjustment-fill"></div></div>
       <span></span>
     </div>
 
@@ -666,6 +676,7 @@
         <label class="room-switch"><input type="checkbox" data-setting="lobby"><span><b>Ask before letting people in</b><small>You approve each person who knocks</small></span></label>
         <label class="room-switch"><input type="checkbox" data-setting="control"><span><b>Guests can control playback</b><small>Play, pause and jump for everyone</small></span></label>
         <label class="room-switch"><input type="checkbox" data-setting="streaming"><span><b>Stream my video</b><small>Guests without the movie watch your stream</small></span></label>
+        <label class="room-switch"><input type="checkbox" data-setting="media"><span><b>Guests can add media</b><small>Guests may publish a local video for everyone to watch</small></span></label>
         <label class="room-field room-quality"><span>Stream quality</span>
           <select data-setting="quality">
             <option value="saver">Data saver &middot; 480p, about 1.2 Mbit/s per viewer</option>
@@ -680,6 +691,7 @@
         <p class="room-section-title">How you watch</p>
         <button class="room-choice" data-watch="stream"><i class="fa-solid fa-tower-broadcast"></i><span><b>The host's stream</b><small></small></span></button>
         <button class="room-choice" data-watch="own"><i class="fa-solid fa-film"></i><span><b>My own copy</b><small></small></span></button>
+        <button class="room-choice room-add-media" data-watch="add"><i class="fa-solid fa-cloud-arrow-up"></i><span><b>Add media for everyone</b><small></small></span></button>
       </div>
       <div class="room-browser-settings">
         <p class="room-section-title">This browser</p>
