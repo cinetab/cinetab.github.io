@@ -65,7 +65,7 @@ const hideTooltip = (() => {
         el.removeAttribute("title");
         el.dataset.tip = text;
         // Icon-only controls lose their accessible name with the title, so give it back
-        const iconOnly = !el.textContent.trim() || el.querySelector(".material-symbols-rounded");
+        const iconOnly = !el.textContent.trim();
         if (iconOnly && (!el.hasAttribute("aria-label") || el.dataset.tipLabel)) {
             el.setAttribute("aria-label", text);
             el.dataset.tipLabel = "1";

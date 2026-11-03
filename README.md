@@ -4,6 +4,12 @@
 
 **Movie night on any video call.** CineTab plays a movie from your own computer in a browser tab. Share that tab (with audio) in Google Meet, Zoom or Teams and watch it together with friends.
 
+<p align="center">
+  <b><a href="https://ranjan-sarkar.github.io/cinetab/">Open CineTab</a></b>
+  &nbsp;·&nbsp;
+  <b><a href="https://ranjan-sarkar.github.io/cinetab/cinetab-offline.html" download>Download the offline version</a></b> (one HTML file)
+</p>
+
 The movie is never uploaded. The page uses the browser's File API to play the file straight from your disk, so the site is just static HTML/CSS/JS hosted on GitHub Pages. The home page explains how it works; choosing or dropping a video switches the same page into the player.
 
 ## Watch together
@@ -20,7 +26,8 @@ Don't use Picture-in-Picture while sharing: the video moves out of the tab and t
 - Plays video and audio files via drag & drop or the file picker, in almost any format (see below)
 - Subtitles: drop or pick an `.srt` / `.vtt` file, or use the text subtitles inside an MKV; toggle with `C`
 - Remembers where you stopped for each file (stored only in your browser)
-- Hover preview on the timeline, playback speed, Picture-in-Picture, fullscreen
+- Lists your converted videos on the home page with the space each uses; play or delete them
+- Hover preview on the timeline, playback speed (presets or any speed from 0.25x to 4x), Picture-in-Picture, fullscreen
 
 ## Keyboard shortcuts
 
@@ -51,13 +58,37 @@ Files the browser can't play, or would play **silently** (browsers skip DTS/AC3 
 - **Container or sound only** (e.g. AVI/TS with H.264, MKV with DTS): the video is copied untouched and only the sound becomes AAC, which takes a few minutes for a full movie.
 - **Old video codecs** (Xvid/DivX, WMV, MPEG-2): the video is re-encoded to H.264 at up to 720p, about 4-5x faster than real time on a typical laptop, so a full movie can take 20-30 minutes.
 
-The input is read straight from disk and the output is written to the browser's private storage (OPFS), so large movies don't need to fit in memory. The three most recent conversions are kept so they reopen instantly; they can be cleared from the home page footer. The converter (~31 MB) is downloaded from jsDelivr the first time it's needed.
+The input is read straight from disk and the output is written to the browser's private storage (OPFS), so large movies don't need to fit in memory. The three most recent conversions are kept so they reopen instantly; they're listed on the home page, where each one (or all) can be deleted. The converter (~31 MB) is downloaded from jsDelivr the first time it's needed.
+
+## Offline version
+
+[`cinetab-offline.html`](cinetab-offline.html) is the whole app in one ~1 MB file: fonts, icons, styles and scripts are all inlined. Download it (from the home page, the link above, or the [latest release](https://github.com/ranjan-sarkar/cinetab/releases/latest)), save it anywhere and double-click it. It runs from disk with no server and no internet.
+
+Differences from the website, both down to browser rules for pages opened from disk:
+
+- The converter still downloads ffmpeg.wasm the first time it's needed, so converting AVI/DTS/etc. needs internet once.
+- Browsers don't allow OPFS for `file://` pages, so conversions happen in memory and aren't saved between visits. Very large movies may not fit; use the website for those.
+
+The file is generated from the sources. After changing anything, rebuild it and commit the result:
+
+```
+node tools/build-offline.mjs
+```
+
+(Node 18+, no dependencies. It downloads Poppins and Font Awesome and inlines them.)
+
+## Project files
 
 | File | Purpose |
 | --- | --- |
+| `index.html`, `style.css` | Home page and player |
+| `script.js` | Player logic |
+| `tooltips.js` | Tooltips for every `title` attribute (also in fullscreen) |
 | `converter.js` | Detects files that need converting, manages saved conversions |
 | `converter-worker.js` | Runs ffmpeg.wasm in a Web Worker and writes the MP4 to OPFS |
+| `tools/build-offline.mjs` | Builds `cinetab-offline.html` |
+| `cinetab-offline.html` | Generated single-file offline version |
 
 ## Run locally
 
-Open `index.html` directly in the browser, or serve the folder with any static server.
+Serve the folder with any static server, for example `npx serve .` or `python -m http.server`, and open the printed address. (Opening `index.html` directly works too, but the converter needs a server or the offline file.)

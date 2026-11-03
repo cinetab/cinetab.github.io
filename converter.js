@@ -170,7 +170,8 @@ const Converter = (() => {
 
     const convert = (file, { onStatus, onPlan, forceVideoTranscode = false }) => {
         const key = keyFor(file);
-        const worker = new Worker("converter-worker.js");
+        // The single-file offline build provides the worker as a blob URL
+        const worker = new Worker(window.CINETAB_WORKER_URL || "converter-worker.js");
         let settled = false;
         const finish = () => {
             settled = true;

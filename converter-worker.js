@@ -223,7 +223,8 @@ const convert = async ({ file, key, caps, forceVideoTranscode }) => {
     }
     if (ret !== 0) {
         const tail = logLines.filter(l => !/^\s*(frame|size)=/.test(l)).slice(-4).join(" ");
-        throw new Error(`Conversion failed. ${tail}`);
+        const memoryHint = useOPFS ? "" : " This copy of CineTab can't use disk storage (e.g. the offline file or a private window), so it converts in memory and very large movies may not fit. Try the CineTab website in a normal window.";
+        throw new Error(`Conversion failed.${memoryHint} ${tail}`);
     }
 
     let subtitles = null;

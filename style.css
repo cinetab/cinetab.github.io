@@ -1583,6 +1583,27 @@ kbd {
   }
 }
 
+/* Offline download links */
+.offline-note {
+  margin-top: 6px;
+}
+
+.offline-note a, .faq a {
+  color: #8fb8ff;
+}
+
+.footer-download {
+  color: #a9a9b8;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-download:hover {
+  color: #fff;
+}
+
 /* =================== TOOLTIPS =================== */
 /* Sized and set like a system tooltip, coloured for the dark theme (see tooltips.js) */
 .tooltip {
