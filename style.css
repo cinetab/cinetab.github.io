@@ -2545,6 +2545,89 @@ body > .room-toasts {
   from { opacity: 0; transform: translateY(-6px); }
 }
 
+/* A YouTube video watched together: YouTube's own player between the title bar and the controls,
+   which stay on screen and never cover it (YouTube's ads and their Skip button stay usable) */
+.yt-frame {
+  display: none;
+  background: #000;
+}
+
+.yt-mount {
+  position: absolute;
+  inset: 0;
+}
+
+.yt-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.container.youtube {
+  flex-direction: column;
+  justify-content: flex-start;
+  aspect-ratio: auto;
+  max-width: calc((96vh - 150px) * 16 / 9);
+}
+
+.container.youtube .yt-frame {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  flex: 0 0 auto;
+}
+
+.container.youtube.fullscreen {
+  max-width: 100%;
+}
+
+.container.youtube.fullscreen .yt-frame {
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.container.youtube #main-video {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.container.youtube .top-bar,
+.container.youtube .wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto !important;
+}
+
+.container.youtube .top-bar {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background: #000;
+}
+
+.container.youtube .wrapper {
+  padding-top: 12px;
+  background: #000;
+}
+
+.container.youtube .top-bar button,
+.container.youtube .top-bar .video-title,
+.container.youtube .wrapper * {
+  pointer-events: auto !important;
+}
+
+.container.youtube .pic-in-pic {
+  display: none;
+}
+
 /* Watching the host's stream: speed and scene previews belong to the host's copy */
 .container.remote .playback-content,
 .container.remote .thumbnail-preview {
@@ -2819,6 +2902,76 @@ body > .room-toasts {
 .room-now .room-icon-btn {
   width: 30px;
   height: 30px;
+}
+
+.room-now {
+  flex-wrap: wrap;
+}
+
+.room-now .room-now-yt {
+  font-size: 16px;
+}
+
+.room-now .room-now-yt:hover,
+.room-now .room-now-yt[aria-expanded="true"] {
+  color: #ff4e45;
+}
+
+/* A YouTube playlist: previous / next for everyone */
+.room-now-list {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room-now-list[hidden] {
+  display: none;
+}
+
+.room-now-count {
+  font-size: 11.5px;
+  color: #a9a9b8;
+}
+
+/* Paste a YouTube link */
+.room-yt-form {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-yt-form[hidden] {
+  display: none;
+}
+
+.room-yt-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font: inherit;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+.room-yt-input:focus {
+  border-color: #3e97fd;
+}
+
+.room-yt-hint {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: #8f8f9e;
+}
+
+.room-yt-hint.error {
+  color: #ff8a8a;
 }
 
 .room-requests {

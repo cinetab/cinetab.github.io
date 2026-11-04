@@ -35,6 +35,11 @@
     const ROOMS_KEY = "cinetab:rooms";
     const APPROVED_KEY = "cinetab:room-approved";
     const HOST_SUBTITLES = "Host's subtitles";
+    // YouTube video and playlist ids; the privacy-enhanced player (no cookies until a video plays)
+    const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+    const YT_LIST = /^[A-Za-z0-9_-]{2,64}$/;
+    const YT_HOST = "https://www.youtube-nocookie.com";
+    const YT = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
 
     // Avatars: your initial on one of these colours ("c0"…"c7"), or one of these emoji.
     // Only these values are accepted from other browsers.
@@ -91,6 +96,16 @@
     nowMeta = nowBar.querySelector(".room-now-meta"),
     nowShareBtn = nowBar.querySelector(".room-now-share"),
     nowStopBtn = nowBar.querySelector(".room-now-stop"),
+    nowIcon = nowBar.querySelector(".room-now-icon i"),
+    nowYtBtn = nowBar.querySelector(".room-now-yt"),
+    nowList = nowBar.querySelector(".room-now-list"),
+    nowCount = nowBar.querySelector(".room-now-count"),
+    nowPrevBtn = nowBar.querySelector(".room-now-prev"),
+    nowNextBtn = nowBar.querySelector(".room-now-next"),
+    ytForm = nowBar.querySelector(".room-yt-form"),
+    ytInput = ytForm.querySelector(".room-yt-input"),
+    ytHint = ytForm.querySelector(".room-yt-hint"),
+    ytMount = document.querySelector(".yt-mount"),
     settingInputs = hostSettings.querySelectorAll("[data-setting]"),
     qualityField = hostSettings.querySelector(".room-quality"),
     streamNote = panel.querySelector(".room-stream-note"),
@@ -242,7 +257,7 @@
         statusActions.replaceChildren(...actions.map(action => {
             const button = el("button", action.secondary ? "secondary-btn" : null);
             button.type = "button";
-            if (action.icon) button.append(el("i", `fa-solid ${action.icon}`), " ");
+            if (action.icon) button.append(el("i", action.icon.startsWith("fa-brands") ? action.icon : `fa-solid ${action.icon}`), " ");
             button.append(action.label);
             button.addEventListener("click", action.onClick);
             return button;
@@ -501,8 +516,9 @@
             const name = el("span", "room-person-name", member.name);
             if (you) name.append(el("span", "room-person-you", " (you)"));
             const route = room.role === "host" ? member.route : you ? room.peer && room.peer.route : null;
-            const watching = member.sharing ? "sharing the video"
+            const watching = member.sharing ? file && file.yt ? "shared the video" : "sharing the video"
                 : member.host || !file ? null
+                : file.yt ? "watching on YouTube"
                 : member.stream && streamable() ? "watching the stream" : "playing their own copy";
             const meta = [member.host && "Host", watching, ROUTE_LABEL[route]].filter(Boolean).join(" · ");
             const metaText = meta.charAt(0).toUpperCase() + meta.slice(1);
@@ -627,6 +643,8 @@
         requestList.replaceChildren();
         peopleList.replaceChildren();
         nowBar.classList.remove("live");
+        nowList.hidden = true;
+        closeYouTubeForm();
     };
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
@@ -918,6 +936,14 @@
     // The room's video: the host's own file, or the one a guest is sharing from their device.
     // `stream`: whether guests can watch it as a stream (a guest's video always comes that way).
     const currentMedia = () => {
+        if (room.yt) {
+            const y = room.yt;
+            return {
+                name: `youtube:${y.id}`, size: 0, duration: y.duration, title: y.title || "YouTube video", audio: false,
+                from: y.by.id, fromName: y.by.name, stream: false,
+                yt: { id: y.id, list: y.list, index: y.index, count: y.ids ? y.ids.length : 1 }
+            };
+        }
         if (room.presenter) return { ...room.presentFile, from: room.presenter.id, fromName: room.presenter.name, stream: true };
         const file = fileInfo();
         return file && { ...file, from: room.id, fromName: room.name, stream: room.settings.streaming && canStream };
@@ -931,16 +957,21 @@
         const key = mediaKey(file);
         if (key !== room.mediaKey) {
             room.mediaKey = key;
-            if (file) notice(`${file.fromName} is playing “${file.title}”`);
             shareMembers();
+        }
+        // A YouTube video is announced once its title is known
+        if (file && room.announced !== key && (!room.yt || room.yt.title)) {
+            room.announced = key;
+            const place = file.yt && file.yt.count > 1 ? ` (${file.yt.index + 1} of ${file.yt.count})` : "";
+            notice(`${file.fromName} is playing “${file.title}”${place}`);
         }
         renderNow();
     };
 
     // Where the room's video is: the host's player, or the last report from the guest sharing it
-    const playback = () => room.presenter && room.state ? {
+    const playback = () => (room.presenter || room.yt) && room.state ? {
         paused: room.state.paused,
-        time: Math.min(expectedTime(), room.presentFile.duration || Infinity),
+        time: Math.min(expectedTime(), (room.file && room.file.duration) || Infinity),
         rate: room.state.rate
     } : {
         paused: !hasMedia() || together.stream ? true : mainVideo.paused,
@@ -1113,6 +1144,8 @@
     const setPresenter = (peer, file, message) => {
         const previous = room.presenter;
         const same = previous === peer && room.presentFile && fileKey(room.presentFile) === fileKey(file);
+        // A YouTube video gives way (enterStream switches the player over)
+        room.yt = room.ytToken = null;
         if (previous && previous !== peer) send(previous, { t: "present-end", reason: "replaced", by: peer.name });
         room.presenter = peer;
         room.presentFile = file;
@@ -1174,7 +1207,9 @@
     const removeMedia = by => {
         const file = room.file;
         if (!file) return;
-        if (room.presenter) {
+        if (room.yt) {
+            clearYouTube();
+        } else if (room.presenter) {
             if (room.presenter !== by) send(room.presenter, { t: "present-end", reason: "removed", by: by.name });
             clearPresenter();
         } else {
@@ -1188,7 +1223,10 @@
 
     // The host opening a video replaces a guest's for everyone
     const onHostFile = () => {
-        if (!room || !room.presenter) return;
+        if (!room) return;
+        room.ytToken = null;
+        if (room.yt) return clearYouTube();
+        if (!room.presenter) return;
         send(room.presenter, { t: "present-end", reason: "replaced", by: room.name });
         clearPresenter();
     };
@@ -1319,6 +1357,7 @@
 
     // A guest's playback request (when guests may control playback)
     const applyControl = (peer, message) => {
+        if (room.yt) return controlYouTube(peer, message);
         if (room.presenter) return room.presenter !== peer && controlPresenter(peer, message);
         if (!hasMedia() || together.stream) return;
         room.attribution = { name: peer.name, id: peer.id, until: Date.now() + 1500 };
@@ -1379,6 +1418,13 @@
             const title = room.presentFile.title;
             clearPresenter();
             notice(`${peer.name} stopped sharing “${title}”`);
+        } else if (message.t === "youtube") {
+            // A guest shares a YouTube video or playlist
+            if (room.settings.media !== true || !allow(peer, "youtube", 5, 10000)) return;
+            const ref = validYouTube(message);
+            if (ref) setYouTube(peer, ref);
+        } else if (message.t === "ytstep") {
+            if (room.yt && room.settings.control && allow(peer, "ytstep", 6, 5000) && (message.step === 1 || message.step === -1)) ytStep(message.step);
         } else if (message.t === "remove") {
             if (room.settings.media === true && allow(peer, "remove", 4, 10000)) removeMedia(peer);
         } else if (message.t === "want") {
@@ -1484,8 +1530,10 @@
             settings: { lobby: true, control: true, streaming: canStream, media: true, quality: "standard", locked: false },
             approved: approvedTickets(hostCode),
             // The room's video (see currentMedia) and, while a guest shares one, their playback
-            file: null, mediaKey: null,
+            file: null, mediaKey: null, announced: null,
             presenter: null, presentFile: null, presentCues: null,
+            // A YouTube video or playlist; the host keeps its clock in `state`
+            yt: null, ytToken: null,
             state: null, offset: 0, remote: null, cues: null, cuesOn: true,
             peers: new Map(),
             knocks: new Map(),
@@ -1513,10 +1561,11 @@
         if (room !== host) return host.signal.close();
         // Regular updates keep guests' timelines and sync accurate
         host.timers.push(setInterval(() => broadcast(stateMessage()), 3000));
+        host.timers.push(setInterval(() => room === host && hostYouTubeTick(), 1000));
         syncSettingsUI();
         // A video that's already open becomes the room's video
         host.file = currentMedia();
-        host.mediaKey = mediaKey(host.file);
+        host.mediaKey = host.announced = mediaKey(host.file);
         enterRoomUI();
         rememberRoom();
         renderPeople([{ id: host.id, name: host.name, avatar: host.avatar, host: true }]);
@@ -1546,7 +1595,13 @@
         // Who shared it, and whether it comes as a stream (older hosts don't say)
         from: typeof file.from === "string" ? file.from.slice(0, 40) : null,
         fromName: clean(file.fromName, 30),
-        stream: typeof file.stream === "boolean" ? file.stream : null
+        stream: typeof file.stream === "boolean" ? file.stream : null,
+        yt: file.yt && typeof file.yt === "object" && YT_ID.test(file.yt.id) ? {
+            id: file.yt.id,
+            list: typeof file.yt.list === "string" && YT_LIST.test(file.yt.list) ? file.yt.list : null,
+            index: Number.isInteger(file.yt.index) && file.yt.index >= 0 ? file.yt.index : 0,
+            count: Number.isInteger(file.yt.count) && file.yt.count > 0 ? Math.min(file.yt.count, 5000) : 1
+        } : null
     } : null;
 
     // The room's video can be watched as a stream
@@ -1673,6 +1728,7 @@
     };
 
     const enterStream = () => {
+        if (together.stream === ytControls) leaveStream();
         const file = room.file;
         videoTitle.textContent = audioTitle.textContent = file.title;
         container.classList.toggle("audio-mode", file.audio);
@@ -1702,17 +1758,469 @@
 
     const leaveStream = () => {
         if (!together.stream) return;
+        const wasYouTube = together.stream === ytControls;
         together.stream = null;
         if (room) clearInterval(room.streamTimer);
-        container.classList.remove("remote", "audio-mode");
+        container.classList.remove("remote", "audio-mode", "youtube");
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
-        showRemote(null);
+        if (wasYouTube) ytStop();
+        else showRemote(null);
         videoTitle.textContent = audioTitle.textContent = currentSource ? savedTitle(currentSource.name, currentSource.size) : "No Video Loaded";
         subtitlesBtn.classList.remove("active");
         progressBar.style.width = "0%";
         currentVidTime.innerText = videoDuration.innerText = formatTime(0);
         showPlaying(false);
+    };
+
+    // ---------- A YouTube video or playlist, watched together
+    // Everyone plays it in YouTube's own player, loaded from YouTube. Nothing goes through the
+    // host's connection: the host keeps the room's clock (play, pause, position, speed, which
+    // video of a playlist) and every player follows it, like a copy of a file does. YouTube shows
+    // its ads as usual; whoever gets one catches up as soon as it ends.
+
+    // A link to a video, a playlist, or a video in a playlist: { id, list, start }
+    const parseYouTube = text => {
+        let url;
+        try {
+            url = new URL(/^https?:\/\//i.test(text.trim()) ? text.trim() : `https://${text.trim()}`);
+        } catch (e) {
+            return null;
+        }
+        const host = url.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, "");
+        const parts = url.pathname.split("/").filter(Boolean);
+        let id = null;
+        if (host === "youtu.be") id = parts[0];
+        else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+            if (parts[0] === "watch") id = url.searchParams.get("v");
+            else if (["embed", "shorts", "live", "v"].includes(parts[0])) id = parts[1];
+            else if (parts[0] !== "playlist") return null;
+        } else return null;
+        const t = url.searchParams.get("t") || url.searchParams.get("start") || "";
+        const hms = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+        return validYouTube({
+            id, list: url.searchParams.get("list"),
+            start: hms ? (+(hms[1] || 0)) * 3600 + (+(hms[2] || 0)) * 60 + (+(hms[3] || 0)) : 0
+        });
+    };
+
+    const validYouTube = ref => {
+        const id = typeof ref.id === "string" && YT_ID.test(ref.id) ? ref.id : null;
+        const list = typeof ref.list === "string" && YT_LIST.test(ref.list) ? ref.list : null;
+        return id || list ? { id, list, start: finite(ref.start, 0, 1e6) ? ref.start : 0 } : null;
+    };
+
+    // YouTube's player API, loaded the first time a room plays a YouTube video
+    let ytApiLoading = null;
+    const ytApi = () => ytApiLoading ||= new Promise((resolve, reject) => {
+        if (window.YT && window.YT.Player) return resolve(window.YT);
+        const previous = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+            if (typeof previous === "function") previous();
+            resolve(window.YT);
+        };
+        const script = document.createElement("script");
+        script.src = "https://www.youtube.com/iframe_api";
+        script.onerror = () => {
+            ytApiLoading = null;
+            script.remove();
+            reject(new Error("YouTube can't be reached from this network"));
+        };
+        document.head.append(script);
+    });
+
+    // This browser's YouTube player. `loaded`: the video it has; `selfUntil`: changes until then
+    // are ours, not a click on YouTube's player
+    const yt = { player: null, ready: false, creating: null, loaded: null, cuedAt: 0, started: 0, lastSeek: 0, selfUntil: 0, error: null, captions: false };
+
+    const ytPlayer = () => yt.creating ||= ytApi().then(api => new Promise(resolve => {
+        const mount = el("div");
+        ytMount.replaceChildren(mount);
+        yt.player = new api.Player(mount, {
+            host: YT_HOST,
+            width: "100%",
+            height: "100%",
+            // CineTab's controls drive it, so everyone's player does the same
+            playerVars: { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, origin: location.origin },
+            events: {
+                onReady: () => {
+                    yt.ready = true;
+                    syncYouTubeVolume();
+                    resolve(yt.player);
+                },
+                onStateChange: onYouTubeState,
+                onError: onYouTubeError
+            }
+        });
+    })).catch(error => {
+        yt.creating = null;
+        throw error;
+    });
+
+    const ytMine = () => yt.selfUntil = now() + 1500;
+
+    const syncYouTubeVolume = () => {
+        if (!yt.ready) return;
+        if (mainVideo.muted || mainVideo.volume === 0) yt.player.mute();
+        else {
+            yt.player.unMute();
+            yt.player.setVolume(Math.round(mainVideo.volume * 100));
+        }
+    };
+    // The player's volume slider and mute button work on YouTube's player too
+    mainVideo.addEventListener("volumechange", () => together.stream === ytControls && syncYouTubeVolume());
+
+    const ytStop = () => {
+        yt.loaded = null;
+        if (!yt.ready) return;
+        ytMine();
+        try {
+            yt.player.stopVideo();
+        } catch (e) {}
+    };
+
+    // What the player's controls do while the room watches YouTube (see `together` in script.js)
+    const ytControls = {
+        get paused() { return !room || !room.state || room.state.paused; },
+        get duration() { return room && room.file ? room.file.duration : 0; },
+        currentTime: () => expectedTime(),
+        request: change => request(change),
+        toggleSubtitles: () => {
+            // Subtitles loaded from a file come first, then YouTube's own captions
+            if (room.cues) return streamControls.toggleSubtitles();
+            if (!yt.ready) return;
+            yt.captions = !yt.captions;
+            try {
+                if (yt.captions) yt.player.loadModule("captions");
+                else yt.player.unloadModule("captions");
+            } catch (e) {}
+            subtitlesBtn.classList.toggle("active", yt.captions);
+            showFeedback("fa-closed-captioning", yt.captions ? "YouTube captions on" : "YouTube captions off");
+        },
+        loadSubtitles: text => streamControls.loadSubtitles(text)
+    };
+
+    const enterYouTube = () => {
+        const file = room.file;
+        videoTitle.textContent = audioTitle.textContent = file.title;
+        if (together.stream !== ytControls) {
+            leaveStream();
+            cancelConversion();
+            if (hasMedia()) mainVideo.pause();
+            removeSubtitles();
+            [uploadOverlay, errorOverlay, compatBanner].forEach(item => item.classList.add("hidden"));
+            container.classList.remove("audio-mode");
+            together.stream = ytControls;
+            container.classList.add("remote", "youtube");
+            room.shownPlaying = null;
+            yt.error = null;
+            subtitlesBtn.classList.toggle("active", !!room.cues && room.cuesOn);
+            clearInterval(room.streamTimer);
+            room.streamTimer = setInterval(ytTick, 250);
+        }
+        ytPlayer().then(ytTick, () => {
+            yt.error = "YouTube can't be reached from this network.";
+            ytTick();
+        });
+        ytTick();
+    };
+
+    // Keeps this browser's YouTube player where the room's clock is
+    const ytFollow = () => {
+        if (!yt.ready || !room.state || !room.file || !room.file.yt) return;
+        const player = yt.player;
+        const id = room.file.yt.id;
+        const state = room.state;
+        const end = room.file.duration || Infinity;
+        const target = Math.max(0, Math.min(expectedTime(), end));
+        const playing = !state.paused;
+        if (yt.loaded !== id) {
+            yt.loaded = id;
+            yt.error = null;
+            yt.captions = false;
+            yt.started = yt.lastSeek = now();
+            yt.cuedAt = target;
+            ytMine();
+            if (playing) player.loadVideoById({ videoId: id, startSeconds: target });
+            else player.cueVideoById({ videoId: id, startSeconds: target });
+            syncYouTubeVolume();
+            return;
+        }
+        if (yt.error) return;
+        const current = player.getPlayerState();
+        const at = player.getCurrentTime() || 0;
+        if (player.getPlaybackRate() !== state.rate) player.setPlaybackRate(state.rate);
+        if (playing) {
+            if (current === YT.PAUSED || current === YT.CUED || (current === YT.ENDED && target < end - 1)) {
+                ytMine();
+                player.playVideo();
+            } else if (current === YT.PLAYING && Math.abs(at - target) > 2 && now() - yt.lastSeek > 4000) {
+                // Behind after an ad or a slow connection (or ahead): jump to where everyone is.
+                // While an ad plays the jump does nothing, and it's tried again a little later.
+                yt.lastSeek = now();
+                ytMine();
+                player.seekTo(target, true);
+            }
+        } else if (current === YT.PLAYING || current === YT.BUFFERING) {
+            ytMine();
+            player.pauseVideo();
+        } else if (current === YT.PAUSED && Math.abs(at - target) > 0.5 && now() - yt.lastSeek > 1000) {
+            yt.lastSeek = now();
+            ytMine();
+            player.seekTo(target, true);
+        } else if ((current === YT.CUED || current === YT.UNSTARTED) && Math.abs(yt.cuedAt - target) > 0.5) {
+            yt.cuedAt = target;
+            ytMine();
+            player.cueVideoById({ videoId: id, startSeconds: target });
+        }
+    };
+
+    const ytTick = () => {
+        if (together.stream !== ytControls || !room || !room.file || !room.file.yt) return;
+        const duration = room.file.duration;
+        const time = duration ? Math.min(expectedTime(), duration) : expectedTime();
+        showProgress(time, duration || Infinity);
+        videoDuration.innerText = formatTime(duration);
+        const playing = !!room.state && !room.state.paused;
+        if (room.shownPlaying !== playing) {
+            room.shownPlaying = playing;
+            showPlaying(playing);
+        }
+        renderCue(time);
+        ytFollow();
+        // Still loading, an error, or a browser that wants a click before playing sound
+        const blocked = yt.ready && playing && !yt.error && yt.player.getPlayerState() === YT.UNSTARTED && now() - yt.started > 5000;
+        const note = yt.error || (!yt.ready ? "Loading YouTube…" : blocked ? "Click the video to start it" : null);
+        streamWait.hidden = !note;
+        if (note && streamWaitText.textContent !== note) streamWaitText.textContent = note;
+    };
+
+    const onYouTubeState = e => {
+        if (!room || together.stream !== ytControls) return;
+        if (e.data === YT.PLAYING) yt.error = null;
+        // The host's player reaching the end moves the room on
+        if (room.role === "host" && e.data === YT.ENDED && room.yt && yt.loaded === room.yt.id && room.state && !room.state.paused) ytFinished();
+        if (now() < yt.selfUntil || !room.state) return;
+        // Someone clicked YouTube's player itself: that's play or pause for everyone
+        const at = yt.player.getCurrentTime();
+        const time = Number.isFinite(at) && Math.abs(at - expectedTime()) < 3 ? at : undefined;
+        let asked = true;
+        if (e.data === YT.PAUSED && !room.state.paused) asked = request({ paused: true, time });
+        else if (e.data === YT.PLAYING && room.state.paused) asked = request({ paused: false, time });
+        if (!asked) ytFollow();
+    };
+
+    const YT_ERRORS = {
+        2: "This YouTube link doesn't work.",
+        5: "YouTube couldn't play this video in the browser.",
+        100: "This video is private or was removed.",
+        101: "The uploader doesn't allow this video to be played outside YouTube.",
+        150: "The uploader doesn't allow this video to be played outside YouTube.",
+        153: "YouTube didn't allow this video to be played here."
+    };
+
+    const onYouTubeError = e => {
+        if (!room || together.stream !== ytControls) return;
+        yt.error = YT_ERRORS[e.data] || "YouTube couldn't play this video.";
+        ytTick();
+        // The host skips a video that can't be played to the next one in the playlist
+        if (room.role !== "host" || !room.yt || yt.loaded !== room.yt.id) return;
+        const y = room.yt;
+        const title = y.title || "a video";
+        if (y.ids && y.index + 1 < y.ids.length) {
+            notice(`Skipped ${title === "a video" ? title : `“${title}”`} in the playlist: ${yt.error.toLowerCase()}`);
+            const id = y.id;
+            setTimeout(() => room && room.yt === y && y.id === id && ytStep(1), 2000);
+        } else {
+            notice(`${yt.error} (YouTube)`);
+        }
+    };
+
+    // ---------- The host's side of a YouTube video: the clock, titles, playlists
+
+    // The video ids of a public or unlisted playlist, from a hidden player (null if it can't be read)
+    const resolvePlaylist = list => ytApi().then(api => new Promise(resolve => {
+        const holder = el("div");
+        holder.style.cssText = "position:fixed;left:-10000px;top:0;width:320px;height:180px;pointer-events:none";
+        holder.setAttribute("aria-hidden", "true");
+        const mount = el("div");
+        holder.append(mount);
+        document.body.append(holder);
+        let helper = null;
+        let poll = null;
+        const finish = ids => {
+            clearInterval(poll);
+            clearTimeout(timer);
+            try {
+                helper.destroy();
+            } catch (e) {}
+            holder.remove();
+            resolve(ids && ids.length ? ids.filter(id => YT_ID.test(id)).slice(0, 5000) : null);
+        };
+        const timer = setTimeout(() => finish(null), 15000);
+        helper = new api.Player(mount, {
+            host: YT_HOST,
+            width: 320,
+            height: 180,
+            playerVars: { listType: "playlist", list, controls: 0, mute: 1 },
+            events: {
+                onReady: () => {
+                    poll = setInterval(() => {
+                        const ids = helper.getPlaylist && helper.getPlaylist();
+                        if (Array.isArray(ids) && ids.length) finish(ids);
+                    }, 300);
+                },
+                onError: () => finish(null)
+            }
+        });
+    }), () => null);
+
+    // `by`: whoever shared the link (the host or a guest)
+    const setYouTube = async (by, ref) => {
+        const token = room.ytToken = Signaling.newId();
+        const sharer = { id: by.id, name: by.name };
+        if (ref.id) startYouTube(sharer, { id: ref.id, list: ref.list, ids: ref.list ? null : [ref.id], index: 0, start: ref.start });
+        else addMessage({ system: true, text: "Opening the YouTube playlist…" });
+        if (!ref.list) return;
+        const ids = await resolvePlaylist(ref.list);
+        if (!room || room.role !== "host" || room.ytToken !== token) return;
+        if (!ids) {
+            if (ref.id) {
+                room.yt.ids = [ref.id];
+                return shareFile();
+            }
+            return notice(`Couldn't open the YouTube playlist ${sharer.name} shared. It may be private, or YouTube didn't answer.`);
+        }
+        if (ref.id) {
+            // Already playing: the rest of the playlist comes after it
+            let index = ids.indexOf(ref.id);
+            if (index < 0) {
+                ids.unshift(ref.id);
+                index = 0;
+            }
+            room.yt.ids = ids;
+            room.yt.index = index;
+            return shareFile();
+        }
+        startYouTube(sharer, { id: ids[0], list: ref.list, ids, index: 0, start: 0 });
+    };
+
+    const startYouTube = (by, item) => {
+        // Whatever was playing gives way: a guest's video, or the host's own file
+        if (room.presenter) {
+            send(room.presenter, { t: "present-end", reason: "replaced", by: by.name });
+            room.presenter = room.presentFile = room.presentCues = room.remote = null;
+        }
+        if (!together.stream) releaseMedia();
+        stopCapture();
+        room.yt = { id: item.id, list: item.list, ids: item.ids, index: item.index, title: "", duration: 0, by };
+        room.state = { paused: false, time: item.start || 0, rate: 1, at: now() };
+        room.cues = null;
+        shareFile();
+        enterYouTube();
+        broadcast(stateMessage());
+        sendSubtitles();
+        updateStreams();
+        shareMembers();
+    };
+
+    // Back to no video (the host's player shows "Select a movie")
+    const clearYouTube = () => {
+        room.ytToken = null;
+        if (!room.yt) return;
+        room.yt = room.state = room.cues = null;
+        leaveStream();
+        uploadOverlay.classList.remove("hidden");
+        shareFile();
+        broadcast(stateMessage());
+        sendSubtitles();
+        updateStreams();
+        shareMembers();
+    };
+
+    // Someone's play, pause, jump or speed change, for everyone
+    const controlYouTube = (by, change) => {
+        const previous = room.state;
+        const duration = room.yt.duration;
+        const state = { ...previous, time: expectedTime(), at: now() };
+        let cause = null;
+        if (finite(change.rate, 0.25, 2)) {
+            state.rate = Math.round(change.rate * 100) / 100;
+            cause = "rate";
+        }
+        if (finite(change.time, 0, 1e7)) {
+            state.time = duration ? Math.min(change.time, duration) : change.time;
+            cause = "seek";
+        }
+        if (change.paused === true && !previous.paused) {
+            state.paused = true;
+            cause = "pause";
+        } else if (change.paused === false && previous.paused) {
+            state.paused = false;
+            cause = "play";
+            // Play at the end starts it again
+            if (duration && state.time >= duration - 0.5) state.time = 0;
+        }
+        if (duration) state.time = Math.min(state.time, duration);
+        room.state = state;
+        broadcast(stateMessage(cause, { id: by.id, name: by.name }));
+        if (by.id !== room.id) stateFeedback(previous, state, cause, by.name);
+        ytTick();
+        renderHomeBar();
+    };
+
+    // The previous or next video of a playlist
+    const ytStep = step => {
+        const y = room.yt;
+        const index = y && y.ids ? y.index + step : -1;
+        if (index < 0 || index >= y.ids.length) return;
+        y.index = index;
+        y.id = y.ids[index];
+        y.title = "";
+        y.duration = 0;
+        room.state = { paused: false, time: 0, rate: room.state ? room.state.rate : 1, at: now() };
+        shareFile();
+        broadcast(stateMessage());
+        ytTick();
+    };
+
+    // The end of a video: the next one in the playlist, or stop at the end
+    const ytFinished = () => {
+        const y = room.yt;
+        if (y.ids && y.index + 1 < y.ids.length) return ytStep(1);
+        room.state = { paused: true, time: y.duration || expectedTime(), rate: room.state.rate, at: now() };
+        broadcast(stateMessage());
+        ytTick();
+    };
+
+    // Once a second: the title and length from the host's player, and the end of the video
+    const hostYouTubeTick = () => {
+        if (!room || room.role !== "host" || !room.yt) return;
+        const y = room.yt;
+        if (yt.ready && yt.loaded === y.id) {
+            let changed = false;
+            try {
+                const data = yt.player.getVideoData();
+                if (data && data.video_id === y.id) {
+                    const title = clean(data.title, 200);
+                    if (title && title !== y.title) {
+                        y.title = title;
+                        changed = true;
+                    }
+                    // Only while the video itself plays, not an ad
+                    const length = yt.player.getDuration();
+                    if (yt.player.getPlayerState() === YT.PLAYING && yt.player.getCurrentTime() > 1 && length > 1 && Math.abs(length - y.duration) > 1) {
+                        y.duration = length;
+                        changed = true;
+                    }
+                }
+            } catch (e) {}
+            if (changed) {
+                shareFile();
+                if (together.stream === ytControls) videoTitle.textContent = audioTitle.textContent = room.file.title;
+            }
+        }
+        if (y.duration && room.state && !room.state.paused && expectedTime() >= y.duration - 0.3) ytFinished();
     };
 
     // ---------- Following the host with this browser's own copy
@@ -1739,6 +2247,10 @@
     const request = change => {
         if (!room || !room.file) return false;
         if (room.role === "host") {
+            if (room.yt) {
+                controlYouTube({ id: room.id, name: room.name }, change);
+                return true;
+            }
             if (!room.presenter) return false;
             controlPresenter({ id: room.id, name: room.name }, change);
         } else {
@@ -1756,7 +2268,8 @@
             rate: change.rate ?? state.rate,
             at: room.offset === null ? null : hostNow()
         };
-        if (together.stream) streamTick();
+        if (together.stream === ytControls) ytTick();
+        else if (together.stream) streamTick();
         return true;
     };
 
@@ -1784,6 +2297,14 @@
         const file = room.file;
         const by = sharerName();
         const sharing = !!room.presenting;
+        if (file && file.yt && !sharing) {
+            streamChoice.disabled = ownChoice.disabled = true;
+            streamChoice.classList.remove("active");
+            ownChoice.classList.remove("active");
+            streamChoice.querySelector("b").textContent = "The stream";
+            streamChoice.querySelector("small").textContent = ownChoice.querySelector("small").textContent = "Everyone watches this one on YouTube";
+            return;
+        }
         const streaming = streamable();
         const own = !together.stream && !sharing && ownMatches();
         streamChoice.disabled = !streaming || sharing;
@@ -1835,16 +2356,29 @@
             // Sharing: the video plays here and everyone else follows it
             leaveStream();
             hideOverlay();
+        } else if (file && file.yt) {
+            // YouTube: everyone's own YouTube player, on the room's clock
+            hideOverlay();
+            enterYouTube();
         } else if (!file) {
             leaveStream();
             if (hasMedia()) mainVideo.pause();
             const share = canShare();
+            const youtube = canShareYouTube();
             showStatus({
                 icon: "fa-couch",
                 title: "Nothing is playing yet",
-                text: share ? "Share a video from this device, or wait for someone to start one. Chat with everyone in the meantime."
+                text: share ? "Share a video from this device or a YouTube link, or wait for someone to start one. Chat with everyone in the meantime."
+                    : youtube ? "Share a YouTube link, or wait for someone to start a video. Chat with everyone in the meantime."
                     : `Waiting for ${room.hostName} to start a video. Chat with everyone in the meantime.`,
-                actions: share ? [{ label: "Share a video", icon: "fa-folder-open", onClick: shareVideo }] : []
+                actions: [
+                    share && { label: "Share a video", icon: "fa-folder-open", onClick: shareVideo },
+                    youtube && { label: "YouTube link", icon: "fa-brands fa-youtube", secondary: share, onClick: () => {
+                        hideOverlay();
+                        showPanel(true);
+                        if (ytForm.hidden) nowYtBtn.click();
+                    } }
+                ].filter(Boolean)
             });
         } else if (streamable() && (room.watching === "stream" || !ownMatches())) {
             // A new video plays straight away as a stream, unless this browser has its own copy open
@@ -2019,10 +2553,15 @@
         const sharing = !host && room.presenting;
         const mine = sharing || (!!file && file.from === room.id);
         const on = !!file || !!sharing;
+        const youtube = !sharing && file && file.yt;
         nowBar.classList.toggle("live", on);
+        nowIcon.className = youtube ? "fa-brands fa-youtube" : "fa-solid fa-film";
         if (sharing) {
             nowTitle.textContent = currentSource ? savedTitle(currentSource.name, currentSource.size) : "Your video";
             nowMeta.textContent = sharing.live ? "You're sharing it" : "Getting your video ready…";
+        } else if (youtube) {
+            nowTitle.textContent = file.title;
+            nowMeta.textContent = mine ? "You shared it" : `Shared by ${sharerName()}`;
         } else if (file) {
             nowTitle.textContent = file.title;
             nowMeta.textContent = mine ? "You're sharing it" : `Shared by ${sharerName()}`;
@@ -2038,9 +2577,75 @@
             : on ? "Play a different video from this device for everyone" : "Play a video from this device for everyone";
         nowShareBtn.querySelector("span").textContent = on ? "Change" : "Share a video";
         nowStopBtn.hidden = !on || !(allowed || mine);
-        nowStopBtn.title = mine ? "Stop sharing your video" : "Remove this video for everyone";
+        nowStopBtn.title = mine && !youtube ? "Stop sharing your video" : "Remove this video for everyone";
         nowStopBtn.setAttribute("aria-label", nowStopBtn.title);
+        // YouTube links: for anyone who may share videos (no Chrome or Edge needed)
+        nowYtBtn.hidden = !allowed;
+        if (!allowed) closeYouTubeForm();
+        // A playlist: which video, and the previous / next one for everyone
+        const list = youtube && file.yt.count > 1 ? file.yt : null;
+        nowList.hidden = !list;
+        if (list) {
+            const control = host || room.settings.control;
+            nowCount.textContent = `${list.index + 1} of ${list.count}`;
+            nowPrevBtn.disabled = !control || list.index === 0;
+            nowNextBtn.disabled = !control || list.index + 1 >= list.count;
+        }
     };
+
+    // ---------- Pasting a YouTube link
+
+    const canShareYouTube = () => !!room && (room.role === "host" || (room.phase === "in" && room.settings.media === true));
+
+    const closeYouTubeForm = () => {
+        ytForm.hidden = true;
+        nowYtBtn.setAttribute("aria-expanded", "false");
+    };
+
+    const ytHintText = ytHint.textContent;
+    const showYouTubeHint = (text = ytHintText, error = false) => {
+        ytHint.textContent = text;
+        ytHint.classList.toggle("error", error);
+    };
+
+    nowYtBtn.addEventListener("click", () => {
+        if (!ytForm.hidden) return closeYouTubeForm();
+        ytForm.hidden = false;
+        nowYtBtn.setAttribute("aria-expanded", "true");
+        showYouTubeHint();
+        ytInput.focus();
+    });
+    ytInput.addEventListener("keydown", e => {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        closeYouTubeForm();
+    });
+
+    ytForm.addEventListener("submit", e => {
+        e.preventDefault();
+        if (!room) return;
+        const ref = parseYouTube(ytInput.value);
+        if (!ref) return showYouTubeHint("That isn't a link to a YouTube video or playlist.", true);
+        if (!canShareYouTube()) return showYouTubeHint(`${room.hostName || "The host"} isn't letting guests share videos right now.`, true);
+        ytInput.value = "";
+        closeYouTubeForm();
+        if (room.role === "host") return setYouTube({ id: room.id, name: room.name }, ref);
+        if (room.presenting) {
+            stopPresenting(true);
+            if (room.file && room.file.from === room.id) room.file = null;
+        }
+        send(room.peer, { t: "youtube", ...ref });
+    });
+
+    // A playlist's previous / next video, for everyone
+    const stepPlaylist = step => {
+        if (!room) return;
+        if (room.role === "host") return room.yt && ytStep(step);
+        if (!room.settings.control) return showFeedback("fa-lock", "Host only");
+        send(room.peer, { t: "ytstep", step });
+    };
+    nowPrevBtn.addEventListener("click", () => stepPlaylist(-1));
+    nowNextBtn.addEventListener("click", () => stepPlaylist(1));
 
     nowShareBtn.addEventListener("click", shareVideo);
     nowStopBtn.addEventListener("click", () => {
@@ -2096,7 +2701,8 @@
         const previous = room.state;
         const state = room.state = validState(message);
         if (message.byId !== room.id) stateFeedback(previous, state, message.cause, clean(message.by, 30));
-        if (together.stream) streamTick();
+        if (together.stream === ytControls) ytTick();
+        else if (together.stream) streamTick();
         else followHost();
         renderHomeBar();
     };
@@ -2798,7 +3404,7 @@
         const forget = homeBar.querySelector(".room-home-forget");
         const close = homeBar.querySelector(".room-home-dismiss");
         if (room) {
-            const playing = room.role === "host" && !room.presenter ? hasMedia() && !mainVideo.paused
+            const playing = room.role === "host" && !room.presenter && !room.yt ? hasMedia() && !mainVideo.paused
                 : room.presenting ? hasMedia() && !mainVideo.paused : !!room.state && !room.state.paused;
             homeBar.hidden = false;
             homeBar.classList.add("live");

@@ -4,6 +4,21 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.8] - 2026-11-04
+
+### Watch-together rooms: YouTube together
+- Paste a YouTube link in the *Now playing* bar (YouTube button): a public or unlisted video, a
+  Short, a playlist or a video in a playlist; a start time in the link is kept
+- Everyone watches it in YouTube's own player, loaded by their own browser, so it doesn't use the
+  host's upload; play, pause, jumps and speed from anyone (clicks on the YouTube player too) are
+  shared, and everyone stays on the same second
+- Playlists move on to the next video for everyone; *Previous* / *Next* and "3 of 12" in the bar
+- Ads are YouTube's: whoever gets one catches up with everyone as soon as it ends
+- Videos that can't be played outside YouTube show why; in a playlist they're skipped
+- The player's volume and mute work on YouTube's player; the CC button turns YouTube's captions on
+  and off (or shows subtitles loaded from a file)
+- The privacy-enhanced youtube-nocookie.com player is used
+
 ## [1.2.5] - 2026-11-04
 
 ### Watch-together rooms: share videos from any device
@@ -143,6 +158,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.2.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.8
 [1.2.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.5
 [1.2.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.1
 [1.2.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.0
