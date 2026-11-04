@@ -829,6 +829,87 @@ body.watching {
   transform: translateY(0);
 }
 
+.video-controls button[hidden] {
+  display: none !important;
+}
+
+.video-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* More: picture shape and volume boost, as rows of chips */
+.more-options {
+  width: 264px;
+}
+
+.option-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.option-chips li {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: #ddd;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.option-chips li:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.option-chips li.active {
+  color: #fff;
+  border-color: #3e97fd;
+  background: rgba(62, 151, 253, 0.25);
+}
+
+.option-chips.disabled li {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.aspect-current,
+.boost-current {
+  color: #3e97fd;
+  text-transform: none;
+}
+
+.more-note {
+  padding: 0 14px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #9a9aa8;
+}
+
+/* The picture's shape (More menu) */
+.container.aspect-fill #main-video {
+  object-fit: cover;
+}
+
+.container.aspect-stretch #main-video {
+  object-fit: fill;
+}
+
+/* A fixed shape: the largest box of that shape that fits the player */
+.container.aspect-ratio:not(.youtube) {
+  container-type: size;
+}
+
+.container.aspect-ratio:not(.youtube) #main-video {
+  object-fit: fill;
+  width: min(100cqw, 100cqh * var(--aspect));
+  height: min(100cqh, 100cqw / var(--aspect));
+}
+
 .popup-menu .menu-header {
   font-size: 11px;
   text-transform: uppercase;
@@ -1589,6 +1670,7 @@ video::cue {
             <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
+            <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a room's YouTube queue</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
             <dt><kbd>Esc</kbd></dt><dd>Close a dialog</dd>
           </dl>
@@ -1648,9 +1730,12 @@ video::cue {
 
         <!-- Play/Pause in Center -->
         <li class="options center">
+          <!-- The previous / next video in a room's YouTube queue (room.js shows them) -->
+          <button class="prev-track" title="Previous video in the queue (Shift + P)" aria-label="Previous video in the queue" hidden><i class="fa-solid fa-backward-step"></i></button>
           <button class="skip-backward" title="Back 5 seconds (Left arrow)"><i class="fas fa-backward"></i></button>
           <button class="play-pause" title="Play (Space / K)"><i class="fas fa-play"></i></button>
           <button class="skip-forward" title="Forward 5 seconds (Right arrow)"><i class="fas fa-forward"></i></button>
+          <button class="next-track" title="Next video in the queue (Shift + N)" aria-label="Next video in the queue" hidden><i class="fa-solid fa-forward-step"></i></button>
         </li>
 
         <li class="options right">
@@ -1678,6 +1763,29 @@ video::cue {
             </div>
           </div>
 
+          <!-- More: the picture's shape and a volume boost -->
+          <div class="popup-menu-wrapper more-content">
+            <button class="more-btn" title="More: picture shape, volume boost" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <div class="popup-menu more-options">
+              <div class="menu-header"><span>Picture</span><span class="aspect-current">Fit</span></div>
+              <ul class="option-chips aspect-options">
+                <li data-aspect="fit" title="The whole picture, with black bars where it doesn't match the screen">Fit</li>
+                <li data-aspect="fill" title="Fill the screen, cropping the edges">Fill</li>
+                <li data-aspect="stretch" title="Stretch the picture to the screen">Stretch</li>
+                <li data-aspect="16:9" title="Show the picture as 16:9">16:9</li>
+                <li data-aspect="4:3" title="Show the picture as 4:3">4:3</li>
+                <li data-aspect="21:9" title="Show the picture as 21:9 (cinema)">21:9</li>
+              </ul>
+              <div class="menu-header"><span>Volume boost</span><span class="boost-current">Off</span></div>
+              <ul class="option-chips boost-options">
+                <li data-boost="1" title="Normal volume">Off</li>
+                <li data-boost="1.5" title="Up to 150% volume">150%</li>
+                <li data-boost="2" title="Up to 200% volume">200%</li>
+                <li data-boost="3" title="Up to 300% volume (quiet videos)">300%</li>
+              </ul>
+              <p class="more-note" hidden></p>
+            </div>
+          </div>
           <button class="shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i></button>
           <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
           <button class="fullscreen" title="Fullscreen (F)"><i class="fa-solid fa-expand"></i></button>
@@ -2392,6 +2500,7 @@ const together = {
     onHome: null,     // called whenever the home page is shown
     onPlayer: null,   // called whenever the player is shown
     onTitle: null,    // called when the video's title is renamed
+    step: null,       // the previous (-1) / next (1) video of a room's YouTube queue
     active: () => false // in a room: going home keeps the video playing for everyone
 };
 
@@ -3012,7 +3121,7 @@ shortcutsBtn.addEventListener("click", toggleShortcuts);
 
 document.addEventListener("keydown", e => {
     if (e.key !== "Escape" || playerPage.hidden) return;
-    if (speedOptions.classList.contains("show")) return speedOptions.classList.remove("show");
+    if (closePopups()) return;
     const open = [...document.querySelectorAll("[data-dialog]")]
         .filter(dialog => !dialog.hidden && !dialog.classList.contains("hidden") && dialog.getClientRects().length)
         .pop();
@@ -3043,13 +3152,25 @@ mainVideo.addEventListener("pause", savePosition);
 mainVideo.addEventListener("ended", () => storage.remove(currentFileKey));
 window.addEventListener("beforeunload", savePosition);
 
-// Speed Menu Toggle
-speedBtn.addEventListener("click", () => speedOptions.classList.toggle("show"));
+// Popup menus (speed, More): one at a time, closed by a click elsewhere or Esc
+const moreBtn = container.querySelector(".more-btn"),
+moreOptions = container.querySelector(".more-options");
+const popupMenus = [speedOptions, moreOptions];
+const togglePopup = menu => {
+    const open = !menu.classList.contains("show");
+    popupMenus.forEach(other => other.classList.toggle("show", other === menu && open));
+    if (open && menu === moreOptions) renderMoreOptions();
+};
+const closePopups = () => {
+    const open = popupMenus.some(menu => menu.classList.contains("show"));
+    popupMenus.forEach(menu => menu.classList.remove("show"));
+    return open;
+};
+speedBtn.addEventListener("click", () => togglePopup(speedOptions));
+moreBtn.addEventListener("click", () => togglePopup(moreOptions));
 
 document.addEventListener("click", e => {
-    if(!e.target.closest(".popup-menu-wrapper")) {
-        speedOptions.classList.remove("show");
-    }
+    if (!e.target.closest(".popup-menu-wrapper")) closePopups();
 });
 
 // Timeline Hover Live Preview & Seeking
@@ -3169,6 +3290,104 @@ volumeBtn.parentNode.addEventListener("click", (e) => {
 volumeSlider.addEventListener("input", e => setVolume(e.target.value));
 // Give focus back to the page so keyboard shortcuts keep working
 volumeSlider.addEventListener("change", () => volumeSlider.blur());
+
+// ---------- More menu: the picture's shape and a volume boost
+
+const aspectChips = moreOptions.querySelectorAll("li[data-aspect]"),
+aspectCurrent = moreOptions.querySelector(".aspect-current"),
+boostChips = moreOptions.querySelectorAll("li[data-boost]"),
+boostCurrent = moreOptions.querySelector(".boost-current"),
+moreNote = moreOptions.querySelector(".more-note");
+const ASPECT_KEY = "cinetab:aspect";
+const ASPECTS = { "16:9": 16 / 9, "4:3": 4 / 3, "21:9": 21 / 9 };
+
+// Fit (the whole picture), Fill (cropped to the screen), Stretch, or a fixed shape
+const setAspect = (aspect, announce = false) => {
+    if (!["fit", "fill", "stretch", ...Object.keys(ASPECTS)].includes(aspect)) aspect = "fit";
+    container.classList.toggle("aspect-fill", aspect === "fill");
+    container.classList.toggle("aspect-stretch", aspect === "stretch");
+    container.classList.toggle("aspect-ratio", aspect in ASPECTS);
+    if (aspect in ASPECTS) container.style.setProperty("--aspect", ASPECTS[aspect]);
+    aspectChips.forEach(chip => chip.classList.toggle("active", chip.dataset.aspect === aspect));
+    aspectCurrent.textContent = aspectChips[[...aspectChips].findIndex(chip => chip.dataset.aspect === aspect)].textContent;
+    storage.set(ASPECT_KEY, aspect);
+    if (announce) showFeedback("fa-expand", aspectCurrent.textContent);
+};
+aspectChips.forEach(chip => chip.addEventListener("click", () => setAspect(chip.dataset.aspect, true)));
+setAspect(storage.get(ASPECT_KEY) || "fit");
+
+// Louder than 100%: the sound goes through Web Audio with extra gain and a limiter that stops
+// it from distorting. Created the first time it's needed (it has to start from a click), and
+// then the player's sound keeps going that way. Chrome gives silence for a stream (a room) played
+// that way, so a stream's sound is taken from the stream itself instead.
+const boost = { level: 1, ctx: null, gain: null, streamVolume: null, stream: null, streamNode: null };
+
+const syncBoostVolume = () => {
+    if (boost.streamVolume) boost.streamVolume.gain.value = mainVideo.muted ? 0 : mainVideo.volume;
+};
+
+const routeBoost = () => {
+    if (!boost.ctx) return;
+    const stream = mainVideo.srcObject instanceof MediaStream ? mainVideo.srcObject : null;
+    if (stream === boost.stream) return;
+    if (boost.streamNode) boost.streamNode.disconnect();
+    boost.streamNode = null;
+    boost.stream = stream;
+    if (stream && stream.getAudioTracks().length) {
+        boost.streamNode = boost.ctx.createMediaStreamSource(stream);
+        boost.streamNode.connect(boost.streamVolume);
+    }
+};
+
+const setBoost = level => {
+    if (container.classList.contains("youtube")) return;
+    if (level > 1 && !boost.ctx) {
+        try {
+            const ctx = new AudioContext();
+            const gain = ctx.createGain();
+            const limiter = ctx.createDynamicsCompressor();
+            limiter.threshold.value = -1.5;
+            limiter.knee.value = 0;
+            limiter.ratio.value = 20;
+            limiter.attack.value = 0.003;
+            limiter.release.value = 0.2;
+            gain.connect(limiter);
+            limiter.connect(ctx.destination);
+            ctx.createMediaElementSource(mainVideo).connect(gain);
+            boost.streamVolume = ctx.createGain();
+            boost.streamVolume.connect(gain);
+            Object.assign(boost, { ctx, gain });
+            syncBoostVolume();
+            routeBoost();
+        } catch (e) {
+            showFeedback("fa-triangle-exclamation", "Boost isn't available here");
+            return;
+        }
+    }
+    boost.level = level;
+    if (boost.ctx) {
+        boost.gain.gain.value = level;
+        boost.ctx.resume().catch(() => {});
+    }
+    renderMoreOptions();
+    showFeedback(level > 1 ? "fa-volume-high" : "fa-volume-low", level > 1 ? `Boost ${Math.round(level * 100)}%` : "Boost off");
+};
+boostChips.forEach(chip => chip.addEventListener("click", () => setBoost(+chip.dataset.boost)));
+mainVideo.addEventListener("volumechange", syncBoostVolume);
+// A room's stream can change at any time
+["loadstart", "emptied", "play"].forEach(type => mainVideo.addEventListener(type, routeBoost));
+
+// The menu reflects what applies right now: YouTube's own player keeps its shape and volume
+function renderMoreOptions() {
+    const youtube = container.classList.contains("youtube");
+    moreOptions.querySelector(".aspect-options").classList.toggle("disabled", youtube);
+    moreOptions.querySelector(".boost-options").classList.toggle("disabled", youtube);
+    boostChips.forEach(chip => chip.classList.toggle("active", +chip.dataset.boost === boost.level));
+    boostCurrent.textContent = youtube ? "—" : boost.level > 1 ? `${Math.round(boost.level * 100)}%` : "Off";
+    moreNote.hidden = !youtube;
+    moreNote.textContent = youtube ? "YouTube's player keeps its own shape and volume (up to 100%)." : "";
+}
+renderMoreOptions();
 
 // Play / Pause
 const togglePlay = () => {
@@ -3682,7 +3901,15 @@ document.addEventListener("keydown", e => {
             break;
 
         case "KeyP":
+            if (e.shiftKey) {
+                if (together.step) together.step(-1);
+                break;
+            }
             toggleCustomPiP();
+            break;
+
+        case "KeyN":
+            if (e.shiftKey && together.step) together.step(1);
             break;
 
         case "KeyC":

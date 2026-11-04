@@ -432,6 +432,7 @@
             <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
+            <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a room's YouTube queue</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
             <dt><kbd>Esc</kbd></dt><dd>Close a dialog</dd>
           </dl>
@@ -496,6 +497,7 @@
               </span>
             </label>
             <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> Hide my IP address from guests (sends everything through a relay server)</label>
+            <label class="room-check room-localnet"><input type="checkbox" name="localnet"> <span>Friends are on the same Wi-Fi (campus, office, hostel): help their devices find mine <small>Such Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off.</small></span></label>
             <label class="room-check"><input type="checkbox" name="remember" checked> Remember this room in this browser, so it's one click to open again (saves the code and password here)</label>
             <div class="convert-actions">
               <button type="submit"><i class="fa-solid fa-door-open"></i> Create room</button>
@@ -519,6 +521,7 @@
             </div>
             <div class="room-avatar-grid" hidden></div>
             <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> Hide my IP address from the host (sends everything through a relay server)</label>
+            <label class="room-check room-localnet"><input type="checkbox" name="localnet"> <span>I'm on the same Wi-Fi as the host (campus, office, hostel): help our devices find each other <small>Such Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off.</small></span></label>
             <label class="room-check"><input type="checkbox" name="remember" checked> Remember this room in this browser, so it's one click to join next time (saves the code and password here)</label>
             <p class="room-error" hidden></p>
             <div class="convert-actions">
@@ -579,9 +582,12 @@
 
         <!-- Play/Pause in Center -->
         <li class="options center">
+          <!-- The previous / next video in a room's YouTube queue (room.js shows them) -->
+          <button class="prev-track" title="Previous video in the queue (Shift + P)" aria-label="Previous video in the queue" hidden><i class="fa-solid fa-backward-step"></i></button>
           <button class="skip-backward" title="Back 5 seconds (Left arrow)"><i class="fas fa-backward"></i></button>
           <button class="play-pause" title="Play (Space / K)"><i class="fas fa-play"></i></button>
           <button class="skip-forward" title="Forward 5 seconds (Right arrow)"><i class="fas fa-forward"></i></button>
+          <button class="next-track" title="Next video in the queue (Shift + N)" aria-label="Next video in the queue" hidden><i class="fa-solid fa-forward-step"></i></button>
         </li>
 
         <li class="options right">
@@ -609,6 +615,29 @@
             </div>
           </div>
 
+          <!-- More: the picture's shape and a volume boost -->
+          <div class="popup-menu-wrapper more-content">
+            <button class="more-btn" title="More: picture shape, volume boost" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <div class="popup-menu more-options">
+              <div class="menu-header"><span>Picture</span><span class="aspect-current">Fit</span></div>
+              <ul class="option-chips aspect-options">
+                <li data-aspect="fit" title="The whole picture, with black bars where it doesn't match the screen">Fit</li>
+                <li data-aspect="fill" title="Fill the screen, cropping the edges">Fill</li>
+                <li data-aspect="stretch" title="Stretch the picture to the screen">Stretch</li>
+                <li data-aspect="16:9" title="Show the picture as 16:9">16:9</li>
+                <li data-aspect="4:3" title="Show the picture as 4:3">4:3</li>
+                <li data-aspect="21:9" title="Show the picture as 21:9 (cinema)">21:9</li>
+              </ul>
+              <div class="menu-header"><span>Volume boost</span><span class="boost-current">Off</span></div>
+              <ul class="option-chips boost-options">
+                <li data-boost="1" title="Normal volume">Off</li>
+                <li data-boost="1.5" title="Up to 150% volume">150%</li>
+                <li data-boost="2" title="Up to 200% volume">200%</li>
+                <li data-boost="3" title="Up to 300% volume (quiet videos)">300%</li>
+              </ul>
+              <p class="more-note" hidden></p>
+            </div>
+          </div>
           <button class="shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i></button>
           <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
           <button class="fullscreen" title="Fullscreen (F)"><i class="fa-solid fa-expand"></i></button>
@@ -630,6 +659,7 @@
 
     <nav class="room-tabs" role="tablist" aria-label="Room">
       <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
+      <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
       <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
       <button class="room-tab-btn" role="tab" data-tab="invite" title="Invite people with a link, QR code, or code and password"><i class="fa-solid fa-user-plus"></i><span>Invite</span></button>
       <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
@@ -668,6 +698,23 @@
         <input class="room-chat-input" maxlength="500" autocomplete="off" placeholder="Send a message to everyone" aria-label="Chat message">
         <button type="submit" class="room-send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
       </form>
+    </section>
+
+    <!-- YouTube queue: add links (a playlist adds all its videos), reorder, play one now -->
+    <section class="room-tab room-tab-queue" data-tab="queue" role="tabpanel" hidden>
+      <form class="room-queue-form" novalidate>
+        <div class="room-queue-row">
+          <input class="room-queue-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste a YouTube video or playlist link" aria-label="YouTube link to add">
+          <button type="button" class="room-icon-btn room-queue-paste" title="Paste the link you copied" aria-label="Paste the link you copied"><i class="fa-regular fa-paste"></i></button>
+        </div>
+        <div class="room-queue-row">
+          <button type="submit" class="room-small-btn primary" value="end"><i class="fa-solid fa-plus"></i> Add to queue</button>
+          <button type="submit" class="room-small-btn" value="play"><i class="fa-solid fa-play"></i> Play now</button>
+        </div>
+        <small class="room-queue-hint">Found a video on YouTube? Copy its link there, then paste it here. You can also drop a link on this list.</small>
+      </form>
+      <p class="room-section-title">Queue <span class="room-queue-count"></span></p>
+      <ol class="room-queue"></ol>
     </section>
 
     <section class="room-tab" data-tab="people" role="tabpanel" hidden>
@@ -718,6 +765,7 @@
         <button class="room-choice" data-watch="own"><i class="fa-solid fa-film"></i><span><b>My own copy</b><small></small></span></button>      </div>
       <div class="room-browser-settings">
         <p class="room-section-title">This browser</p>
+        <label class="room-switch"><input type="checkbox" class="room-localnet-switch"><span><b>Help people on this Wi-Fi connect</b><small class="room-localnet-note">For campus, office or hostel Wi-Fi that hides devices from each other. Asks to use the microphone once; it stays off.</small></span></label>
         <label class="room-switch"><input type="checkbox" class="room-remember"><span><b>Remember this room</b><small>Keeps its code and password here for one-click rejoining. Turning it off deletes them.</small></span></label>
       </div>
     </section>

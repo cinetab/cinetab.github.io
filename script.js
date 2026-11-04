@@ -84,6 +84,7 @@ const together = {
     onHome: null,     // called whenever the home page is shown
     onPlayer: null,   // called whenever the player is shown
     onTitle: null,    // called when the video's title is renamed
+    step: null,       // the previous (-1) / next (1) video of a room's YouTube queue
     active: () => false // in a room: going home keeps the video playing for everyone
 };
 
@@ -704,7 +705,7 @@ shortcutsBtn.addEventListener("click", toggleShortcuts);
 
 document.addEventListener("keydown", e => {
     if (e.key !== "Escape" || playerPage.hidden) return;
-    if (speedOptions.classList.contains("show")) return speedOptions.classList.remove("show");
+    if (closePopups()) return;
     const open = [...document.querySelectorAll("[data-dialog]")]
         .filter(dialog => !dialog.hidden && !dialog.classList.contains("hidden") && dialog.getClientRects().length)
         .pop();
@@ -735,13 +736,25 @@ mainVideo.addEventListener("pause", savePosition);
 mainVideo.addEventListener("ended", () => storage.remove(currentFileKey));
 window.addEventListener("beforeunload", savePosition);
 
-// Speed Menu Toggle
-speedBtn.addEventListener("click", () => speedOptions.classList.toggle("show"));
+// Popup menus (speed, More): one at a time, closed by a click elsewhere or Esc
+const moreBtn = container.querySelector(".more-btn"),
+moreOptions = container.querySelector(".more-options");
+const popupMenus = [speedOptions, moreOptions];
+const togglePopup = menu => {
+    const open = !menu.classList.contains("show");
+    popupMenus.forEach(other => other.classList.toggle("show", other === menu && open));
+    if (open && menu === moreOptions) renderMoreOptions();
+};
+const closePopups = () => {
+    const open = popupMenus.some(menu => menu.classList.contains("show"));
+    popupMenus.forEach(menu => menu.classList.remove("show"));
+    return open;
+};
+speedBtn.addEventListener("click", () => togglePopup(speedOptions));
+moreBtn.addEventListener("click", () => togglePopup(moreOptions));
 
 document.addEventListener("click", e => {
-    if(!e.target.closest(".popup-menu-wrapper")) {
-        speedOptions.classList.remove("show");
-    }
+    if (!e.target.closest(".popup-menu-wrapper")) closePopups();
 });
 
 // Timeline Hover Live Preview & Seeking
@@ -861,6 +874,104 @@ volumeBtn.parentNode.addEventListener("click", (e) => {
 volumeSlider.addEventListener("input", e => setVolume(e.target.value));
 // Give focus back to the page so keyboard shortcuts keep working
 volumeSlider.addEventListener("change", () => volumeSlider.blur());
+
+// ---------- More menu: the picture's shape and a volume boost
+
+const aspectChips = moreOptions.querySelectorAll("li[data-aspect]"),
+aspectCurrent = moreOptions.querySelector(".aspect-current"),
+boostChips = moreOptions.querySelectorAll("li[data-boost]"),
+boostCurrent = moreOptions.querySelector(".boost-current"),
+moreNote = moreOptions.querySelector(".more-note");
+const ASPECT_KEY = "cinetab:aspect";
+const ASPECTS = { "16:9": 16 / 9, "4:3": 4 / 3, "21:9": 21 / 9 };
+
+// Fit (the whole picture), Fill (cropped to the screen), Stretch, or a fixed shape
+const setAspect = (aspect, announce = false) => {
+    if (!["fit", "fill", "stretch", ...Object.keys(ASPECTS)].includes(aspect)) aspect = "fit";
+    container.classList.toggle("aspect-fill", aspect === "fill");
+    container.classList.toggle("aspect-stretch", aspect === "stretch");
+    container.classList.toggle("aspect-ratio", aspect in ASPECTS);
+    if (aspect in ASPECTS) container.style.setProperty("--aspect", ASPECTS[aspect]);
+    aspectChips.forEach(chip => chip.classList.toggle("active", chip.dataset.aspect === aspect));
+    aspectCurrent.textContent = aspectChips[[...aspectChips].findIndex(chip => chip.dataset.aspect === aspect)].textContent;
+    storage.set(ASPECT_KEY, aspect);
+    if (announce) showFeedback("fa-expand", aspectCurrent.textContent);
+};
+aspectChips.forEach(chip => chip.addEventListener("click", () => setAspect(chip.dataset.aspect, true)));
+setAspect(storage.get(ASPECT_KEY) || "fit");
+
+// Louder than 100%: the sound goes through Web Audio with extra gain and a limiter that stops
+// it from distorting. Created the first time it's needed (it has to start from a click), and
+// then the player's sound keeps going that way. Chrome gives silence for a stream (a room) played
+// that way, so a stream's sound is taken from the stream itself instead.
+const boost = { level: 1, ctx: null, gain: null, streamVolume: null, stream: null, streamNode: null };
+
+const syncBoostVolume = () => {
+    if (boost.streamVolume) boost.streamVolume.gain.value = mainVideo.muted ? 0 : mainVideo.volume;
+};
+
+const routeBoost = () => {
+    if (!boost.ctx) return;
+    const stream = mainVideo.srcObject instanceof MediaStream ? mainVideo.srcObject : null;
+    if (stream === boost.stream) return;
+    if (boost.streamNode) boost.streamNode.disconnect();
+    boost.streamNode = null;
+    boost.stream = stream;
+    if (stream && stream.getAudioTracks().length) {
+        boost.streamNode = boost.ctx.createMediaStreamSource(stream);
+        boost.streamNode.connect(boost.streamVolume);
+    }
+};
+
+const setBoost = level => {
+    if (container.classList.contains("youtube")) return;
+    if (level > 1 && !boost.ctx) {
+        try {
+            const ctx = new AudioContext();
+            const gain = ctx.createGain();
+            const limiter = ctx.createDynamicsCompressor();
+            limiter.threshold.value = -1.5;
+            limiter.knee.value = 0;
+            limiter.ratio.value = 20;
+            limiter.attack.value = 0.003;
+            limiter.release.value = 0.2;
+            gain.connect(limiter);
+            limiter.connect(ctx.destination);
+            ctx.createMediaElementSource(mainVideo).connect(gain);
+            boost.streamVolume = ctx.createGain();
+            boost.streamVolume.connect(gain);
+            Object.assign(boost, { ctx, gain });
+            syncBoostVolume();
+            routeBoost();
+        } catch (e) {
+            showFeedback("fa-triangle-exclamation", "Boost isn't available here");
+            return;
+        }
+    }
+    boost.level = level;
+    if (boost.ctx) {
+        boost.gain.gain.value = level;
+        boost.ctx.resume().catch(() => {});
+    }
+    renderMoreOptions();
+    showFeedback(level > 1 ? "fa-volume-high" : "fa-volume-low", level > 1 ? `Boost ${Math.round(level * 100)}%` : "Boost off");
+};
+boostChips.forEach(chip => chip.addEventListener("click", () => setBoost(+chip.dataset.boost)));
+mainVideo.addEventListener("volumechange", syncBoostVolume);
+// A room's stream can change at any time
+["loadstart", "emptied", "play"].forEach(type => mainVideo.addEventListener(type, routeBoost));
+
+// The menu reflects what applies right now: YouTube's own player keeps its shape and volume
+function renderMoreOptions() {
+    const youtube = container.classList.contains("youtube");
+    moreOptions.querySelector(".aspect-options").classList.toggle("disabled", youtube);
+    moreOptions.querySelector(".boost-options").classList.toggle("disabled", youtube);
+    boostChips.forEach(chip => chip.classList.toggle("active", +chip.dataset.boost === boost.level));
+    boostCurrent.textContent = youtube ? "—" : boost.level > 1 ? `${Math.round(boost.level * 100)}%` : "Off";
+    moreNote.hidden = !youtube;
+    moreNote.textContent = youtube ? "YouTube's player keeps its own shape and volume (up to 100%)." : "";
+}
+renderMoreOptions();
 
 // Play / Pause
 const togglePlay = () => {
@@ -1374,7 +1485,15 @@ document.addEventListener("keydown", e => {
             break;
 
         case "KeyP":
+            if (e.shiftKey) {
+                if (together.step) together.step(-1);
+                break;
+            }
             toggleCustomPiP();
+            break;
+
+        case "KeyN":
+            if (e.shiftKey && together.step) together.step(1);
             break;
 
         case "KeyC":

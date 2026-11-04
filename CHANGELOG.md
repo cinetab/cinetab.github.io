@@ -4,6 +4,43 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Watch-together rooms: YouTube queue
+- A **Queue** tab in the room panel while YouTube is on (it opens when YouTube starts), with each
+  video's thumbnail, title and who added it
+- Anyone who may share videos can add a link to the end of the queue or play it straight away;
+  a playlist link adds all its videos (up to 500 in the queue)
+- Drag videos to reorder them (or use the arrows on phones), remove them, or press ▶ to play one
+  now for everyone
+- The next video in the queue starts for everyone when one ends; videos that can't be played
+  outside YouTube are skipped
+- A YouTube link pasted in the *Now playing* bar while YouTube is on plays right after the current
+  video and keeps the queue
+- Coming back from YouTube (after following one of its own links in the player) opens the queue
+  ready for the link, with a paste button; a link can also be dropped onto the queue
+- *Previous* / *Next* buttons beside the player's play button while the queue has more than one
+  video, and `Shift` + `P` / `N`
+
+### Rooms on campus, office and hostel Wi-Fi
+- People on the same Wi-Fi couldn't join each other's rooms on networks that block multicast
+  (browsers hide each device's local address behind a name only multicast can look up, and such
+  firewalls don't loop traffic back through the shared public address)
+- *Help devices find each other*: a tick box in the create and join dialogs, *Help people on this
+  Wi-Fi connect* in the room's Settings, and *Same Wi-Fi: try again* when joining fails. The
+  browser asks for the microphone once and CineTab turns it straight off; with that permission
+  browsers use the real local address, and either side turning it on is enough
+- *Check my network* says whether this device is hidden from others on the same Wi-Fi, and fixes it
+- A failed join now explains the same-Wi-Fi case and what to try
+
+### Player
+- **More** menu (⋮) in the controls:
+  - Picture shape: Fit, Fill (cropped to the screen), Stretch, 16:9, 4:3 or 21:9; remembered in
+    this browser
+  - Volume boost: 150%, 200% or 300%, with a limiter against distortion. It works for files and
+    for a room's stream, and only changes what you hear (guests hear the host's normal volume).
+    YouTube's player keeps its own shape and volume
+
 ## [1.2.8] - 2026-11-04
 
 ### Watch-together rooms: YouTube together

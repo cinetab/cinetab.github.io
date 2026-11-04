@@ -106,6 +106,16 @@
     ytInput = ytForm.querySelector(".room-yt-input"),
     ytHint = ytForm.querySelector(".room-yt-hint"),
     ytMount = document.querySelector(".yt-mount"),
+    queueTabBtn = panel.querySelector('.room-tab-btn[data-tab="queue"]'),
+    queueTab = panel.querySelector(".room-tab-queue"),
+    queueForm = queueTab.querySelector(".room-queue-form"),
+    queueInput = queueTab.querySelector(".room-queue-input"),
+    queuePasteBtn = queueTab.querySelector(".room-queue-paste"),
+    queueHint = queueTab.querySelector(".room-queue-hint"),
+    queueCount = queueTab.querySelector(".room-queue-count"),
+    queueList = queueTab.querySelector(".room-queue"),
+    prevTrackBtn = document.querySelector(".container .prev-track"),
+    nextTrackBtn = document.querySelector(".container .next-track"),
     settingInputs = hostSettings.querySelectorAll("[data-setting]"),
     qualityField = hostSettings.querySelector(".room-quality"),
     streamNote = panel.querySelector(".room-stream-note"),
@@ -645,6 +655,10 @@
         nowBar.classList.remove("live");
         nowList.hidden = true;
         closeYouTubeForm();
+        queueTabBtn.hidden = true;
+        prevTrackBtn.hidden = nextTrackBtn.hidden = true;
+        queueList.replaceChildren();
+        if (activeTab === "queue") showTab("chat");
     };
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
@@ -937,11 +951,12 @@
     // `stream`: whether guests can watch it as a stream (a guest's video always comes that way).
     const currentMedia = () => {
         if (room.yt) {
+            // Each video in the queue is its own item, even the same video added twice
             const y = room.yt;
             return {
-                name: `youtube:${y.id}`, size: 0, duration: y.duration, title: y.title || "YouTube video", audio: false,
+                name: `youtube:${y.queue[y.index].k}:${y.id}`, size: 0, duration: y.duration, title: y.title || "YouTube video", audio: false,
                 from: y.by.id, fromName: y.by.name, stream: false,
-                yt: { id: y.id, list: y.list, index: y.index, count: y.ids ? y.ids.length : 1 }
+                yt: { id: y.id, index: y.index, count: y.queue.length }
             };
         }
         if (room.presenter) return { ...room.presentFile, from: room.presenter.id, fromName: room.presenter.name, stream: true };
@@ -1330,6 +1345,7 @@
             file: currentMedia()
         });
         sendSubtitles(peer);
+        if (room.yt) send(peer, queueMessage());
         renderRequests();
         shareMembers();
         updateStreams();
@@ -1422,9 +1438,12 @@
             // A guest shares a YouTube video or playlist
             if (room.settings.media !== true || !allow(peer, "youtube", 5, 10000)) return;
             const ref = validYouTube(message);
-            if (ref) setYouTube(peer, ref);
+            if (ref) setYouTube(peer, ref, ["now", "end", "play"].includes(message.where) ? message.where : "now");
         } else if (message.t === "ytstep") {
             if (room.yt && room.settings.control && allow(peer, "ytstep", 6, 5000) && (message.step === 1 || message.step === -1)) ytStep(message.step);
+        } else if (message.t === "queue-op") {
+            // Play one now, move one, or take one out of the YouTube queue
+            if (room.settings.media === true && allow(peer, "queue-op", 20, 10000)) queueOp(peer, message);
         } else if (message.t === "remove") {
             if (room.settings.media === true && allow(peer, "remove", 4, 10000)) removeMedia(peer);
         } else if (message.t === "want") {
@@ -2023,12 +2042,12 @@
         if (!room || together.stream !== ytControls) return;
         yt.error = YT_ERRORS[e.data] || "YouTube couldn't play this video.";
         ytTick();
-        // The host skips a video that can't be played to the next one in the playlist
+        // The host skips a video that can't be played to the next one in the queue
         if (room.role !== "host" || !room.yt || yt.loaded !== room.yt.id) return;
         const y = room.yt;
         const title = y.title || "a video";
-        if (y.ids && y.index + 1 < y.ids.length) {
-            notice(`Skipped ${title === "a video" ? title : `“${title}”`} in the playlist: ${yt.error.toLowerCase()}`);
+        if (y.index + 1 < y.queue.length) {
+            notice(`Skipped ${title === "a video" ? title : `“${title}”`} in the queue: ${yt.error.toLowerCase()}`);
             const id = y.id;
             setTimeout(() => room && room.yt === y && y.id === id && ytStep(1), 2000);
         } else {
@@ -2036,7 +2055,12 @@
         }
     };
 
-    // ---------- The host's side of a YouTube video: the clock, titles, playlists
+    // ---------- The host's side of a YouTube video: the clock, the queue, titles
+    // The room watches a queue of YouTube videos. Anyone who may share videos can add links (a
+    // playlist adds all its videos), reorder, remove, or play one straight away. `room.yt.index` is
+    // the video that's on; `id`, `title` and `by` describe it.
+
+    const QUEUE_MAX = 500;
 
     // The video ids of a public or unlisted playlist, from a hidden player (null if it can't be read)
     const resolvePlaylist = list => ytApi().then(api => new Promise(resolve => {
@@ -2055,7 +2079,7 @@
                 helper.destroy();
             } catch (e) {}
             holder.remove();
-            resolve(ids && ids.length ? ids.filter(id => YT_ID.test(id)).slice(0, 5000) : null);
+            resolve(ids && ids.length ? ids.filter(id => YT_ID.test(id)).slice(0, QUEUE_MAX) : null);
         };
         const timer = setTimeout(() => finish(null), 15000);
         helper = new api.Player(mount, {
@@ -2075,53 +2099,145 @@
         });
     }), () => null);
 
-    // `by`: whoever shared the link (the host or a guest)
-    const setYouTube = async (by, ref) => {
-        const token = room.ytToken = Signaling.newId();
-        const sharer = { id: by.id, name: by.name };
-        if (ref.id) startYouTube(sharer, { id: ref.id, list: ref.list, ids: ref.list ? null : [ref.id], index: 0, start: ref.start });
-        else addMessage({ system: true, text: "Opening the YouTube playlist…" });
-        if (!ref.list) return;
-        const ids = await resolvePlaylist(ref.list);
-        if (!room || room.role !== "host" || room.ytToken !== token) return;
-        if (!ids) {
-            if (ref.id) {
-                room.yt.ids = [ref.id];
-                return shareFile();
-            }
-            return notice(`Couldn't open the YouTube playlist ${sharer.name} shared. It may be private, or YouTube didn't answer.`);
-        }
-        if (ref.id) {
-            // Already playing: the rest of the playlist comes after it
-            let index = ids.indexOf(ref.id);
-            if (index < 0) {
-                ids.unshift(ref.id);
-                index = 0;
-            }
-            room.yt.ids = ids;
-            room.yt.index = index;
-            return shareFile();
-        }
-        startYouTube(sharer, { id: ids[0], list: ref.list, ids, index: 0, start: 0 });
+    const queueItem = (id, by) => ({ k: Signaling.newId().slice(0, 10), id, title: "", by });
+
+    // The queue as guests get it
+    const queueMessage = () => ({
+        t: "queue",
+        index: room.yt ? room.yt.index : 0,
+        items: room.yt ? room.yt.queue.map(item => ({ k: item.k, id: item.id, title: item.title, by: item.by.name })) : []
+    });
+
+    // Changes to the queue go out together, a moment later
+    const shareQueue = () => {
+        clearTimeout(room.queueTimer);
+        const host = room;
+        room.queueTimer = setTimeout(() => {
+            if (room !== host) return;
+            const message = queueMessage();
+            broadcast(message);
+            room.queue = { index: message.index, items: message.items };
+            renderQueue();
+        }, 120);
     };
 
-    const startYouTube = (by, item) => {
+    // Titles of queued videos, from YouTube's oEmbed (a few at a time)
+    const fetchTitles = () => {
+        const host = room;
+        const y = host && host.role === "host" && host.yt;
+        if (!y) return;
+        while ((host.titleFetches || 0) < 4) {
+            const item = y.queue.find(entry => !entry.title && !entry.asked);
+            if (!item) return;
+            item.asked = true;
+            host.titleFetches = (host.titleFetches || 0) + 1;
+            fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${item.id}`)}`)
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const title = data && clean(data.title, 200);
+                    if (title && room === host && !item.title) titleKnown(item, title);
+                })
+                .catch(() => {})
+                .finally(() => {
+                    host.titleFetches--;
+                    if (room === host) fetchTitles();
+                });
+        }
+    };
+
+    const titleKnown = (item, title) => {
+        item.title = title;
+        const y = room.yt;
+        if (y && y.queue[y.index] === item) {
+            y.title = title;
+            shareFile();
+            if (together.stream === ytControls) videoTitle.textContent = audioTitle.textContent = title;
+        }
+        shareQueue();
+    };
+
+    // The video at `index` becomes the one everyone watches, from the start (or `start` seconds)
+    const playQueued = (index, start = 0) => {
+        const y = room.yt;
+        const item = y && y.queue[index];
+        if (!item) return;
+        y.index = index;
+        y.id = item.id;
+        y.title = item.title;
+        y.by = item.by;
+        y.duration = 0;
+        room.state = { paused: false, time: start, rate: room.state ? room.state.rate : 1, at: now() };
+        shareFile();
+        broadcast(stateMessage());
+        shareQueue();
+        ytTick();
+    };
+
+    // A YouTube link from `by` (the host or a guest). `where`: "end" of the queue, "play" (right
+    // after the current video, and straight away), or "now" (a new queue; also when nothing's on)
+    const setYouTube = async (by, ref, where = "now") => {
+        const sharer = { id: by.id, name: by.name };
+        if (!room.yt) where = "now";
+        if (where === "now") {
+            const token = room.ytToken = Signaling.newId();
+            if (ref.id) startYouTube([queueItem(ref.id, sharer)], ref.start);
+            else addMessage({ system: true, text: "Opening the YouTube playlist…" });
+            if (!ref.list) return;
+            const ids = await resolvePlaylist(ref.list);
+            if (!room || room.role !== "host" || room.ytToken !== token) return;
+            if (!ids) {
+                if (!ref.id) notice(`Couldn't open the YouTube playlist ${sharer.name} shared. It may be private, or YouTube didn't answer.`);
+                return;
+            }
+            if (!ref.id) return startYouTube(ids.map(id => queueItem(id, sharer)), 0);
+            // Already playing the linked video: the rest of the playlist goes around it
+            const y = room.yt;
+            const at = ids.indexOf(ref.id);
+            const before = at > 0 ? ids.slice(0, at) : [];
+            const after = (at >= 0 ? ids.slice(at + 1) : ids).slice(0, QUEUE_MAX - y.queue.length - before.length);
+            y.queue.splice(y.index + 1, 0, ...after.map(id => queueItem(id, sharer)));
+            y.queue.splice(y.index, 0, ...before.map(id => queueItem(id, sharer)));
+            y.index += before.length;
+            shareFile();
+            shareQueue();
+            return fetchTitles();
+        }
+        // Into the queue of what's on
+        const y = room.yt;
+        let ids = ref.list ? await resolvePlaylist(ref.list) : null;
+        if (!ids && ref.id) ids = [ref.id];
+        if (!room || room.role !== "host" || room.yt !== y) return;
+        if (!ids) return notice(`Couldn't open the YouTube playlist ${sharer.name} added. It may be private, or YouTube didn't answer.`);
+        const space = QUEUE_MAX - y.queue.length;
+        if (space <= 0) return notice(`The queue is full (${QUEUE_MAX} videos).`);
+        const items = ids.slice(0, space).map(id => queueItem(id, sharer));
+        const at = where === "end" ? y.queue.length : y.index + 1;
+        y.queue.splice(at, 0, ...items);
+        if (where === "play") playQueued(at, items.length === 1 ? ref.start : 0);
+        else {
+            notice(items.length > 1 ? `${sharer.name} added ${items.length} videos to the queue` : `${sharer.name} added a video to the queue`);
+            shareFile();
+            shareQueue();
+        }
+        fetchTitles();
+    };
+
+    const startYouTube = (items, start = 0) => {
         // Whatever was playing gives way: a guest's video, or the host's own file
         if (room.presenter) {
-            send(room.presenter, { t: "present-end", reason: "replaced", by: by.name });
+            send(room.presenter, { t: "present-end", reason: "replaced", by: items[0].by.name });
             room.presenter = room.presentFile = room.presentCues = room.remote = null;
         }
         if (!together.stream) releaseMedia();
         stopCapture();
-        room.yt = { id: item.id, list: item.list, ids: item.ids, index: item.index, title: "", duration: 0, by };
-        room.state = { paused: false, time: item.start || 0, rate: 1, at: now() };
-        room.cues = null;
-        shareFile();
+        room.yt = { queue: items, index: 0, id: null, title: "", by: items[0].by, duration: 0 };
+        room.state = room.cues = null;
+        playQueued(0, start);
         enterYouTube();
-        broadcast(stateMessage());
         sendSubtitles();
         updateStreams();
         shareMembers();
+        fetchTitles();
     };
 
     // Back to no video (the host's player shows "Select a movie")
@@ -2132,10 +2248,41 @@
         leaveStream();
         uploadOverlay.classList.remove("hidden");
         shareFile();
+        shareQueue();
         broadcast(stateMessage());
         sendSubtitles();
         updateStreams();
         shareMembers();
+    };
+
+    // Someone's change to the queue: play one now, move one, or take one out
+    const queueOp = (by, message) => {
+        const y = room.yt;
+        if (!y || typeof message.k !== "string") return;
+        const at = y.queue.findIndex(item => item.k === message.k);
+        if (at < 0) return;
+        if (message.op === "play") {
+            if (at !== y.index) playQueued(at);
+        } else if (message.op === "remove") {
+            const [item] = y.queue.splice(at, 1);
+            if (!y.queue.length) {
+                clearYouTube();
+                return notice(`${by.name} removed “${item.title || "the last video"}”, the end of the queue`);
+            }
+            if (at < y.index) y.index--;
+            else if (at === y.index) return playQueued(Math.min(at, y.queue.length - 1));
+            shareFile();
+            shareQueue();
+        } else if (message.op === "move" && Number.isInteger(message.to)) {
+            const to = Math.max(0, Math.min(y.queue.length - 1, message.to));
+            if (to === at) return;
+            const current = y.queue[y.index];
+            const [item] = y.queue.splice(at, 1);
+            y.queue.splice(to, 0, item);
+            y.index = y.queue.indexOf(current);
+            shareFile();
+            shareQueue();
+        }
     };
 
     // Someone's play, pause, jump or speed change, for everyone
@@ -2169,25 +2316,16 @@
         renderHomeBar();
     };
 
-    // The previous or next video of a playlist
+    // The previous or next video in the queue
     const ytStep = step => {
         const y = room.yt;
-        const index = y && y.ids ? y.index + step : -1;
-        if (index < 0 || index >= y.ids.length) return;
-        y.index = index;
-        y.id = y.ids[index];
-        y.title = "";
-        y.duration = 0;
-        room.state = { paused: false, time: 0, rate: room.state ? room.state.rate : 1, at: now() };
-        shareFile();
-        broadcast(stateMessage());
-        ytTick();
+        if (y && y.index + step >= 0 && y.index + step < y.queue.length) playQueued(y.index + step);
     };
 
-    // The end of a video: the next one in the playlist, or stop at the end
+    // The end of a video: the next one in the queue, or stop at the end
     const ytFinished = () => {
         const y = room.yt;
-        if (y.ids && y.index + 1 < y.ids.length) return ytStep(1);
+        if (y.index + 1 < y.queue.length) return ytStep(1);
         room.state = { paused: true, time: y.duration || expectedTime(), rate: room.state.rate, at: now() };
         broadcast(stateMessage());
         ytTick();
@@ -2204,7 +2342,7 @@
                 if (data && data.video_id === y.id) {
                     const title = clean(data.title, 200);
                     if (title && title !== y.title) {
-                        y.title = title;
+                        titleKnown(y.queue[y.index], title);
                         changed = true;
                     }
                     // Only while the video itself plays, not an ad
@@ -2215,10 +2353,7 @@
                     }
                 }
             } catch (e) {}
-            if (changed) {
-                shareFile();
-                if (together.stream === ytControls) videoTitle.textContent = audioTitle.textContent = room.file.title;
-            }
+            if (changed) shareFile();
         }
         if (y.duration && room.state && !room.state.paused && expectedTime() >= y.duration - 0.3) ytFinished();
     };
@@ -2585,11 +2720,25 @@
         // A playlist: which video, and the previous / next one for everyone
         const list = youtube && file.yt.count > 1 ? file.yt : null;
         nowList.hidden = !list;
+        // ... in the bar and beside the player's play button
+        prevTrackBtn.hidden = nextTrackBtn.hidden = !list;
         if (list) {
             const control = host || room.settings.control;
             nowCount.textContent = `${list.index + 1} of ${list.count}`;
-            nowPrevBtn.disabled = !control || list.index === 0;
-            nowNextBtn.disabled = !control || list.index + 1 >= list.count;
+            nowPrevBtn.disabled = prevTrackBtn.disabled = !control || list.index === 0;
+            nowNextBtn.disabled = nextTrackBtn.disabled = !control || list.index + 1 >= list.count;
+        }
+        // The YouTube queue gets its own tab while YouTube is on, and opens when it starts
+        queueTabBtn.hidden = !youtube;
+        if (youtube && !room.queueShown) {
+            room.queueShown = true;
+            if (document.activeElement !== chatInput) {
+                showPanel(true);
+                showTab("queue");
+            }
+        } else if (!youtube) {
+            room.queueShown = false;
+            if (activeTab === "queue") showTab("chat");
         }
     };
 
@@ -2629,12 +2778,220 @@
         if (!canShareYouTube()) return showYouTubeHint(`${room.hostName || "The host"} isn't letting guests share videos right now.`, true);
         ytInput.value = "";
         closeYouTubeForm();
-        if (room.role === "host") return setYouTube({ id: room.id, name: room.name }, ref);
+        // While YouTube is on, it plays right after the current video and keeps the queue
+        if (room.role === "host") return setYouTube({ id: room.id, name: room.name }, ref, "play");
         if (room.presenting) {
             stopPresenting(true);
             if (room.file && room.file.from === room.id) room.file = null;
         }
-        send(room.peer, { t: "youtube", ...ref });
+        send(room.peer, { t: "youtube", ...ref, where: "play" });
+    });
+
+    // ---------- The YouTube queue tab
+
+    const queueHintText = queueHint.textContent;
+    const showQueueHint = (text = queueHintText, error = false) => {
+        queueHint.textContent = text;
+        queueHint.classList.toggle("error", error);
+    };
+
+    const renderQueue = () => {
+        if (!room) return;
+        const queue = room.queue || { index: 0, items: [] };
+        const edit = canShareYouTube();
+        const items = queue.items;
+        queueForm.hidden = !edit;
+        queueCount.textContent = items.length ? `${Math.min(queue.index + 1, items.length)} of ${items.length}` : "";
+        const scrolledTo = queueList.dataset.current;
+        queueList.replaceChildren(...items.map((item, i) => {
+            const current = i === queue.index;
+            const li = el("li", `room-queue-item${current ? " current" : i < queue.index ? " played" : ""}`);
+            li.dataset.k = item.k;
+            li.dataset.i = i;
+            li.draggable = edit;
+            if (edit) {
+                const grip = el("span", "room-queue-grip");
+                grip.title = "Drag to move";
+                grip.append(el("i", "fa-solid fa-grip-vertical"));
+                li.append(grip);
+            }
+            const thumb = el("img", "room-queue-thumb");
+            thumb.src = `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`;
+            thumb.alt = "";
+            thumb.loading = "lazy";
+            thumb.draggable = false;
+            const info = el("span", "room-queue-info");
+            const title = el("b", null, item.title || "YouTube video");
+            title.title = item.title || item.id;
+            info.append(title, el("small", null, current ? "Now playing" : `Added by ${item.by}`));
+            li.append(thumb, info);
+            if (edit) {
+                const actions = el("span", "room-queue-actions");
+                const action = (op, icon, label, disabled = false) => {
+                    const button = el("button", "room-icon-btn");
+                    button.type = "button";
+                    button.dataset.q = op;
+                    button.title = label;
+                    button.setAttribute("aria-label", label);
+                    button.disabled = disabled;
+                    button.append(el("i", `fa-solid ${icon}`));
+                    return button;
+                };
+                if (!current) actions.append(action("play", "fa-play", "Play this now, for everyone"));
+                actions.append(
+                    action("up", "fa-arrow-up", "Move up", i === 0),
+                    action("down", "fa-arrow-down", "Move down", i === items.length - 1),
+                    action("remove", "fa-xmark", "Remove from the queue")
+                );
+                li.append(actions);
+            }
+            return li;
+        }));
+        // Keep the current video in view when it changes
+        const now = items[queue.index];
+        if (now && scrolledTo !== now.k) {
+            queueList.dataset.current = now.k;
+            const row = queueList.children[queue.index];
+            if (row && activeTab === "queue") row.scrollIntoView({ block: "nearest" });
+        }
+    };
+
+    const sendQueueOp = op => {
+        if (!room) return;
+        if (room.role === "host") queueOp({ id: room.id, name: room.name }, op);
+        else send(room.peer, { t: "queue-op", ...op });
+    };
+
+    queueList.addEventListener("click", e => {
+        const button = e.target.closest("button[data-q]");
+        const row = button && button.closest("li[data-k]");
+        if (!row) return;
+        const k = row.dataset.k;
+        const at = +row.dataset.i;
+        const op = button.dataset.q;
+        if (op === "up" || op === "down") sendQueueOp({ op: "move", k, to: at + (op === "up" ? -1 : 1) });
+        else sendQueueOp({ op, k });
+    });
+
+    // Adding a link: to the end of the queue, or to play right away
+    const addToQueue = (text, where) => {
+        if (!room) return false;
+        const ref = parseYouTube(text);
+        if (!ref) {
+            showQueueHint("That isn't a link to a YouTube video or playlist.", true);
+            return false;
+        }
+        if (!canShareYouTube()) {
+            showQueueHint(`${room.hostName || "The host"} isn't letting guests share videos right now.`, true);
+            return false;
+        }
+        if (room.role === "host") setYouTube({ id: room.id, name: room.name }, ref, where);
+        else send(room.peer, { t: "youtube", ...ref, where });
+        showQueueHint(ref.list && !ref.id ? "Adding the playlist…" : where === "play" ? "Playing it now…" : "Added to the queue.");
+        setTimeout(() => queueHint.textContent !== queueHintText && !queueHint.classList.contains("error") && showQueueHint(), 3000);
+        return true;
+    };
+
+    queueForm.addEventListener("submit", e => {
+        e.preventDefault();
+        const where = e.submitter && e.submitter.value === "play" ? "play" : "end";
+        if (addToQueue(queueInput.value, where)) queueInput.value = "";
+    });
+    queueInput.addEventListener("input", () => queueHint.classList.contains("error") && showQueueHint());
+    queueInput.addEventListener("keydown", e => e.key === "Escape" && (e.stopPropagation(), queueInput.blur()));
+
+    // Paste: the link copied from YouTube's page
+    queuePasteBtn.addEventListener("click", async () => {
+        try {
+            const text = (await navigator.clipboard.readText()).trim();
+            queueInput.value = text;
+            if (parseYouTube(text)) showQueueHint("Add it to the queue, or play it now.");
+            else showQueueHint("What you copied isn't a YouTube link.", true);
+        } catch (error) {
+            showQueueHint("This browser didn't allow reading what you copied. Paste the link with Ctrl+V (or a long press).", true);
+        }
+        queueInput.focus();
+    });
+
+    // Drag to reorder, or drop a link (from YouTube's page in another window) onto the queue
+    let draggedK = null;
+    const clearDrop = () => queueList.querySelectorAll(".drop-before, .drop-after").forEach(row => row.classList.remove("drop-before", "drop-after"));
+    queueList.addEventListener("dragstart", e => {
+        const row = e.target.closest && e.target.closest("li[data-k]");
+        if (!row) return;
+        draggedK = row.dataset.k;
+        row.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/x-cinetab-queue", draggedK);
+    });
+    queueList.addEventListener("dragend", () => {
+        draggedK = null;
+        clearDrop();
+        queueList.querySelectorAll(".dragging").forEach(row => row.classList.remove("dragging"));
+    });
+    const dropSpot = e => {
+        const row = e.target.closest && e.target.closest("li[data-k]");
+        if (!row) return null;
+        const rect = row.getBoundingClientRect();
+        return { row, after: e.clientY > rect.top + rect.height / 2 };
+    };
+    queueTab.addEventListener("dragover", e => {
+        const link = !draggedK && [...e.dataTransfer.types].some(type => type === "text/uri-list" || type === "text/plain");
+        if (!draggedK && !link) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (link) {
+            e.dataTransfer.dropEffect = "copy";
+            return queueTab.classList.add("drop-link");
+        }
+        clearDrop();
+        const spot = dropSpot(e);
+        if (spot) spot.row.classList.add(spot.after ? "drop-after" : "drop-before");
+    });
+    queueTab.addEventListener("dragleave", e => {
+        if (!queueTab.contains(e.relatedTarget)) {
+            queueTab.classList.remove("drop-link");
+            clearDrop();
+        }
+    });
+    queueTab.addEventListener("drop", e => {
+        e.preventDefault();
+        e.stopPropagation();
+        queueTab.classList.remove("drop-link");
+        if (!draggedK) {
+            const text = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+            const link = text.split(/\s+/).find(part => /youtu/i.test(part)) || text;
+            if (link) addToQueue(link, "end");
+            return;
+        }
+        const spot = dropSpot(e);
+        const from = room && room.queue ? room.queue.items.findIndex(item => item.k === draggedK) : -1;
+        clearDrop();
+        if (!spot || from < 0) return;
+        let to = +spot.row.dataset.i + (spot.after ? 1 : 0);
+        if (from < to) to--;
+        if (to !== from) sendQueueOp({ op: "move", k: draggedK, to });
+    });
+
+    // YouTube's own links in its player ("More videos", the title) open YouTube in a new tab, and
+    // the browser doesn't tell CineTab which video. When someone comes back from there, the queue
+    // is ready for the link.
+    let leftForYouTube = false;
+    window.addEventListener("blur", () => {
+        if (together.stream !== ytControls) return;
+        setTimeout(() => {
+            const frame = document.activeElement;
+            if (document.hidden && frame && frame.tagName === "IFRAME" && ytMount.contains(frame)) leftForYouTube = true;
+        }, 400);
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden || !leftForYouTube) return;
+        leftForYouTube = false;
+        if (!room || together.stream !== ytControls || !canShareYouTube()) return;
+        showPanel(true);
+        showTab("queue");
+        showQueueHint("Back from YouTube? Copy the video's link there, then paste it here (or press the paste button) to add it to the queue.");
+        queueInput.focus();
     });
 
     // A playlist's previous / next video, for everyone
@@ -2646,6 +3003,17 @@
     };
     nowPrevBtn.addEventListener("click", () => stepPlaylist(-1));
     nowNextBtn.addEventListener("click", () => stepPlaylist(1));
+    prevTrackBtn.addEventListener("click", () => stepPlaylist(-1));
+    nextTrackBtn.addEventListener("click", () => stepPlaylist(1));
+    // Shift + N / P (see script.js)
+    together.step = step => {
+        const file = room && room.file;
+        if (!file || !file.yt || file.yt.count < 2) return;
+        const index = file.yt.index + step;
+        if (index < 0 || index >= file.yt.count) return;
+        stepPlaylist(step);
+        showFeedback(step > 0 ? "fa-forward-step" : "fa-backward-step", step > 0 ? "Next video" : "Previous video");
+    };
 
     nowShareBtn.addEventListener("click", shareVideo);
     nowStopBtn.addEventListener("click", () => {
@@ -2794,6 +3162,16 @@
             }
             case "pcontrol":
                 return applyAsked(message);
+            case "queue": {
+                // The YouTube queue, from the host
+                if (!Array.isArray(message.items)) return;
+                const items = message.items.slice(0, 500)
+                    .filter(item => item && typeof item.k === "string" && YT_ID.test(item.id))
+                    .map(item => ({ k: item.k.slice(0, 16), id: item.id, title: clean(item.title, 200), by: clean(item.by, 30) || "someone" }));
+                const index = Number.isInteger(message.index) ? Math.max(0, Math.min(items.length - 1, message.index)) : 0;
+                guest.queue = items.length ? { index, items } : null;
+                return renderQueue();
+            }
             case "present-end": {
                 // The host ended this guest's sharing: someone else's video, removed, or not allowed
                 if (!guest.presenting) return;
@@ -2816,6 +3194,7 @@
                     renderState();
                     rememberRoom();
                 }
+                renderQueue();
                 return refreshGuestView();
             case "members": {
                 if (!Array.isArray(message.members)) return;
@@ -2893,9 +3272,66 @@
         }
     };
 
-    // What this network allows: reaching the relays, direct connections, a TURN relay
+    // ---------- Same Wi-Fi
+    // Browsers hide this device's local network address behind a random name ("….local") that
+    // other devices on the network look up by multicast. Campus, office and hostel Wi-Fi often
+    // blocks that, and their firewalls don't loop traffic back to the shared public address, so
+    // devices on the same Wi-Fi can't find each other. Browsers use the real local address for
+    // sites allowed to use the microphone, so asking once (and stopping the microphone straight
+    // away) lets them connect directly. One side of a connection is enough.
+    const LOCALNET_KEY = "cinetab:room-localnet";
+
+    const micPermission = async () => {
+        try {
+            return (await navigator.permissions.query({ name: "microphone" })).state;
+        } catch (e) {
+            return "unknown";
+        }
+    };
+
+    // Needs a click or a key press; true if the microphone is allowed
+    const allowLocalNetwork = async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+            storage.set(LOCALNET_KEY, "1");
+            renderLocalNetwork();
+            return true;
+        } catch (e) {
+            toast(e.name === "NotAllowedError"
+                ? "The microphone wasn't allowed, so devices on this Wi-Fi may not find each other"
+                : "Couldn't turn on local network connections in this browser");
+            return false;
+        }
+    };
+
+    const localnetSwitch = panel.querySelector(".room-localnet-switch");
+    const localnetNote = panel.querySelector(".room-localnet-note");
+    const localnetText = localnetNote.textContent;
+    async function renderLocalNetwork() {
+        const granted = await micPermission() === "granted";
+        localnetSwitch.checked = granted;
+        localnetSwitch.disabled = granted;
+        localnetNote.textContent = granted
+            ? "On: the microphone is allowed for this site (it stays off unless you turn it on). Undo it in the browser's site settings."
+            : localnetText;
+        [createForm, joinForm].forEach(form => {
+            const box = field(form, "localnet");
+            if (granted) box.checked = true;
+        });
+    }
+    localnetSwitch.addEventListener("change", async () => {
+        if (!localnetSwitch.checked) return;
+        localnetSwitch.checked = await allowLocalNetwork();
+        if (localnetSwitch.checked) toast("Devices on this Wi-Fi can now find this one");
+    });
+    renderLocalNetwork();
+
+    // What this network allows: reaching the relays, direct connections, a TURN relay, and
+    // whether this device shows its local network address
     const iceCheck = () => new Promise(resolve => {
-        const found = { host: false, srflx: false, relay: false };
+        const found = { host: false, srflx: false, relay: false, local: false };
         const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         let done = false;
         const finish = () => {
@@ -2906,7 +3342,12 @@
             resolve(found);
         };
         const timer = setTimeout(finish, 6000);
-        pc.onicecandidate = e => e.candidate ? found[e.candidate.type] = true : finish();
+        pc.onicecandidate = e => {
+            if (!e.candidate) return finish();
+            found[e.candidate.type] = true;
+            const address = e.candidate.address || e.candidate.candidate.split(" ")[4] || "";
+            if (e.candidate.type === "host" && address && !address.endsWith(".local")) found.local = true;
+        };
         pc.createDataChannel("check");
         pc.createOffer().then(offer => pc.setLocalDescription(offer)).catch(finish);
     });
@@ -2923,7 +3364,9 @@
             ice.srflx
                 ? { ok: true, title: "Direct connections over the internet work", text: "People on other networks can connect to you directly." }
                 : { ok: false, title: "This network blocks direct connections over the internet", text: RELAY_AVAILABLE ? "People on other networks can still connect through the TURN relay." : "People on other networks can't connect to you unless a TURN relay is set up for CineTab (see its README). Mobile data or a hotspot usually works." },
-            { ok: ice.host ? null : false, title: "Same Wi-Fi", text: ice.host ? "People on this same network connect to each other directly, which is the fastest, unless the network keeps devices apart (some campus and hotel Wi-Fi does). If they can't connect, use a phone hotspot for everyone." : "This browser doesn't offer local connections." }
+            !ice.host ? { ok: false, title: "Same Wi-Fi", text: "This browser doesn't offer local connections." }
+                : ice.local ? { ok: true, title: "Same Wi-Fi: devices can find this one", text: "People on this network can connect to you directly, the fastest way, unless the Wi-Fi keeps devices apart altogether (some campus and hotel Wi-Fi does; then a phone hotspot for everyone works)." }
+                : { ok: null, title: "Same Wi-Fi: this device is hidden", text: "Browsers hide this device behind a name that campus, office and hostel Wi-Fi often can't look up, so people on the same Wi-Fi may not connect. “Help devices find this one” below fixes that (the browser asks for the microphone; it stays off)." }
         ];
         if (RELAY_AVAILABLE) list.push(ice.relay
             ? { ok: true, title: "The TURN relay is reachable", text: "Connections work even where direct ones are blocked." }
@@ -2933,7 +3376,12 @@
             icon: good ? "fa-circle-check" : "fa-triangle-exclamation",
             title: good ? "This network looks good for rooms" : "This network blocks some of what rooms need",
             list,
-            actions: [{ label: "Back", icon: "fa-arrow-left", onClick: back }],
+            actions: [
+                ice.host && !ice.local && { label: "Help devices find this one", icon: "fa-wifi", onClick: async () => {
+                    if (await allowLocalNetwork()) checkNetwork(back);
+                } },
+                { label: "Back", icon: "fa-arrow-left", secondary: ice.host && !ice.local, onClick: back }
+            ].filter(Boolean),
             onClose: back
         });
     };
@@ -2945,7 +3393,8 @@
 
     const cantConnect = () => failedToJoin(
         "Couldn't connect to the host",
-        "The room was found, but your two networks didn't allow a direct connection. Some mobile data and office or school networks block it. Try again on a different network (home Wi-Fi or a phone hotspot) on either side."
+        "The room was found, but your devices couldn't connect. On the same Wi-Fi as the host (campus, office, hostel)? That kind of Wi-Fi often hides devices from each other: try “Same Wi-Fi” below, and ask the host to turn on “Help people on this Wi-Fi connect” in the room's Settings. Otherwise one of the networks blocks direct connections: try a phone hotspot or home Wi-Fi on either side.",
+        true
     );
 
     const notFound = () => failedToJoin(
@@ -2953,17 +3402,24 @@
         "Check the room code and password. The host's CineTab tab also has to be open."
     );
 
-    const failedToJoin = (title, text) => {
+    const failedToJoin = async (title, text, offerLocal = false) => {
         const guest = room;
         if (guest.joinedOnce) return ended(["Connection lost", `Couldn't reconnect to ${guest.hostName}.`]);
         const retry = { code: Signaling.formatCode(guest.code), password: guest.password };
         teardown();
+        // Joining again with the real local address, unless this browser already shows it
+        const local = offerLocal && await micPermission() !== "granted";
         showStatus({
             icon: "fa-triangle-exclamation", title, text,
             actions: [
-                { label: "Try again", icon: "fa-rotate-right", onClick: () => openJoin(retry) },
+                local && { label: "Same Wi-Fi: try again", icon: "fa-wifi", onClick: async () => {
+                    if (!await allowLocalNetwork()) return;
+                    openJoin(retry);
+                    joinForm.requestSubmit();
+                } },
+                { label: "Try again", icon: "fa-rotate-right", secondary: local, onClick: () => openJoin(retry) },
                 { label: "Check my network", icon: "fa-stethoscope", secondary: true, onClick: () => checkNetwork(() => openJoin(retry)) }
-            ],
+            ].filter(Boolean),
             onClose: closeDialog
         });
     };
@@ -3188,6 +3644,7 @@
         clearInterval(old.streamTimer);
         clearTimeout(old.pingTimer);
         clearTimeout(old.pstateTimer);
+        clearTimeout(old.queueTimer);
         clearTimeout(old.connectTimer);
         old.timers.forEach(clearInterval);
         if (old.role === "host") old.peers.forEach(closePeer);
@@ -3478,6 +3935,13 @@
         field(form, "name").value = storage.get(NAME_KEY) || "";
         picker.value = storage.get(AVATAR_KEY) || "";
         form.querySelector(".room-avatar-grid").hidden = true;
+        field(form, "localnet").checked = false;
+        renderLocalNetwork();
+    };
+
+    // "Same Wi-Fi" ticked: the microphone permission first (it stays off), then the room
+    const prepareLocalNetwork = async form => {
+        if (field(form, "localnet").checked && await micPermission() !== "granted") await allowLocalNetwork();
     };
 
     // `saved`: a remembered room to open again with the same code and password
@@ -3519,13 +3983,14 @@
     overlay.querySelectorAll(".room-cancel").forEach(button => button.addEventListener("click", closeDialog));
     createForm.querySelector(".room-new-password").addEventListener("click", () => field(createForm, "password").value = Signaling.newPassword());
 
-    createForm.addEventListener("submit", e => {
+    createForm.addEventListener("submit", async e => {
         e.preventDefault();
         const name = clean(field(createForm, "name").value, 30);
         const password = field(createForm, "password").value.trim();
         if (!name || password.length < 4) return;
         storage.set(NAME_KEY, name);
         storage.set(AVATAR_KEY, createPicker.value);
+        await prepareLocalNetwork(createForm);
         startHost({
             name, avatar: createPicker.value, password,
             title: clean(field(createForm, "title").value, 40),
@@ -3535,7 +4000,7 @@
         });
     });
 
-    joinForm.addEventListener("submit", e => {
+    joinForm.addEventListener("submit", async e => {
         e.preventDefault();
         const code = Signaling.normalizeCode(field(joinForm, "code").value);
         const password = field(joinForm, "password").value.trim();
@@ -3547,6 +4012,7 @@
         if (error) return;
         storage.set(NAME_KEY, name);
         storage.set(AVATAR_KEY, joinPicker.value);
+        await prepareLocalNetwork(joinForm);
         const saved = savedRooms().find(item => item.code === code);
         startGuest({ code, password, name, avatar: joinPicker.value, relay: field(joinForm, "relay").checked,
             remember: field(joinForm, "remember").checked, ticket: saved?.ticket || null });
