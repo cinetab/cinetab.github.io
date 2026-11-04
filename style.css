@@ -2482,6 +2482,22 @@ kbd {
   color: #fff;
 }
 
+/* "Watched before": suggestions from the history, in place of the Videos / Playlists switch */
+.yt-results-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #c9c9d6;
+}
+
+.yt-results-label i {
+  font-size: 11px;
+  color: #3e97fd;
+}
+
 .yt-results-close {
   display: inline-flex;
   align-items: center;
@@ -5987,6 +6003,11 @@ body > .room-toasts {
   margin-bottom: 8px;
   padding: 4px 0 6px;
   background: #17171c;
+}
+
+/* Inside the "now playing" box, whose background is a little lighter */
+.room-now .yt-results-head {
+  background: #202025;
 }
 
 .room-panel .yt-results-close {

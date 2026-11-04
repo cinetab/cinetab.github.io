@@ -4,6 +4,16 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.2] - 2026-11-04
+
+### YouTube search in rooms
+- The room's YouTube box and the Queue tab suggest what you watched before (YouTube videos and
+  playlists, also from earlier rooms) as soon as you click into them, newest first, with when
+  you watched each one
+- Typing narrows the suggestions to the ones that match; Enter searches all of YouTube. A
+  playlist picked from them carries on from the video you were on
+- **Hide** (or Esc) puts the suggestions away; emptying the box brings them back
+
 ## [1.4.1] - 2026-11-04
 
 ### Fixed
@@ -318,6 +328,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.2
 [1.4.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.1
 [1.4.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.0
 [1.3.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.1

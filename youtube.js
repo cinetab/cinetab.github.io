@@ -200,12 +200,53 @@
     const views = n => n ? `${compactNumber ? compactNumber.format(n) : n} views` : "";
     const refOf = item => item.kind === "playlist" ? { id: null, list: item.list, start: 0 } : { id: item.id, list: null, start: 0 };
 
+    let relativeFormat = null;
+    try {
+        relativeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    } catch (e) {}
+    const watchedAgo = at => {
+        const seconds = (Date.now() - at) / 1000;
+        if (!relativeFormat || seconds < 60) return "Watched just now";
+        const [value, unit] = seconds < 3600 ? [seconds / 60, "minute"] : seconds < 86400 ? [seconds / 3600, "hour"]
+            : seconds < 86400 * 30 ? [seconds / 86400, "day"] : [seconds / (86400 * 30), "month"];
+        return `Watched ${relativeFormat.format(-Math.round(value), unit)}`;
+    };
+
+    // YouTube videos and playlists watched before in this browser (history.js) whose title or
+    // channel has every word of `filter`, most recent first, as search results
+    const watchedBefore = (filter = "", max = 8) => {
+        const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
+        return CineHistory.list()
+            .filter(entry => (entry.type === "video" && entry.id) || (entry.type === "playlist" && entry.list))
+            .filter(entry => {
+                const haystack = `${entry.title || ""} ${entry.videoTitle || ""} ${entry.channel || ""}`.toLowerCase();
+                return words.every(word => haystack.includes(word));
+            })
+            .slice(0, max)
+            .map(entry => entry.type === "playlist" ? {
+                kind: "playlist", id: entry.id || null, list: entry.list,
+                title: entry.title || entry.videoTitle || "YouTube playlist", channel: entry.channel || "",
+                thumb: entry.id ? thumbOf(entry.id) : "", count: entry.count || null, ago: watchedAgo(entry.at),
+                // The playlist from the video it was on (in a room, the rest of it goes around that one)
+                ref: { id: entry.id || null, list: entry.list, start: 0 }
+            } : {
+                kind: "video", id: entry.id, list: null,
+                title: entry.title || "YouTube video", channel: entry.channel || "", thumb: thumbOf(entry.id),
+                duration: entry.duration || null, live: !!entry.live, ago: watchedAgo(entry.at),
+                ref: { id: entry.id, list: null, start: 0 }
+            });
+    };
+
     // A search box's results: a Videos / Playlists switch, the results and "More results".
     // `actions`: [{ key, label, icon }], the first one is what a click on a result does;
     // `onPick(ref, key, item)` gets the chosen one. `input`: the search box; Clear empties it,
-    // and emptying it (or Esc in it) clears the results.
-    const createResults = ({ host, actions, onPick, input = null, compact = false }) => {
+    // and emptying it (or Esc in it) clears the results. `suggest`: while the box is empty or
+    // being typed in, it suggests what was watched before (matching what's typed); Enter searches.
+    const createResults = ({ host, actions, onPick, input = null, compact = false, suggest = false }) => {
         const head = el("div", "yt-results-head");
+        const label = el("span", "yt-results-label");
+        label.append(el("i", "fa-solid fa-clock-rotate-left"), el("span", null, "Watched before"));
+        label.hidden = true;
         const kinds = el("div", "yt-kinds");
         kinds.setAttribute("role", "radiogroup");
         kinds.setAttribute("aria-label", "Show");
@@ -226,7 +267,7 @@
         close.type = "button";
         close.title = input ? "Clear the search and its results (Esc)" : "Clear the results";
         close.append(el("i", "fa-solid fa-xmark"), el("span", null, "Clear"));
-        head.append(kinds, onYouTube, close);
+        head.append(label, kinds, onYouTube, close);
         const status = el("p", "yt-status");
         status.setAttribute("aria-live", "polite");
         const list = el("ul", `yt-result-list${compact ? " compact" : ""}`);
@@ -235,7 +276,17 @@
         host.replaceChildren(head, status, list, more);
         host.hidden = true;
 
-        const state = { query: "", kind: "video", next: null, items: [], token: 0, busy: false };
+        // `mode`: "search" (YouTube's results) or "history" (watched before)
+        const state = { query: "", kind: "video", next: null, items: [], token: 0, busy: false, mode: "search" };
+
+        const setMode = mode => {
+            state.mode = mode;
+            const history = mode === "history";
+            label.hidden = !history;
+            kinds.hidden = onYouTube.hidden = history;
+            close.lastChild.textContent = history ? "Hide" : "Clear";
+            close.title = history ? "Hide what you watched before (Esc)" : input ? "Clear the search and its results (Esc)" : "Clear the results";
+        };
 
         const showStatus = (message, kind = "") => {
             status.replaceChildren();
@@ -310,6 +361,7 @@
             query = text(query, 150);
             if (!query) return;
             const token = ++state.token;
+            setMode("search");
             state.query = query;
             state.kind = kind;
             state.busy = true;
@@ -349,7 +401,7 @@
             const button = e.target.closest("[data-act]");
             const row = button && button.closest(".yt-result");
             const item = row && state.items[+row.dataset.i];
-            if (item) onPick(refOf(item), button.dataset.act, item);
+            if (item) onPick(item.ref || refOf(item), button.dataset.act, item);
         });
         // `empty`: the search box too (the Clear button, Esc)
         const clear = (empty = false) => {
@@ -361,13 +413,47 @@
             host.hidden = true;
             if (empty && input) input.value = "";
         };
+
+        // What was watched before, matching `filter` (nothing to show: no list)
+        const showWatched = (filter = "") => {
+            const items = watchedBefore(filter);
+            state.token++;
+            state.query = "";
+            state.next = null;
+            state.items = items;
+            setMode("history");
+            list.replaceChildren(...items.map(itemRow));
+            more.hidden = true;
+            showStatus("");
+            host.hidden = !items.length;
+        };
+
+        // The button hides suggestions, and clears a search; focusing the box afterwards doesn't
+        // bring the suggestions straight back
+        let quietFocus = false;
         close.addEventListener("click", () => {
-            clear(true);
-            if (input) input.focus();
+            const history = state.mode === "history";
+            clear(!history);
+            if (!input) return;
+            quietFocus = true;
+            input.focus();
+            quietFocus = false;
         });
+        if (input && suggest) {
+            input.addEventListener("focus", () => {
+                if (!quietFocus && host.hidden && !input.value.trim()) showWatched();
+            });
+        }
         if (input) {
-            // The box emptied (by hand, or its own ×): nothing left to show results for
-            input.addEventListener("input", () => !input.value.trim() && !host.hidden && clear());
+            // Typing: what was watched before that matches (Enter searches YouTube). The box
+            // emptied (by hand, or its own ×): everything watched before, or nothing.
+            input.addEventListener("input", () => {
+                const value = input.value.trim();
+                if (!value) return suggest ? showWatched() : !host.hidden && clear();
+                if (!suggest) return;
+                if (parse(value)) return state.mode === "history" && clear();
+                showWatched(value);
+            });
             // Esc clears the results first (and only then does what the box does with Esc, like
             // closing the room's YouTube box)
             input.addEventListener("keydown", e => {
@@ -378,7 +464,7 @@
             }, true);
         }
         renderKinds();
-        return { run, clear, get open() { return !host.hidden; } };
+        return { run, clear, showWatched, get open() { return !host.hidden; } };
     };
 
     // ---------- Playing on your own

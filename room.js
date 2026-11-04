@@ -3111,6 +3111,7 @@
     const nowResults = window.CineYouTube && ytForm.querySelector(".yt-results") && CineYouTube.createResults({
         host: ytForm.querySelector(".yt-results"),
         input: ytInput,
+        suggest: true,
         compact: true,
         actions: [{ key: "play", label: "Play for everyone", icon: "fa-play" }],
         onPick: ref => {
@@ -3252,6 +3253,7 @@
     const queueResults = window.CineYouTube && queueForm.querySelector(".yt-results") && CineYouTube.createResults({
         host: queueForm.querySelector(".yt-results"),
         input: queueInput,
+        suggest: true,
         compact: true,
         actions: [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }],
         onPick: (ref, where) => addRefToQueue(ref, where)
