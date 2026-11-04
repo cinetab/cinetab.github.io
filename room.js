@@ -14,9 +14,21 @@
     // traffic. To add one, put it here with its credentials, for example from Metered's or
     // Cloudflare's free tier: { urls: "turns:turn.example.com:443?transport=tcp", username: "…", credential: "…" }
     const ICE_SERVERS = [
-        { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] }
+        { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }
     ];
-    const RELAY_AVAILABLE = ICE_SERVERS.some(server => [].concat(server.urls).some(url => /^turns?:/.test(url)));
+    // Or an address that hands out short-lived TURN credentials as a list of ICE servers, so no
+    // password sits in this file. Metered's free tier gives one:
+    // "https://<your-app>.metered.live/api/v1/turn/credentials?apiKey=<your key>"
+    const TURN_CREDENTIALS_URL = "";
+    const hasTurn = servers => servers.some(server => [].concat(server.urls).some(url => /^turns?:/.test(url)));
+    let iceServers = ICE_SERVERS;
+    let relayAvailable = hasTurn(ICE_SERVERS);
+    // Without TURN, two networks that both block direct connections can't connect over WebRTC at
+    // all. The room's messages then go through the relays that found the room (see newTunnel).
+    // Messages are cut into smaller parts there, so each fits in one relay message.
+    const TUNNEL_CHUNK = 5000;
+    // How long a direct connection gets to open before the room goes through the relays instead
+    const DIRECT_WAIT = 10000;
     const MAX_GUESTS = 12;
     const QUALITY = {
         saver: { height: 480, bitrate: 1200000 },
@@ -27,7 +39,7 @@
     };
     // Reactions offered on every chat message
     const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🍿"];
-    const ROUTE_LABEL = { lan: "same network", direct: "direct connection", relay: "through a relay" };
+    const ROUTE_LABEL = { lan: "same network", direct: "direct connection", relay: "through a relay", tunnel: "through the room's relay" };
     // Data channel messages above this size are sent in parts
     const CHUNK = 16000;
     const NAME_KEY = "cinetab:room-name";
@@ -135,7 +147,28 @@
 
     badge.hidden = true;
     shareHelpBtn.append(badge);
-    overlay.querySelectorAll(".room-relay").forEach(label => label.hidden = !RELAY_AVAILABLE);
+    const showRelayOption = () => overlay.querySelectorAll(".room-relay").forEach(label => label.hidden = !relayAvailable);
+    showRelayOption();
+
+    // TURN credentials from TURN_CREDENTIALS_URL, fetched once (and again after a failure)
+    let turnLoad = null;
+    const loadTurn = () => {
+        if (!TURN_CREDENTIALS_URL) return Promise.resolve();
+        turnLoad ||= fetch(TURN_CREDENTIALS_URL)
+            .then(response => response.ok ? response.json() : null)
+            .then(list => {
+                const servers = (Array.isArray(list) ? list : list && list.iceServers || [])
+                    .filter(server => server && (typeof server.urls === "string" || Array.isArray(server.urls)));
+                if (!servers.length) throw new Error("No TURN servers");
+                iceServers = [...ICE_SERVERS, ...servers];
+                relayAvailable = hasTurn(iceServers);
+                showRelayOption();
+            })
+            .catch(() => turnLoad = null);
+        // Never holds up a room for long
+        return Promise.race([turnLoad, new Promise(resolve => setTimeout(resolve, 4000))]);
+    };
+    loadTurn();
 
     let room = null;
     let captured = null;
@@ -278,10 +311,12 @@
 
     // Pop-ups go wherever they can be seen: the player (also in fullscreen) or the home page.
     // Switching between them clears old ones, so none is left covering the other view.
+    // Pop-ups for people asking to join (by their id); they stay until answered
+    const knockToasts = new Map();
     const placeToasts = () => {
         const host = playerPage.hidden ? document.body : playerPage;
         if (toasts.parentNode === host) return;
-        toasts.replaceChildren();
+        toasts.replaceChildren(...knockToasts.values());
         host.append(toasts);
     };
 
@@ -303,8 +338,89 @@
             });
         }
         toasts.append(item);
-        while (toasts.children.length > 3) toasts.firstChild.remove();
+        // At most three at once, not counting people waiting to be let in
+        const plain = [...toasts.children].filter(child => !child.classList.contains("room-knock"));
+        plain.slice(0, Math.max(0, plain.length - 3)).forEach(child => child.remove());
         setTimeout(() => item.remove(), onClick ? 7000 : 5000);
+    };
+
+    // A short two-note chime, made on the spot (no sound file to load)
+    let chimeContext = null;
+    const playChime = () => {
+        try {
+            chimeContext ||= new (window.AudioContext || window.webkitAudioContext)();
+            if (chimeContext.state === "suspended") chimeContext.resume();
+            const start = chimeContext.currentTime + 0.03;
+            [[784, 0], [1175, 0.17]].forEach(([frequency, at]) => {
+                const tone = chimeContext.createOscillator();
+                const gain = chimeContext.createGain();
+                tone.type = "sine";
+                tone.frequency.value = frequency;
+                gain.gain.setValueAtTime(0.0001, start + at);
+                gain.gain.exponentialRampToValueAtTime(0.3, start + at + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, start + at + 0.7);
+                tone.connect(gain).connect(chimeContext.destination);
+                tone.start(start + at);
+                tone.stop(start + at + 0.75);
+            });
+        } catch (e) {}
+    };
+
+    const clearKnock = id => {
+        const item = knockToasts.get(id);
+        if (item) item.remove();
+        knockToasts.delete(id);
+    };
+
+    // Someone asks to join: a chime and a pop-up. Clicking it shows Accept and Deny.
+    const announceKnock = peer => {
+        playChime();
+        placeToasts();
+        clearKnock(peer.id);
+        const item = el("div", "room-toast room-knock");
+        item.setAttribute("role", "alert");
+        const head = el("button", "room-knock-head");
+        head.type = "button";
+        head.setAttribute("aria-expanded", "false");
+        const body = el("span", "room-toast-body");
+        const text = el("span", "room-toast-text", "wants to join · tap to answer");
+        body.append(el("b", null, peer.name), text);
+        head.append(makeAvatar(peer.name, peer.avatar, "small"), body, el("i", "fa-solid fa-bell room-knock-bell"));
+        const actions = el("span", "room-knock-actions");
+        actions.hidden = true;
+        const deny = el("button", "room-small-btn", "Deny");
+        deny.type = "button";
+        deny.dataset.deny = peer.id;
+        deny.title = `Don't let ${peer.name} in`;
+        const accept = el("button", "room-small-btn primary", "Accept");
+        accept.type = "button";
+        accept.dataset.admit = peer.id;
+        accept.title = `Let ${peer.name} into the room`;
+        actions.append(deny, accept);
+        item.append(head, actions);
+        head.addEventListener("click", () => {
+            actions.hidden = !actions.hidden;
+            head.setAttribute("aria-expanded", String(!actions.hidden));
+            text.textContent = actions.hidden ? "wants to join · tap to answer" : "wants to join the room";
+            if (!actions.hidden) accept.focus();
+        });
+        actions.addEventListener("click", e => {
+            const button = e.target.closest("button");
+            if (!button || !room || room.role !== "host") return;
+            clearKnock(peer.id);
+            const waiting = room.peers.get(peer.id);
+            if (!waiting || waiting.status !== "waiting") return;
+            if (button.dataset.admit) admit(waiting);
+            else refuse(waiting, "denied");
+        });
+        knockToasts.set(peer.id, item);
+        toasts.append(item);
+        // In a background tab, the tab's title says so too
+        if (document.hidden) {
+            const title = document.title;
+            const asking = document.title = `🔔 ${peer.name} wants to join`;
+            document.addEventListener("visibilitychange", () => document.title === asking && (document.title = title), { once: true });
+        }
     };
 
     const openChat = () => {
@@ -728,8 +844,85 @@
     // ---------- WebRTC
 
     const newConnection = relay => {
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceTransportPolicy: relay && RELAY_AVAILABLE ? "relay" : "all" });
+        const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: relay && relayAvailable ? "relay" : "all" });
         return { pc, channel: pc.createDataChannel("room", { negotiated: true, id: 0 }), rate: {} };
+    };
+
+    // ---------- When the two networks don't allow a direct connection
+    // Mobile data behind carrier-grade NAT, and strict campus, office or hostel firewalls, often let
+    // neither side connect directly, and without a TURN server WebRTC then gives up. Both browsers
+    // can still reach the relays that found the room, so the room's messages go through them
+    // instead: sealed with the key only this guest and the host share (see Signaling.pairSecret),
+    // numbered so they arrive in order and only once. It acts like a data channel. Chat, sync,
+    // YouTube and own copies all work this way; only streaming a video needs a direct connection.
+    const newTunnel = (signal, key, myId, theirId) => {
+        const channel = { isTunnel: true, readyState: "connecting", onmessage: null, onclose: null, onopen: null };
+        let sent = 0, next = 1, lastHeard = Date.now(), lastSent = 0, gapTimer = null;
+        const early = new Map();
+        let chain = Promise.resolve();
+        const frame = body => {
+            lastSent = Date.now();
+            const n = ++sent;
+            chain = chain.then(async () => {
+                const d = await Signaling.sealText(key, JSON.stringify({ n, ...body }));
+                await signal.send({ t: "tun", from: myId, to: theirId, d });
+            }).catch(() => {});
+            return chain;
+        };
+        const timer = setInterval(() => {
+            if (channel.readyState !== "open") return;
+            // Silence for this long means the other side has gone (closed the tab, lost its network)
+            if (Date.now() - lastHeard > 35000) return shut(true);
+            if (Date.now() - lastSent > 10000) frame({ k: 1 });
+        }, 5000);
+        const shut = notify => {
+            if (channel.readyState === "closed") return;
+            channel.readyState = "closed";
+            clearInterval(timer);
+            clearTimeout(gapTimer);
+            if (notify && channel.onclose) channel.onclose();
+        };
+        const flush = () => {
+            while (early.has(next)) {
+                const body = early.get(next);
+                early.delete(next++);
+                if (typeof body.d === "string" && channel.readyState === "open" && channel.onmessage) channel.onmessage({ data: body.d });
+            }
+            clearTimeout(gapTimer);
+            // A message lost on every relay: move on rather than wait forever
+            if (early.size) gapTimer = setTimeout(() => {
+                next = Math.min(...early.keys());
+                flush();
+            }, 3000);
+        };
+        channel.open = () => {
+            if (channel.readyState !== "connecting") return;
+            channel.readyState = "open";
+            lastHeard = Date.now();
+            if (channel.onopen) channel.onopen();
+            flush();
+        };
+        channel.send = text => {
+            if (channel.readyState === "open") frame({ d: text });
+        };
+        channel.close = () => shut(false);
+        // A sealed message from the relays
+        channel.deliver = async sealed => {
+            if (channel.readyState === "closed") return;
+            let body;
+            try {
+                body = JSON.parse(await Signaling.unsealText(key, sealed));
+            } catch (e) {
+                return;
+            }
+            const n = body && body.n;
+            // Each number counts once, so a message replayed later is ignored
+            if (!Number.isInteger(n) || n < next || early.has(n) || n > next + 2000) return;
+            lastHeard = Date.now();
+            early.set(n, body);
+            if (channel.readyState === "open") flush();
+        };
+        return channel;
     };
 
     const attachRemoteVoice = (peer, track) => {
@@ -809,7 +1002,8 @@
         clearTimeout(peer.timer);
         clearTimeout(peer.lostTimer);
         try {
-            peer.pc.close();
+            if (peer.pc) peer.pc.close();
+            else if (peer.channel) peer.channel.close();
         } catch (e) {}
         const audio = remoteVoiceAudio.get(peer);
         if (audio) {
@@ -875,6 +1069,7 @@
     const wirePeer = (peer, onMessage, onGone, allowParts) => {
         peer.channel.onmessage = e => receive(peer, e.data, onMessage, allowParts);
         peer.channel.onclose = onGone;
+        if (!peer.pc) return;
         peer.pc.onconnectionstatechange = () => {
             const state = peer.pc.connectionState;
             if (state === "failed" || state === "closed") onGone();
@@ -889,11 +1084,12 @@
     const send = (peer, message) => {
         if (!peer || !peer.channel || peer.channel.readyState !== "open") return;
         const text = JSON.stringify(message);
-        if (text.length <= CHUNK) return peer.channel.send(text);
+        const size = peer.channel.isTunnel ? TUNNEL_CHUNK : CHUNK;
+        if (text.length <= size) return peer.channel.send(text);
         const id = Signaling.newId();
-        const count = Math.ceil(text.length / CHUNK);
+        const count = Math.ceil(text.length / size);
         for (let i = 0; i < count; i++) {
-            peer.channel.send(JSON.stringify({ t: "part", id, i, n: count, d: text.slice(i * CHUNK, (i + 1) * CHUNK) }));
+            peer.channel.send(JSON.stringify({ t: "part", id, i, n: count, d: text.slice(i * size, (i + 1) * size) }));
         }
     };
 
@@ -910,7 +1106,7 @@
 
         const { id, i, n, d } = message;
         const parts = typeof allowParts === "function" ? allowParts() : allowParts;
-        if (!parts || typeof id !== "string" || !Number.isInteger(n) || n < 2 || n > 200 ||
+        if (!parts || typeof id !== "string" || !Number.isInteger(n) || n < 2 || n > 400 ||
             !Number.isInteger(i) || i < 0 || i >= n || typeof d !== "string") return;
         peer.parts ||= new Map();
         let entry = peer.parts.get(id);
@@ -1064,6 +1260,8 @@
 
     const renderRequests = () => {
         const waiting = [...room.peers.values()].filter(peer => peer.status === "waiting");
+        // Answered in the People tab, or gone: its pop-up goes too
+        [...knockToasts.keys()].filter(id => !waiting.some(peer => peer.id === id)).forEach(clearKnock);
         requestList.replaceChildren(...waiting.map(peer => {
             const item = el("li", "room-request");
             const text = el("p");
@@ -1393,7 +1591,8 @@
             clearTimeout(peer.timer);
             peer.name = clean(message.name, 30) || "Guest";
             peer.avatar = validAvatar(message.avatar);
-            peer.wantsStream = message.stream !== false;
+            // Video can't go through the relays, only messages
+            peer.wantsStream = !peer.channel.isTunnel && message.stream !== false;
             if (typeof message.ticket === "string" && (room.tickets.has(message.ticket) || room.approved.includes(message.ticket))) {
                 peer.ticket = message.ticket;
                 return admit(peer, true);
@@ -1404,7 +1603,7 @@
             peer.status = "waiting";
             send(peer, { t: "waiting" });
             renderRequests();
-            toast("wants to join", peer.name, peer.avatar);
+            announceKnock(peer);
             return;
         }
         if (peer.status !== "admitted") return;
@@ -1447,7 +1646,7 @@
         } else if (message.t === "remove") {
             if (room.settings.media === true && allow(peer, "remove", 4, 10000)) removeMedia(peer);
         } else if (message.t === "want") {
-            peer.wantsStream = message.stream === true;
+            peer.wantsStream = !peer.channel.isTunnel && message.stream === true;
             updateStreams();
             shareMembers();
         } else if (message.t === "profile") {
@@ -1518,10 +1717,40 @@
         }
     };
 
+    // A guest whose direct connection didn't open: the room goes through the relays for them
+    const acceptTunnel = async (id, pub) => {
+        const host = room;
+        const key = await Signaling.pairSecret(host.pair, pub, host.signal.salt);
+        if (room !== host || host.peers.has(id)) return;
+        const peer = { id, name: "Someone", avatar: "", status: "connecting", wantsStream: false, senders: {}, rate: {}, route: "tunnel", pc: null };
+        peer.channel = newTunnel(host.signal, key, host.id, id);
+        host.peers.set(id, peer);
+        wirePeer(peer, message => room === host && hostHandle(peer, message), () => dropPeer(peer), () => peer.status === "admitted");
+        peer.channel.open();
+        host.signal.send({ t: "tunnel-ok", from: host.id, to: id });
+        peer.timer = setTimeout(() => peer.status === "connecting" && dropPeer(peer, true), 30000);
+    };
+
     const hostSignal = message => {
         const host = room;
         const { t, from } = message;
         if (typeof from !== "string" || from.length > 40 || from === host.id) return;
+        if (t === "tun") {
+            const peer = message.to === host.id && typeof message.d === "string" && host.peers.get(from);
+            if (peer && peer.channel && peer.channel.isTunnel) peer.channel.deliver(message.d);
+            return;
+        }
+        if (t === "tunnel" && message.to === host.id) {
+            const existing = host.peers.get(from);
+            // Asked again: the reply got lost
+            if (existing && existing.channel && existing.channel.isTunnel) return host.signal.send({ t: "tunnel-ok", from: host.id, to: from });
+            const pub = host.knocks.get(from);
+            if (!pub || (existing && existing.status !== "connecting")) return;
+            // The direct connection that never opened gives way
+            if (existing) dropPeer(existing, true);
+            if (host.peers.size < MAX_GUESTS + 6) acceptTunnel(from, pub);
+            return;
+        }
         if (t === "knock") {
             if (typeof message.pub !== "string" || message.pub.length > 200) return;
             const reason = host.settings.locked && !message.rejoin ? "locked" : guests().length >= MAX_GUESTS ? "full" : null;
@@ -1563,6 +1792,7 @@
         };
         showStatus({ icon: "fa-door-open", title: "Creating your room…", busy: true, onClose: () => leaveRoom(false) });
         try {
+            await loadTurn();
             host.pair = await Signaling.newPairKey();
             host.signal = await Signaling.join({
                 code: host.code, password,
@@ -1624,7 +1854,8 @@
     } : null;
 
     // The room's video can be watched as a stream
-    const streamable = () => !!room.file && (room.file.stream ?? room.settings.streaming === true);
+    // (not through the relays, which only carry messages)
+    const streamable = () => !!room.file && !tunneled() && (room.file.stream ?? room.settings.streaming === true);
     // Name of whoever shared the room's video
     const sharerName = () => room.file && room.file.fromName || room.hostName || "The host";
 
@@ -2447,7 +2678,7 @@
         streamChoice.querySelector("b").textContent = file && !sharing ? `${by}'s stream` : "The stream";
         streamChoice.querySelector("small").textContent = sharing ? "You're sharing the video from this device"
             : !file ? "Available when someone starts a video"
-            : !streaming ? `${by} isn't streaming right now`
+            : !streaming ? tunneled() ? "Needs a direct connection to the host" : `${by} isn't streaming right now`
             : together.stream ? "Watching now · nothing to download" : "Watch as it plays · nothing to download";
         ownChoice.disabled = !file || sharing;
         ownChoice.classList.toggle("active", own || sharing);
@@ -2463,11 +2694,11 @@
     };
     fileInput.addEventListener("cancel", () => room && (room.sharePending = false));
 
-    const canShare = () => !!room && (room.role === "host" || (room.phase === "in" && room.settings.media === true && canStream));
+    const canShare = () => !!room && (room.role === "host" || (room.phase === "in" && room.settings.media === true && canStream && !tunneled()));
 
     const shareVideo = () => {
         if (!room) return;
-        if (!canShare()) return showFeedback("fa-lock", canStream ? "Host only" : "Needs Chrome or Edge");
+        if (!canShare()) return showFeedback("fa-lock", tunneled() ? "Needs a direct connection" : canStream ? "Host only" : "Needs Chrome or Edge");
         pickFile(true);
     };
 
@@ -2534,7 +2765,9 @@
             showStatus({
                 icon: "fa-film",
                 title: `Open your copy of “${file.title}”`,
-                text: `${by} is playing ${file.name} (${details}) but isn't streaming it right now. Choose the same movie on this device and CineTab keeps it in step with ${by}.`,
+                text: tunneled() && file.stream
+                    ? `${by} is playing ${file.name} (${details}). Your connection goes through the room's relay because your networks don't allow a direct one, and video can't stream that way. Choose the same movie on this device and CineTab keeps it in step with ${by}. YouTube links play for everyone as usual.`
+                    : `${by} is playing ${file.name} (${details}) but isn't streaming it right now. Choose the same movie on this device and CineTab keeps it in step with ${by}.`,
                 actions: [{ label: "Choose my copy", icon: "fa-folder-open", onClick: () => pickFile(false) }]
             });
         }
@@ -3118,6 +3351,7 @@
                     guest.joinedOnce = true;
                     enterRoomUI();
                     addMessage({ system: true, text: `You joined ${guest.hostName}'s room. Messages aren't saved anywhere.` });
+                    if (tunneled()) addMessage({ system: true, text: `Your network and ${guest.hostName}'s don't allow a direct connection, so you're connected through the room's relay (still encrypted). Chat, sync, YouTube and playing your own copy all work; ${guest.hostName}'s video can't stream to you this way. A phone hotspot on either side usually gives a direct connection.` });
                 } else {
                     addMessage({ system: true, text: "Reconnected." });
                 }
@@ -3252,6 +3486,9 @@
     const lost = peer => {
         const guest = room;
         if (!guest || guest.role !== "guest" || guest.peer !== peer) return;
+        // A direct connection that never opened: the networks don't allow one, so the room goes
+        // through the relays instead (the host already answered there)
+        if (!peer.channel.isTunnel && !peer.opened && guest.hostId && guest.pairKey) return useTunnel(peer);
         closePeer(peer);
         guest.peer = null;
         clearTimeout(guest.pingTimer);
@@ -3332,7 +3569,7 @@
     // whether this device shows its local network address
     const iceCheck = () => new Promise(resolve => {
         const found = { host: false, srflx: false, relay: false, local: false };
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const pc = new RTCPeerConnection({ iceServers });
         let done = false;
         const finish = () => {
             if (done) return;
@@ -3354,6 +3591,7 @@
 
     const checkNetwork = async back => {
         showStatus({ icon: "fa-stethoscope", title: "Checking this network…", text: "Takes a few seconds.", busy: true, onClose: back });
+        await loadTurn();
         const [relays, ice] = await Promise.all([Signaling.check(), iceCheck()]);
         const reached = relays.filter(relay => relay.ok);
         const webOnly = reached.length && reached.every(relay => relay.port443);
@@ -3363,12 +3601,12 @@
                 : { ok: false, title: "This network blocks the relays used to find rooms", text: "Rooms can't be created or joined from here. Try mobile data or a phone hotspot." },
             ice.srflx
                 ? { ok: true, title: "Direct connections over the internet work", text: "People on other networks can connect to you directly." }
-                : { ok: false, title: "This network blocks direct connections over the internet", text: RELAY_AVAILABLE ? "People on other networks can still connect through the TURN relay." : "People on other networks can't connect to you unless a TURN relay is set up for CineTab (see its README). Mobile data or a hotspot usually works." },
+                : { ok: false, title: "This network blocks direct connections over the internet", text: relayAvailable ? "People on other networks can still connect through the TURN relay." : "People on other networks still get into the room through the room's relay: chat, sync, YouTube and playing their own copy work, but the host's video can't stream to them. A phone hotspot, or a TURN relay set up for CineTab (see its README), fixes that." },
             !ice.host ? { ok: false, title: "Same Wi-Fi", text: "This browser doesn't offer local connections." }
                 : ice.local ? { ok: true, title: "Same Wi-Fi: devices can find this one", text: "People on this network can connect to you directly, the fastest way, unless the Wi-Fi keeps devices apart altogether (some campus and hotel Wi-Fi does; then a phone hotspot for everyone works)." }
                 : { ok: null, title: "Same Wi-Fi: this device is hidden", text: "Browsers hide this device behind a name that campus, office and hostel Wi-Fi often can't look up, so people on the same Wi-Fi may not connect. “Help devices find this one” below fixes that (the browser asks for the microphone; it stays off)." }
         ];
-        if (RELAY_AVAILABLE) list.push(ice.relay
+        if (relayAvailable) list.push(ice.relay
             ? { ok: true, title: "The TURN relay is reachable", text: "Connections work even where direct ones are blocked." }
             : { ok: false, title: "The TURN relay can't be reached", text: "Check its address and credentials in room.js." });
         const good = reached.length && (ice.srflx || ice.relay);
@@ -3393,7 +3631,7 @@
 
     const cantConnect = () => failedToJoin(
         "Couldn't connect to the host",
-        "The room was found, but your devices couldn't connect. On the same Wi-Fi as the host (campus, office, hostel)? That kind of Wi-Fi often hides devices from each other: try “Same Wi-Fi” below, and ask the host to turn on “Help people on this Wi-Fi connect” in the room's Settings. Otherwise one of the networks blocks direct connections: try a phone hotspot or home Wi-Fi on either side.",
+        "The room was found, but the host's browser stopped answering, directly or through the relay. Their CineTab tab may have been closed, or put to sleep (phones pause tabs in the background): ask them to keep it open in front, then try again. If it keeps happening, try a phone hotspot or home Wi-Fi on either side.",
         true
     );
 
@@ -3461,8 +3699,9 @@
             if (guest.members) renderPeople(guest.members);
         });
         channel.onopen = () => {
-            send(peer, { t: "hello", name: guest.name, avatar: guest.avatar, ticket: guest.ticket, stream: guest.watching === "stream" });
-            startPings();
+            peer.opened = true;
+            clearTimeout(guest.connectTimer);
+            sayHello(peer);
         };
         const description = await pc.createOffer();
         await pc.setLocalDescription({ type: "offer", sdp: tuneAudio(description.sdp) });
@@ -3504,12 +3743,66 @@
             const peer = guest.peer;
             try {
                 await peer.pc.setRemoteDescription({ type: "answer", sdp: await Signaling.unsealText(guest.pairKey, message.sdp) });
-                guest.connectTimer = setTimeout(() => room === guest && guest.peer === peer && peer.channel.readyState !== "open" && lost(peer), 20000);
+                // Direct connections open within a few seconds where the networks allow them
+                guest.connectTimer = setTimeout(() => room === guest && guest.peer === peer && peer.channel.readyState !== "open" && lost(peer), DIRECT_WAIT);
             } catch (e) {
                 if (room === guest) lost(peer);
             }
+        } else if (message.t === "tunnel-ok" && message.from === guest.hostId && guest.peer && guest.peer.channel.isTunnel) {
+            clearInterval(guest.offerTimer);
+            guest.peer.channel.open();
+        } else if (message.t === "tun" && message.from === guest.hostId && typeof message.d === "string" && guest.peer && guest.peer.channel.isTunnel) {
+            guest.peer.channel.deliver(message.d);
         }
     };
+
+    const sayHello = peer => {
+        const guest = room;
+        // Video can't come through the relays, so a guest connected that way plays their own copy
+        const stream = !peer.channel.isTunnel && guest.watching === "stream";
+        send(peer, { t: "hello", name: guest.name, avatar: guest.avatar, ticket: guest.ticket, stream });
+        startPings();
+    };
+
+    // The room through the relays, when a direct connection couldn't be made (see newTunnel)
+    const useTunnel = direct => {
+        const guest = room;
+        closePeer(direct);
+        clearTimeout(guest.connectTimer);
+        clearInterval(guest.offerTimer);
+        if (!guest.joinedOnce) showStatus({
+            title: "Connecting through the relay…",
+            text: "Your network and the host's don't allow a direct connection, so the room goes through the relay that found it.",
+            busy: true,
+            actions: [{ label: "Cancel", secondary: true, onClick: () => leaveRoom(false) }],
+            onClose: () => leaveRoom(false)
+        });
+        const peer = guest.peer = { id: guest.hostId, rate: {}, route: "tunnel", pc: null };
+        peer.channel = newTunnel(guest.signal, guest.pairKey, guest.id, guest.hostId);
+        guest.remote = new MediaStream();
+        wirePeer(peer, message => room === guest && guestHandle(message), () => lost(peer), true);
+        peer.channel.onopen = () => {
+            peer.opened = true;
+            sayHello(peer);
+            // Whatever was showing the stream switches to what works through the relay
+            refreshGuestView();
+            renderState();
+            if (guest.members) renderPeople(guest.members);
+        };
+        let tries = 0;
+        const ask = () => {
+            if (room !== guest || guest.peer !== peer || peer.channel.readyState !== "connecting") return clearInterval(guest.offerTimer);
+            if (++tries > 6) {
+                clearInterval(guest.offerTimer);
+                return lost(peer);
+            }
+            guest.signal.send({ t: "tunnel", from: guest.id, to: guest.hostId });
+        };
+        guest.offerTimer = setInterval(ask, 3000);
+        ask();
+    };
+
+    const tunneled = () => !!(room && room.role === "guest" && room.peer && room.peer.channel.isTunnel);
 
     // Asks the room's host to say hello; repeats for a while in case the host is still connecting
     const knock = () => {
@@ -3554,6 +3847,7 @@
         });
         together.active = () => !!room;
         try {
+            await loadTurn();
             guest.pair = await Signaling.newPairKey();
             guest.signal = await Signaling.join({ code, password, onMessage: message => room === guest && guestSignal(message) });
         } catch (e) {
@@ -3647,10 +3941,14 @@
         clearTimeout(old.queueTimer);
         clearTimeout(old.connectTimer);
         old.timers.forEach(clearInterval);
+        [...knockToasts.keys()].forEach(clearKnock);
+        // A goodbye going through the relays (see newTunnel) needs a moment to go out
+        const tunnels = old.role === "host" ? [...old.peers.values()].some(peer => peer.channel && peer.channel.isTunnel)
+            : !!(old.peer && old.peer.channel && old.peer.channel.isTunnel);
         if (old.role === "host") old.peers.forEach(closePeer);
         else closePeer(old.peer);
         stopCapture();
-        if (old.signal) old.signal.close();
+        if (old.signal) setTimeout(() => old.signal.close(), tunnels ? 1500 : 0);
         together.following = false;
         together.onFile = null;
         together.openPanel = null;

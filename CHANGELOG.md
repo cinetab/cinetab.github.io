@@ -4,7 +4,7 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-04
 
 ### Watch-together rooms: YouTube queue
 - A **Queue** tab in the room panel while YouTube is on (it opens when YouTube starts), with each
@@ -21,6 +21,23 @@ All notable changes to CineTab are documented here. The format follows
   ready for the link, with a paste button; a link can also be dropped onto the queue
 - *Previous* / *Next* buttons beside the player's play button while the queue has more than one
   video, and `Shift` + `P` / `N`
+
+### Rooms on any network
+- Guests whose network and the host's don't allow a direct connection (mobile data behind
+  carrier-grade NAT, strict campus or office firewalls) couldn't join at all without a TURN server.
+  Now, if a direct connection doesn't open within about 10 seconds, the room goes through the
+  relays that found it, sealed with a key only that guest and the host share. Chat, sync, YouTube
+  and *My own copy* work on any network that can open websites; streaming a video still needs a
+  direct connection (or TURN), and the guest is told so
+- *Through the room's relay* in the People tab; such a guest leaving or losing the connection is
+  noticed within about 35 seconds
+- `TURN_CREDENTIALS_URL` in `room.js`: fetch short-lived TURN credentials (such as Metered's)
+  instead of writing a password into the page
+
+### Rooms: people asking to join
+- A chime and a pop-up that stays until it's answered; clicking it shows **Accept** and **Deny**.
+  In a background tab, the tab's title says who's asking too
+- The People tab's *Let in* / *Deny* still work, and answering there closes the pop-up
 
 ### Rooms on campus, office and hostel Wi-Fi
 - People on the same Wi-Fi couldn't join each other's rooms on networks that block multicast
@@ -195,6 +212,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.3.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.0
 [1.2.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.8
 [1.2.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.5
 [1.2.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.1
