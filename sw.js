@@ -4,7 +4,7 @@
 // is touched: videos play from the device, and YouTube, rooms and the converter go straight out.
 // Change VERSION with each release, so installed apps pick up the new files.
 
-const VERSION = "1.4.0";
+const VERSION = "1.4.1";
 const CACHE = `cinetab-${VERSION}`;
 const SHELL = [
     "./", "index.html", "style.css", "manifest.webmanifest",

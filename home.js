@@ -103,6 +103,7 @@
 
     const results = CineYouTube.createResults({
         host: dashboard.querySelector(".dash-results"),
+        input: searchInput,
         actions: [{ key: "play", label: "Play", icon: "fa-play" }],
         onPick: (ref, key, item) => playRef(ref, item.kind === "playlist"
             ? { listTitle: item.title, channel: item.channel, count: item.count }
@@ -126,12 +127,6 @@
     searchForm.addEventListener("submit", e => {
         e.preventDefault();
         submit();
-    });
-    searchInput.addEventListener("keydown", e => {
-        if (e.key === "Escape" && results.open) {
-            e.preventDefault();
-            results.clear();
-        }
     });
     pasteBtn.addEventListener("click", async () => {
         try {

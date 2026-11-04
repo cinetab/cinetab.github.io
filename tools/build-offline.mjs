@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const read = name => readFile(path.join(root, name), "utf8");
+// Line endings as the repository keeps them (LF), whatever a Windows checkout made of them
+const read = async name => (await readFile(path.join(root, name), "utf8")).replace(/\r\n/g, "\n");
 
 const FONT_AWESOME = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0";
 const POPPINS_CSS = "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap";

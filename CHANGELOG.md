@@ -4,6 +4,23 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-11-04
+
+### Fixed
+- Phones held sideways in fullscreen: the picture now reaches the edge beside the camera
+  (notch or punch-hole) instead of leaving a black bar there; the title, buttons and timeline
+  stay clear of the camera. The home page and the room panel keep their content clear of it too,
+  and the room panel stays above the iPhone's home indicator
+
+### YouTube search
+- The results have a **Clear** button that empties the search, and it stays at the top while the
+  results scroll in the room panel
+- Emptying the search box, or Esc in it, clears the results too (a second Esc closes the room's
+  YouTube box); closing that box clears its search
+
+### Other
+- The offline player builds on Windows checkouts (CRLF line endings) too
+
 ## [1.4.0] - 2026-11-04
 
 ### YouTube, on your own and in rooms
@@ -301,6 +318,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.1
 [1.4.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.0
 [1.3.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.1
 [1.3.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.0

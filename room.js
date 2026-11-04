@@ -3062,9 +3062,11 @@
 
     const canShareYouTube = () => !!room && (room.role === "host" || (room.phase === "in" && room.settings.media === true));
 
+    // Closing the box also clears its search (opening it again starts afresh)
     const closeYouTubeForm = () => {
         ytForm.hidden = true;
         nowYtBtn.setAttribute("aria-expanded", "false");
+        if (nowResults) nowResults.clear(true);
     };
 
     const ytHintText = ytHint.textContent;
@@ -3108,6 +3110,7 @@
     // Searching YouTube (youtube.js): typing words instead of a link shows results to pick from
     const nowResults = window.CineYouTube && ytForm.querySelector(".yt-results") && CineYouTube.createResults({
         host: ytForm.querySelector(".yt-results"),
+        input: ytInput,
         compact: true,
         actions: [{ key: "play", label: "Play for everyone", icon: "fa-play" }],
         onPick: ref => {
@@ -3248,6 +3251,7 @@
     // Search results in the queue tab: play one now, or add it to the queue
     const queueResults = window.CineYouTube && queueForm.querySelector(".yt-results") && CineYouTube.createResults({
         host: queueForm.querySelector(".yt-results"),
+        input: queueInput,
         compact: true,
         actions: [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }],
         onPick: (ref, where) => addRefToQueue(ref, where)

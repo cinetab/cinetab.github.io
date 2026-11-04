@@ -202,8 +202,9 @@
 
     // A search box's results: a Videos / Playlists switch, the results and "More results".
     // `actions`: [{ key, label, icon }], the first one is what a click on a result does;
-    // `onPick(ref, key, item)` gets the chosen one.
-    const createResults = ({ host, actions, onPick, compact = false }) => {
+    // `onPick(ref, key, item)` gets the chosen one. `input`: the search box; Clear empties it,
+    // and emptying it (or Esc in it) clears the results.
+    const createResults = ({ host, actions, onPick, input = null, compact = false }) => {
         const head = el("div", "yt-results-head");
         const kinds = el("div", "yt-kinds");
         kinds.setAttribute("role", "radiogroup");
@@ -223,9 +224,8 @@
         onYouTube.append(el("span", null, "YouTube"), el("i", "fa-solid fa-arrow-up-right-from-square"));
         const close = el("button", "yt-results-close");
         close.type = "button";
-        close.title = "Close the results";
-        close.setAttribute("aria-label", close.title);
-        close.append(el("i", "fa-solid fa-xmark"));
+        close.title = input ? "Clear the search and its results (Esc)" : "Clear the results";
+        close.append(el("i", "fa-solid fa-xmark"), el("span", null, "Clear"));
         head.append(kinds, onYouTube, close);
         const status = el("p", "yt-status");
         status.setAttribute("aria-live", "polite");
@@ -351,14 +351,32 @@
             const item = row && state.items[+row.dataset.i];
             if (item) onPick(refOf(item), button.dataset.act, item);
         });
-        const clear = () => {
+        // `empty`: the search box too (the Clear button, Esc)
+        const clear = (empty = false) => {
             state.token++;
             state.query = "";
             state.items = [];
+            state.next = null;
             list.replaceChildren();
             host.hidden = true;
+            if (empty && input) input.value = "";
         };
-        close.addEventListener("click", clear);
+        close.addEventListener("click", () => {
+            clear(true);
+            if (input) input.focus();
+        });
+        if (input) {
+            // The box emptied (by hand, or its own ×): nothing left to show results for
+            input.addEventListener("input", () => !input.value.trim() && !host.hidden && clear());
+            // Esc clears the results first (and only then does what the box does with Esc, like
+            // closing the room's YouTube box)
+            input.addEventListener("keydown", e => {
+                if (e.key !== "Escape" || host.hidden) return;
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                clear(true);
+            }, true);
+        }
         renderKinds();
         return { run, clear, get open() { return !host.hidden; } };
     };

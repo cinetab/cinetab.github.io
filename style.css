@@ -1179,8 +1179,10 @@ video::cue {
     border-radius: 0;
     box-shadow: none;
   }
+  /* The picture runs under the camera cutout (viewport-fit=cover); the title and buttons stay
+     clear of it, on whichever side it is */
   .top-bar {
-    padding: 10px 16px;
+    padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
   }
   .video-title {
     font-size: 14px;
@@ -1782,6 +1784,9 @@ video::cue {
   --line: rgba(255, 255, 255, 0.08);
   --card: rgba(255, 255, 255, 0.035);
   min-height: 100vh;
+  /* Phones on their side: the background runs under the camera cutout, the content doesn't */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background:
     radial-gradient(60rem 30rem at 85% -10%, rgba(124, 92, 255, 0.22), transparent 60%),
     radial-gradient(50rem 30rem at -10% 10%, rgba(62, 151, 253, 0.16), transparent 60%),
@@ -2478,18 +2483,28 @@ kbd {
 }
 
 .yt-results-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 0;
-  background: transparent;
-  color: #a9a9b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #d9d9e3;
+  font: inherit;
+  font-size: 12.5px;
   cursor: pointer;
+}
+
+.yt-results-close i {
+  font-size: 11px;
 }
 
 .yt-results-close:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.12);
 }
 
 .yt-status {
@@ -5688,6 +5703,8 @@ body > .room-toasts {
     min-height: 0;
     border-radius: 0;
     border-width: 1px 0 0;
+    /* Above the iPhone's home indicator */
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .player-page.room-open > .room-toasts {
     top: 12px;
@@ -5709,7 +5726,10 @@ body > .room-toasts {
     border-radius: 0;
   }
   .room-panel {
-    width: min(300px, 42vw);
+    /* Its content clear of a camera cutout on its side (the background runs under it) */
+    width: calc(min(300px, 42vw) + env(safe-area-inset-right));
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
     border-radius: 0;
     border-width: 0 0 0 1px;
   }
@@ -5957,8 +5977,26 @@ body > .room-toasts {
   overscroll-behavior: contain;
 }
 
+/* The Videos / Playlists switch and Clear stay at the top while the results scroll */
 .room-panel .yt-results-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-bottom: 8px;
+  padding: 4px 0 6px;
+  background: #17171c;
+}
+
+.room-panel .yt-results-close {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+
+/* The "on YouTube" link is just its icon here, so Clear fits on the same line */
+.room-panel .yt-on-youtube span {
+  display: none;
 }
 
 .room-panel .yt-kind {
