@@ -1862,6 +1862,8 @@
         host.timers.push(setInterval(() => broadcast(stateMessage()), 3000));
         host.timers.push(setInterval(() => room === host && hostYouTubeTick(), 1000));
         syncSettingsUI();
+        // A YouTube video watched alone carries on in the room, from where it is (youtube.js)
+        const fromSolo = together.solo && together.solo.handOff();
         // A video that's already open becomes the room's video
         host.file = currentMedia();
         host.mediaKey = host.announced = mediaKey(host.file);
@@ -1870,7 +1872,8 @@
         renderPeople([{ id: host.id, name: host.name, avatar: host.avatar, host: true }]);
         hideOverlay();
         addMessage({ system: true, text: "Room created. Invite people with the link, the QR code, or the room code and password. Messages aren't saved anywhere." });
-        if (!currentFile) uploadOverlay.classList.remove("hidden");
+        if (fromSolo) setYouTube({ id: host.id, name: host.name }, fromSolo, "now");
+        else if (!currentFile) uploadOverlay.classList.remove("hidden");
     };
 
     // =================== GUEST ===================
@@ -2111,9 +2114,10 @@
         return id || list ? { id, list, start: finite(ref.start, 0, 1e6) ? ref.start : 0 } : null;
     };
 
-    // YouTube's player API, loaded the first time a room plays a YouTube video
+    // YouTube's player API, loaded the first time a room plays a YouTube video (youtube.js loads
+    // it for both, so the script isn't added twice)
     let ytApiLoading = null;
-    const ytApi = () => ytApiLoading ||= new Promise((resolve, reject) => {
+    const ytApi = () => window.CineYouTube ? CineYouTube.api() : ytApiLoading ||= new Promise((resolve, reject) => {
         if (window.YT && window.YT.Player) return resolve(window.YT);
         const previous = window.onYouTubeIframeAPIReady;
         window.onYouTubeIframeAPIReady = () => {
@@ -2290,6 +2294,15 @@
         }
         renderCue(time);
         ytFollow();
+        // Remembered for the dashboard on the home page (history.js)
+        const file = room.file;
+        if (window.CineHistory && file.yt.id && now() - (yt.historyAt || 0) > 5000) {
+            yt.historyAt = now();
+            // The title, once YouTube has said it (until then the room calls it "YouTube video")
+            const title = file.title && file.title !== "YouTube video" ? { title: file.title } : {};
+            CineHistory.put(`yt:${file.yt.id}`, { type: "video", id: file.yt.id, ...title, time, duration, room: true }, yt.historyId !== file.yt.id);
+            yt.historyId = file.yt.id;
+        }
         // An ad plays when YouTube's player has another video than the room's: on a phone the layer
         // over the player steps aside so YouTube's Skip button can be tapped
         let ad = false;
@@ -3073,21 +3086,56 @@
         closeYouTubeForm();
     });
 
+    // A YouTube video or playlist for everyone: "play" (after the current one, straight away) or
+    // "end" (of the queue). Returns why it couldn't, or null.
+    const shareYouTubeRef = (ref, where) => {
+        if (!room) return "You're not in a room.";
+        if (!canShareYouTube()) return `${room.hostName || "The host"} isn't letting guests share videos right now.`;
+        if (room.role === "host") {
+            setYouTube({ id: room.id, name: room.name }, ref, where);
+            return null;
+        }
+        if (where === "play" && room.presenting) {
+            stopPresenting(true);
+            if (room.file && room.file.from === room.id) room.file = null;
+        }
+        send(room.peer, { t: "youtube", ...ref, where });
+        return null;
+    };
+    // The home page's search and dashboard play YouTube here while in a room (youtube.js)
+    together.shareYouTube = ref => shareYouTubeRef(ref, "play");
+
+    // Searching YouTube (youtube.js): typing words instead of a link shows results to pick from
+    const nowResults = window.CineYouTube && ytForm.querySelector(".yt-results") && CineYouTube.createResults({
+        host: ytForm.querySelector(".yt-results"),
+        compact: true,
+        actions: [{ key: "play", label: "Play for everyone", icon: "fa-play" }],
+        onPick: ref => {
+            const refused = shareYouTubeRef(ref, "play");
+            if (refused) return showYouTubeHint(refused, true);
+            ytInput.value = "";
+            nowResults.clear();
+            closeYouTubeForm();
+        }
+    });
+
     ytForm.addEventListener("submit", e => {
         e.preventDefault();
         if (!room) return;
         const ref = parseYouTube(ytInput.value);
-        if (!ref) return showYouTubeHint("That isn't a link to a YouTube video or playlist.", true);
-        if (!canShareYouTube()) return showYouTubeHint(`${room.hostName || "The host"} isn't letting guests share videos right now.`, true);
-        ytInput.value = "";
-        closeYouTubeForm();
-        // While YouTube is on, it plays right after the current video and keeps the queue
-        if (room.role === "host") return setYouTube({ id: room.id, name: room.name }, ref, "play");
-        if (room.presenting) {
-            stopPresenting(true);
-            if (room.file && room.file.from === room.id) room.file = null;
+        if (!ref) {
+            if (nowResults && ytInput.value.trim()) {
+                showYouTubeHint();
+                return nowResults.run(ytInput.value);
+            }
+            return showYouTubeHint("That isn't a link to a YouTube video or playlist.", true);
         }
-        send(room.peer, { t: "youtube", ...ref, where: "play" });
+        // While YouTube is on, it plays right after the current video and keeps the queue
+        const refused = shareYouTubeRef(ref, "play");
+        if (refused) return showYouTubeHint(refused, true);
+        ytInput.value = "";
+        if (nowResults) nowResults.clear();
+        closeYouTubeForm();
     });
 
     // ---------- The YouTube queue tab
@@ -3176,7 +3224,17 @@
         else sendQueueOp({ op, k });
     });
 
-    // Adding a link: to the end of the queue, or to play right away
+    // Adding a video or playlist: to the end of the queue, or to play right away
+    const addRefToQueue = (ref, where) => {
+        const refused = shareYouTubeRef(ref, where);
+        if (refused) {
+            showQueueHint(refused, true);
+            return false;
+        }
+        showQueueHint(ref.list && !ref.id ? "Adding the playlist…" : where === "play" ? "Playing it now…" : "Added to the queue.");
+        setTimeout(() => queueHint.textContent !== queueHintText && !queueHint.classList.contains("error") && showQueueHint(), 3000);
+        return true;
+    };
     const addToQueue = (text, where) => {
         if (!room) return false;
         const ref = parseYouTube(text);
@@ -3184,21 +3242,29 @@
             showQueueHint("That isn't a link to a YouTube video or playlist.", true);
             return false;
         }
-        if (!canShareYouTube()) {
-            showQueueHint(`${room.hostName || "The host"} isn't letting guests share videos right now.`, true);
-            return false;
-        }
-        if (room.role === "host") setYouTube({ id: room.id, name: room.name }, ref, where);
-        else send(room.peer, { t: "youtube", ...ref, where });
-        showQueueHint(ref.list && !ref.id ? "Adding the playlist…" : where === "play" ? "Playing it now…" : "Added to the queue.");
-        setTimeout(() => queueHint.textContent !== queueHintText && !queueHint.classList.contains("error") && showQueueHint(), 3000);
-        return true;
+        return addRefToQueue(ref, where);
     };
+
+    // Search results in the queue tab: play one now, or add it to the queue
+    const queueResults = window.CineYouTube && queueForm.querySelector(".yt-results") && CineYouTube.createResults({
+        host: queueForm.querySelector(".yt-results"),
+        compact: true,
+        actions: [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }],
+        onPick: (ref, where) => addRefToQueue(ref, where)
+    });
 
     queueForm.addEventListener("submit", e => {
         e.preventDefault();
         const where = e.submitter && e.submitter.value === "play" ? "play" : "end";
-        if (addToQueue(queueInput.value, where)) queueInput.value = "";
+        // Words instead of a link: search YouTube for them
+        if (queueResults && queueInput.value.trim() && !parseYouTube(queueInput.value)) {
+            showQueueHint();
+            return queueResults.run(queueInput.value);
+        }
+        if (addToQueue(queueInput.value, where)) {
+            queueInput.value = "";
+            if (queueResults) queueResults.clear();
+        }
     });
     queueInput.addEventListener("input", () => queueHint.classList.contains("error") && showQueueHint());
     queueInput.addEventListener("keydown", e => e.key === "Escape" && (e.stopPropagation(), queueInput.blur()));
@@ -3310,6 +3376,8 @@
     nextTrackBtn.addEventListener("click", () => stepPlaylist(1));
     // Shift + N / P (see script.js)
     together.step = step => {
+        // Outside a room: a YouTube playlist watched alone (youtube.js)
+        if (!room) return together.solo && together.solo.step(step);
         const file = room && room.file;
         if (!file || !file.yt || file.yt.count < 2) return;
         const index = file.yt.index + step;
@@ -3908,6 +3976,7 @@
             offset: null, samples: [], seekLead: 0.15, seekStarted: 0,
             retries: 0, timers: []
         };
+        if (together.solo) together.solo.stop();
         showStatus({
             title: "Looking for the room…",
             text: `Room ${Signaling.formatCode(code)}`,

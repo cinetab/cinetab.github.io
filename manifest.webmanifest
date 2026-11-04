@@ -1,10 +1,12 @@
 {
-  "name": "CineTab – Watch videos together",
+  "id": "/",
+  "name": "CineTab - Movie Night Together",
   "short_name": "CineTab",
-  "description": "Play videos from your computer in a browser tab and watch them together on Google Meet, Zoom, Teams or in a private CineTab room.",
+  "description": "Watch videos from your device or YouTube in a browser tab, alone or together: share the tab on Google Meet, Zoom or Teams, or invite friends to a private CineTab room.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#0f0f11",
   "theme_color": "#0f0f11",
   "categories": ["entertainment", "multimedia", "video"],
@@ -13,5 +15,13 @@
     { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
     { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
     { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search YouTube",
+      "short_name": "YouTube",
+      "url": "/?search#dashboard",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }

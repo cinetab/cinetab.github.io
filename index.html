@@ -3,16 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CineTab – Watch videos together on Google Meet, Zoom &amp; Teams</title>
+  <title>CineTab - Movie Night Together</title>
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.3.1">
+  <meta name="version" content="1.4.0">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
   <link rel="canonical" href="https://cinetab.github.io/">
   <link rel="manifest" href="manifest.webmanifest">
+  <!-- Installed on a phone's home screen, it opens full screen like an app (home.js) -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CineTab">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="CineTab">
@@ -48,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.3.1",
+      "softwareVersion": "1.4.0",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -89,11 +94,13 @@
         <span>Cine<b>Tab</b></span>
       </a>
       <nav class="site-nav">
+        <a href="#dashboard" title="Search YouTube and see what you watched">Dashboard</a>
         <a href="#how" title="See the three steps to movie night">How it works</a>
         <a href="#features" title="What CineTab can do">Features</a>
         <a href="#faq" title="Common questions">FAQ</a>
       </nav>
       <div class="header-actions">
+        <button class="btn btn-ghost btn-sm install-app" hidden title="Install CineTab as an app on this device" aria-label="Install CineTab as an app"><i class="fa-solid fa-download"></i> <span class="label-long">Install app</span></button>
         <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create room</span></button>
         <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer" aria-label="Open a movie"><i class="fa-solid fa-play"></i> <span class="label-long">Open a movie</span><span class="label-short">Open movie</span></button>
       </div>
@@ -107,6 +114,7 @@
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
           <button class="btn btn-ghost btn-lg room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join a room</button>
+          <a class="btn btn-ghost btn-lg hero-yt" href="#dashboard" title="Search YouTube and watch a video or playlist here, alone or together"><i class="fa-brands fa-youtube"></i> Search YouTube</a>
         </div>
         <p class="hero-note">Best in Chrome or Edge on desktop. Your video is never uploaded to any server.</p>
         <p class="hero-note offline-note" data-online-only><i class="fa-solid fa-download"></i> Prefer no website at all? <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file you can open from your computer, even without internet">Download the player as one file</a> and open it from your computer.</p>
@@ -135,6 +143,47 @@
         </div>
       </div>
     </section>
+
+    <!-- ============ DASHBOARD ============ -->
+    <!-- Search YouTube, and what was watched in this browser (home.js, youtube.js, history.js).
+         For someone who has watched something it moves above the hero. -->
+    <section class="section dash-section" id="dashboard">
+      <div class="dash-panel">
+        <div class="dash-head">
+          <h2 class="saved-title"><i class="fa-solid fa-house"></i> Your dashboard</h2>
+          <p class="saved-sub">Search YouTube or paste a link, open a movie from your device, or pick up where you left off</p>
+        </div>
+        <form class="yt-search" role="search" novalidate>
+          <i class="fa-brands fa-youtube yt-search-icon" aria-hidden="true"></i>
+          <input class="yt-search-input" type="search" name="q" maxlength="300" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="Search YouTube or paste a link" aria-label="Search YouTube, or paste a YouTube video or playlist link">
+          <button type="button" class="yt-search-paste" title="Paste a YouTube link you copied" aria-label="Paste a link you copied"><i class="fa-regular fa-paste"></i></button>
+          <button type="submit" class="btn btn-primary btn-sm yt-search-go" title="Search YouTube (or play the link)"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
+        </form>
+        <p class="dash-note" role="status" hidden></p>
+        <div class="yt-results dash-results" hidden></div>
+
+        <div class="dash-history">
+          <div class="dash-history-head">
+            <h3><i class="fa-solid fa-clock-rotate-left"></i> Recently watched</h3>
+            <div class="dash-filters" aria-label="Show">
+              <button type="button" class="dash-filter" data-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="dash-filter" data-filter="youtube" aria-pressed="false"><i class="fa-brands fa-youtube"></i> YouTube</button>
+              <button type="button" class="dash-filter" data-filter="playlist" aria-pressed="false"><i class="fa-solid fa-list"></i> Playlists</button>
+              <button type="button" class="dash-filter" data-filter="file" aria-pressed="false"><i class="fa-solid fa-hard-drive"></i> This device</button>
+            </div>
+            <button type="button" class="dash-clear" title="Forget everything watched in this browser (your files and saved rooms aren't touched)"><i class="fa-solid fa-trash-can"></i> Clear</button>
+          </div>
+          <ul class="dash-grid"></ul>
+          <div class="dash-empty">
+            <i class="fa-solid fa-film"></i>
+            <p>Nothing here yet. Videos you watch, from YouTube or from your device, show up here so you can carry on with one click.</p>
+            <button type="button" class="btn btn-ghost btn-sm choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Open a movie</button>
+          </div>
+          <button type="button" class="dash-more" hidden></button>
+        </div>
+      </div>
+    </section>
+    <!-- ============ /DASHBOARD ============ -->
 
     <section class="section saved-section" id="rooms" hidden>
       <div class="saved-panel">
@@ -286,6 +335,18 @@
           <p>Yes. <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file">Download the player as a single HTML file</a>, save it anywhere and double-click it to open it in your browser. It's just the player, without this home page, and everything it needs (icons, fonts, scripts) is inside that one file, so it works with no internet connection. Two differences from the website: the converter for formats like AVI or DTS sound needs internet the first time it's used (to download ffmpeg), and because browsers don't allow file storage for pages opened from disk, converted copies aren't saved between visits and very large movies may not fit in memory while converting.</p>
         </details>
         <details>
+          <summary>Can I watch YouTube videos together?</summary>
+          <p>Yes. Search YouTube from the <a href="#dashboard">dashboard</a> (or paste a video or playlist link) and it plays right here with CineTab's controls. Click <b>Watch together</b> in the player to create a room: it carries on with the same video for everyone, each person watching on YouTube's own player, in sync. In a room, the <b>Queue</b> tab searches YouTube too. Search results come from YouTube through public Piped servers; if they're busy, search on YouTube and paste the link instead.</p>
+        </details>
+        <details>
+          <summary>Can I install CineTab as an app on my phone?</summary>
+          <p>Yes. Tap <b>Install app</b> at the top of this page. On Android (Chrome, Edge, Samsung Internet) it installs straight away; on iPhone and iPad, tap <b>Share</b>, then <b>Add to Home Screen</b>. CineTab then opens full screen from your home screen like any app, and its page loads even on a weak connection.</p>
+        </details>
+        <details>
+          <summary>What does the dashboard remember?</summary>
+          <p>The YouTube videos and playlists you watched and where you were in them, and the names and lengths of the videos you opened from your device. It's kept only in this browser and never sent anywhere; remove one item with its &times;, or everything with <b>Clear</b>. In Chrome and Edge on a computer, a video from your device opens again with one click (the browser asks for permission); elsewhere you pick the file again and it continues where you stopped.</p>
+        </details>
+        <details>
           <summary>Should I use Picture-in-Picture while sharing?</summary>
           <p>No &mdash; PiP moves the video out of the tab, so people on the call see an empty player. Use fullscreen instead.</p>
         </details>
@@ -313,13 +374,39 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.3.1</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.4.0</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
       </p>
+      <button type="button" class="footer-download install-app" hidden title="Install CineTab as an app on this device"><i class="fa-solid fa-mobile-screen-button"></i> Install app</button>
       <a class="footer-download" data-online-only href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file you can open from your computer"><i class="fa-solid fa-download"></i> Download offline player</a>
     </footer>
+
+    <!-- How to install CineTab where the browser has no install button of its own (home.js) -->
+    <div class="install-dialog" hidden>
+      <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="install-title">
+        <button type="button" class="install-close" title="Close (Esc)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+        <img class="install-icon" src="icon-192.png" alt="" width="64" height="64">
+        <h2 id="install-title">Install CineTab</h2>
+        <p class="install-lead">Put CineTab on your home screen. It opens full screen, like an app.</p>
+        <ol class="install-steps" data-platform="ios">
+          <li>Tap <b>Share</b> <i class="fa-solid fa-arrow-up-from-bracket"></i> (in Safari it can be under <b>&middot;&middot;&middot;</b>; in Chrome it's beside the address bar).</li>
+          <li>Tap <b>Add to Home Screen</b> <i class="fa-regular fa-square-plus"></i>. You may need to scroll down.</li>
+          <li>Tap <b>Add</b>. CineTab is on your home screen.</li>
+        </ol>
+        <ol class="install-steps" data-platform="android">
+          <li>Open the browser's menu <i class="fa-solid fa-ellipsis-vertical"></i>.</li>
+          <li>Tap <b>Install app</b>, or <b>Add to Home screen</b> (Samsung Internet: <b>Add page to &rarr; Home screen</b>).</li>
+          <li>Confirm with <b>Install</b> or <b>Add</b>.</li>
+        </ol>
+        <ol class="install-steps" data-platform="desktop">
+          <li>Click the install icon at the right of the address bar, or open the browser's menu.</li>
+          <li>Choose <b>Install CineTab</b> (Edge: <b>Apps &rarr; Install this site as an app</b>).</li>
+        </ol>
+        <p class="install-note">Already installed? Open CineTab from your home screen or app list.</p>
+      </div>
+    </div>
   </div>
 
   <!-- ============ PLAYER ============ -->
@@ -432,7 +519,7 @@
             <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
-            <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a room's YouTube queue</dd>
+            <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
             <dt><kbd>Esc</kbd></dt><dd>Close a dialog</dd>
           </dl>
@@ -707,9 +794,10 @@
         <button type="button" class="room-small-btn room-now-next" title="Next video in the playlist, for everyone">Next <i class="fa-solid fa-forward-step"></i></button>
       </div>
       <form class="room-yt-form" novalidate hidden>
-        <input class="room-yt-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste a YouTube video or playlist link" aria-label="YouTube link">
-        <button type="submit" class="room-small-btn primary">Play</button>
-        <small class="room-yt-hint">Public or unlisted videos and playlists. Everyone watches on YouTube's own player, in sync.</small>
+        <input class="room-yt-input" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Search YouTube or paste a link" aria-label="Search YouTube or paste a YouTube link">
+        <button type="submit" class="room-small-btn primary">Go</button>
+        <small class="room-yt-hint">Search, or paste a link to a public or unlisted video or playlist. Everyone watches on YouTube's own player, in sync.</small>
+        <div class="yt-results room-yt-results" hidden></div>
       </form>
     </div>
 
@@ -732,14 +820,15 @@
     <section class="room-tab room-tab-queue" data-tab="queue" role="tabpanel" hidden>
       <form class="room-queue-form" novalidate>
         <div class="room-queue-row">
-          <input class="room-queue-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste a YouTube video or playlist link" aria-label="YouTube link to add">
+          <input class="room-queue-input" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Search YouTube or paste a link" aria-label="Search YouTube, or a YouTube link to add">
           <button type="button" class="room-icon-btn room-queue-paste" title="Paste the link you copied" aria-label="Paste the link you copied"><i class="fa-regular fa-paste"></i></button>
         </div>
         <div class="room-queue-row">
           <button type="submit" class="room-small-btn primary" value="end"><i class="fa-solid fa-plus"></i> Add to queue</button>
           <button type="submit" class="room-small-btn" value="play"><i class="fa-solid fa-play"></i> Play now</button>
         </div>
-        <small class="room-queue-hint">Found a video on YouTube? Copy its link there, then paste it here. You can also drop a link on this list.</small>
+        <small class="room-queue-hint">Type words to search YouTube, or paste a video or playlist link. You can also drop a link on this list.</small>
+        <div class="yt-results room-queue-results" hidden></div>
       </form>
       <p class="room-section-title">Queue <span class="room-queue-count"></span></p>
       <ol class="room-queue"></ol>
@@ -835,8 +924,11 @@
   <script src="tooltips.js"></script>
   <script src="converter.js"></script>
   <script src="script.js"></script>
+  <script src="history.js"></script>
+  <script src="youtube.js"></script>
   <script src="vendor/qrcode-generator.js"></script>
   <script src="signaling.js"></script>
   <script src="room.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>

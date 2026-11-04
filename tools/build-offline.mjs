@@ -112,8 +112,9 @@ const build = async () => {
     for (const part of ["CHOOSER", "PLAYER", "PANEL"]) {
         out = cutBlock(out, `<!-- ============ ROOM: ${part} ============ -->`, `<!-- ============ /ROOM: ${part} ============ -->`);
     }
-    for (const script of ["vendor/qrcode-generator.js", "signaling.js", "room.js"]) swap(`  <script src="${script}"></script>\n`, "");
-    swap(`<title>CineTab – Watch videos together on Google Meet, Zoom &amp; Teams</title>`, `<title>CineTab Player</title>`);
+    // So do YouTube, the dashboard's history and installing as an app (home.js)
+    for (const script of ["history.js", "youtube.js", "vendor/qrcode-generator.js", "signaling.js", "room.js", "home.js"]) swap(`  <script src="${script}"></script>\n`, "");
+    swap(`<title>CineTab - Movie Night Together</title>`, `<title>CineTab Player</title>`);
     swap(`<body>`, `<body class="watching">`);
     swap(`<div class="player-page" hidden>`, `<div class="player-page">`);
     swap(`        <button class="player-back" title="Back to home"><i class="fa-solid fa-arrow-left"></i></button>\n`, "");

@@ -4,6 +4,38 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-11-04
+
+### YouTube, on your own and in rooms
+- Search YouTube from the home page: Videos or Playlists, with pictures, lengths and "More
+  results". Pasting a video or playlist link still works, and so does the paste button
+- A YouTube video or playlist plays right in CineTab with its own controls (timeline, jumps,
+  speed, volume, fullscreen, captions with C, Shift + N / P in a playlist); live streams show
+  LIVE
+- **Watch together** while a YouTube video plays creates a room that carries on with it, from
+  the same moment, for everyone
+- In a room, the YouTube box and the Queue tab search YouTube too (Play now / Add to queue)
+- Searches go to public Piped servers (several are tried); a YouTube Data API key can be set in
+  youtube.js to ask YouTube first. If none answers, a link to YouTube's own search is offered
+
+### Dashboard
+- The home page has a dashboard: the YouTube search and **Recently watched** (YouTube videos,
+  playlists, and videos from this device), with how much is left, filters and Clear
+- One click carries on: YouTube where you stopped (a playlist at its video), a video from this
+  device straight away in Chrome and Edge on computers (the browser asks first), elsewhere after
+  picking the file again
+- For someone who has used CineTab before, the dashboard, rooms and converted videos come first
+- History stays in this browser and is never sent anywhere
+
+### Install as an app
+- **Install app** at the top of the page (and in the footer): Android installs straight away,
+  iPhone and iPad get the Share → Add to Home Screen steps
+- A service worker (sw.js) keeps CineTab's own files, so the installed app opens without a
+  connection; the app has a "Search YouTube" shortcut
+
+### Other
+- The tab is now called "CineTab - Movie Night Together"
+
 ## [1.3.1] - 2026-11-04
 
 ### Player on phones and tablets
@@ -269,6 +301,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.0
 [1.3.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.1
 [1.3.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.0
 [1.2.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.8

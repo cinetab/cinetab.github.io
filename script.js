@@ -84,7 +84,9 @@ const together = {
     onHome: null,     // called whenever the home page is shown
     onPlayer: null,   // called whenever the player is shown
     onTitle: null,    // called when the video's title is renamed
-    step: null,       // the previous (-1) / next (1) video of a room's YouTube queue
+    step: null,       // the previous (-1) / next (1) video of a room's YouTube queue (or a playlist)
+    shareYouTube: null, // in a room: plays a YouTube link for everyone (returns why it couldn't)
+    solo: null,       // youtube.js: a YouTube video watched on your own ({ active, stop, pause, handOff })
     active: () => false // in a room: going home keeps the video playing for everyone
 };
 
@@ -172,6 +174,7 @@ const showPlayer = () => {
 const showHome = () => {
     // A room keeps going while you look at the home page
     if (!together.active()) mainVideo.pause();
+    if (together.solo) together.solo.pause();
     if (fullscreenElement()) exitFullscreen();
     playerPage.hidden = true;
     homePage.hidden = false;
@@ -183,7 +186,7 @@ const showHome = () => {
 // Browser back button returns to the home page
 window.addEventListener("popstate", () => {
     if (!homePage) return;
-    if (location.hash === "#watch" && (currentFile || together.active())) showPlayer();
+    if (location.hash === "#watch" && (currentFile || together.active() || (together.solo && together.solo.active))) showPlayer();
     else showHome();
 });
 
@@ -199,7 +202,32 @@ if (homePage) {
     playerHomeBtn.addEventListener("click", goHome);
     playerBackBtn.addEventListener("click", goHome);
 }
-chooseVideoBtns.forEach(btn => btn.addEventListener("click", () => fileInput.click()));
+
+// The file picker. Where the browser can (Chrome and Edge on computers) it's the File System
+// Access picker: its handle lets the dashboard open the same file again later (history.js).
+// Elsewhere it's the usual file input.
+const pickerTypes = () => {
+    const extensions = fileInput.accept.split(",").filter(type => /^\.[a-z0-9]{1,10}$/i.test(type));
+    return [{
+        description: "Videos and music",
+        accept: {
+            "video/*": [".mp4", ".webm", ".m4v", ".mov", ...extensions],
+            "audio/*": [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".oga"]
+        }
+    }];
+};
+const pickVideo = async () => {
+    if (!window.CineHistory || !CineHistory.handles) return fileInput.click();
+    let handle;
+    try {
+        [handle] = await window.showOpenFilePicker({ id: "cinetab-video", startIn: "videos", types: pickerTypes() });
+    } catch (e) {
+        if (e && e.name !== "AbortError") fileInput.click();
+        return;
+    }
+    if (handle) loadVideoFile(await handle.getFile(), handle);
+};
+chooseVideoBtns.forEach(btn => btn.addEventListener("click", pickVideo));
 
 // Video titles can be renamed; the new name is remembered for that file in this browser
 const titleKey = (name, size) => `title:${name}:${size}`;
@@ -255,6 +283,10 @@ const setSource = (source, mode, autoplay = true) => {
 
 // Resets the player for a new file; `name` and `size` are the original file's
 const prepareFor = (name, size) => {
+    // A YouTube video watched on your own gives way (youtube.js)
+    if (together.solo) together.solo.stop();
+    // Remembered for the dashboard on the home page (history.js)
+    if (window.CineHistory) CineHistory.file({ name, size, title: savedTitle(name, size) });
     showPlayer();
     enterMobileImmersive();
     mainVideo.pause();
@@ -282,11 +314,14 @@ const enterMobileImmersive = () => {
     }).catch(() => {});
 };
 
-const loadVideoFile = async (file) => {
+// `handle`: where the file came from, when the browser says (see pickVideo); kept so the
+// dashboard can open it again
+const loadVideoFile = async (file, handle = null) => {
     if(!file) return;
     if (together.onFile) together.onFile(file);
     prepareFor(file.name, file.size);
     currentFile = file;
+    if (handle && window.CineHistory) CineHistory.saveHandle(CineHistory.fileKey(file.name, file.size), handle);
 
     // Converted before? Play the saved copy straight away
     const saved = await Converter.getCached(file);
@@ -302,8 +337,8 @@ const loadVideoFile = async (file) => {
     showFeedback("fa-play", "Playing");
 };
 
-browseBtn.addEventListener("click", () => fileInput.click());
-openFileBtn.addEventListener("click", () => fileInput.click());
+browseBtn.addEventListener("click", pickVideo);
+openFileBtn.addEventListener("click", pickVideo);
 
 fileInput.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -385,11 +420,20 @@ subtitleInput.addEventListener("change", e => {
 });
 
 // Drag & Drop Video / Subtitles anywhere on the page
-const handleDroppedFiles = files => {
+// `handles`: the dropped files' handles, where the browser gives them (kept for the dashboard)
+const handleDroppedFiles = (files, handles = []) => {
     const list = [...files];
     const video = list.find(file => !isSubtitleFile(file));
     const subtitle = list.find(isSubtitleFile);
-    if (video) loadVideoFile(video);
+    if (video) {
+        loadVideoFile(video);
+        if (handles.length && window.CineHistory) {
+            Promise.all(handles.map(handle => handle.catch(() => null))).then(found => {
+                const handle = found.find(item => item && item.kind === "file" && item.name === video.name);
+                if (handle) CineHistory.saveHandle(CineHistory.fileKey(video.name, video.size), handle);
+            });
+        }
+    }
     if (subtitle) loadSubtitleFile(subtitle);
 };
 
@@ -407,7 +451,11 @@ document.addEventListener("dragleave", e => {
 document.addEventListener("drop", e => {
     e.preventDefault();
     setDragOver(false);
-    handleDroppedFiles(e.dataTransfer.files);
+    // Handles have to be asked for during the drop itself
+    const handles = window.CineHistory && CineHistory.handles ? [...e.dataTransfer.items]
+        .filter(item => item.kind === "file" && typeof item.getAsFileSystemHandle === "function")
+        .map(item => item.getAsFileSystemHandle()) : [];
+    handleDroppedFiles(e.dataTransfer.files, handles);
 });
 
 // Format Support: files the browser can't play are converted on this computer (see converter.js)
@@ -1170,12 +1218,12 @@ const mediaTime = () => together.stream ? together.stream.currentTime() : mainVi
 
 const updateMediaSession = () => {
     const session = navigator.mediaSession;
-    if (!session || !(currentFile || together.active())) return;
+    if (!session || !(currentFile || together.active() || (together.solo && together.solo.active))) return;
     const title = videoTitle.textContent;
     if (!session.metadata || session.metadata.title !== title) {
         session.metadata = new MediaMetadata({
             title,
-            artist: together.active() ? "CineTab · watching together" : "CineTab",
+            artist: together.active() ? "CineTab · watching together" : together.solo && together.solo.active ? "CineTab · YouTube" : "CineTab",
             artwork: [
                 { src: "icon-192.png", sizes: "192x192", type: "image/png" },
                 { src: "icon-512.png", sizes: "512x512", type: "image/png" }
