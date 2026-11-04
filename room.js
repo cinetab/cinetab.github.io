@@ -1033,13 +1033,63 @@
         else syncMicrophonePeer(room.peer);
     };
 
+    // ---------- The mic while the page isn't on screen
+    // Switching to another app keeps the mic on: people can still hear you, and the browser shows
+    // that it's in use. Locking the phone turns it off. A web page can't tell those two apart
+    // except through Idle Detection (Chrome and Edge), which reports a locked screen; on a phone or
+    // tablet it asks for that permission once, together with the mic.
+    let lockWatch = null;
+    let micOffByLock = false;
+    const watchScreenLock = async () => {
+        if (lockWatch || !("IdleDetector" in window)) return;
+        lockWatch = "starting";
+        try {
+            let state = "prompt";
+            try {
+                state = (await navigator.permissions.query({ name: "idle-detection" })).state;
+            } catch (e) {}
+            // Asked only where a locked phone is likely; computers use it if it was already allowed
+            if (state === "prompt" && matchMedia("(pointer: coarse)").matches) state = await IdleDetector.requestPermission();
+            if (state !== "granted") {
+                lockWatch = null;
+                return;
+            }
+            const detector = new IdleDetector();
+            detector.addEventListener("change", () => {
+                if (detector.screenState !== "locked" || !micEnabled) return;
+                micOffByLock = true;
+                disableMicrophone();
+            });
+            await detector.start({ threshold: 60000 });
+            lockWatch = detector;
+        } catch (e) {
+            lockWatch = null;
+        }
+    };
+    // Back on the phone after it was locked: say why the mic is off
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden || !micOffByLock) return;
+        micOffByLock = false;
+        if (room) toast("Your mic was turned off when the phone locked. Tap Mic to turn it on again.");
+    });
+
     const enableMicrophone = async () => {
         if (micBusy || micEnabled || !room) return;
         micBusy = true;
         micBtn.disabled = true;
+        // Straight from the click: asking for a permission needs one
+        watchScreenLock();
         try {
+            // Noise suppression is off: on phones and laptop mics it often cuts quiet or distant
+            // speech, so people couldn't be heard. Echo cancellation stays on, or the movie's sound
+            // from the speakers would go back to everyone through the mic.
             micStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true, channelCount: 1 }
+            });
+            micStream.getAudioTracks().forEach(track => {
+                track.contentHint = "speech";
+                // The browser or the phone took the mic away (some do while another app is open)
+                track.addEventListener("ended", () => micStream && micStream.getAudioTracks()[0] === track && disableMicrophone());
             });
             micEnabled = true;
             renderMic();
@@ -1932,6 +1982,7 @@
     // What the player's controls do while watching the stream (see `together` in script.js)
     const streamControls = {
         get paused() { return !room || !room.state || room.state.paused; },
+        get rate() { return room && room.state ? room.state.rate : 1; },
         get duration() { return room && room.file ? room.file.duration : 0; },
         currentTime: () => expectedTime(),
         request: change => request(change),
@@ -2011,7 +2062,7 @@
         const wasYouTube = together.stream === ytControls;
         together.stream = null;
         if (room) clearInterval(room.streamTimer);
-        container.classList.remove("remote", "audio-mode", "youtube");
+        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad");
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
         if (wasYouTube) ytStop();
@@ -2132,6 +2183,7 @@
     // What the player's controls do while the room watches YouTube (see `together` in script.js)
     const ytControls = {
         get paused() { return !room || !room.state || room.state.paused; },
+        get rate() { return room && room.state ? room.state.rate : 1; },
         get duration() { return room && room.file ? room.file.duration : 0; },
         currentTime: () => expectedTime(),
         request: change => request(change),
@@ -2238,6 +2290,14 @@
         }
         renderCue(time);
         ytFollow();
+        // An ad plays when YouTube's player has another video than the room's: on a phone the layer
+        // over the player steps aside so YouTube's Skip button can be tapped
+        let ad = false;
+        try {
+            const data = yt.ready && yt.loaded && yt.player.getPlayerState() === YT.PLAYING && yt.player.getVideoData();
+            ad = !!(data && data.video_id && data.video_id !== yt.loaded);
+        } catch (e) {}
+        container.classList.toggle("yt-ad", ad);
         // Still loading, an error, or a browser that wants a click before playing sound
         const blocked = yt.ready && playing && !yt.error && yt.player.getPlayerState() === YT.UNSTARTED && now() - yt.started > 5000;
         const note = yt.error || (!yt.ready ? "Loading YouTube…" : blocked ? "Click the video to start it" : null);
@@ -2251,6 +2311,8 @@
         // The host's player reaching the end moves the room on
         if (room.role === "host" && e.data === YT.ENDED && room.yt && yt.loaded === room.yt.id && room.state && !room.state.paused) ytFinished();
         if (now() < yt.selfUntil || !room.state) return;
+        // YouTube pausing itself because the page left the screen (phones) isn't anyone's choice
+        if (pageAway()) return;
         // Someone clicked YouTube's player itself: that's play or pause for everyone
         const at = yt.player.getCurrentTime();
         const time = Number.isFinite(at) && Math.abs(at - expectedTime()) < 3 ? at : undefined;
@@ -2639,9 +2701,17 @@
         return true;
     };
 
+    // While the page isn't on screen (another app, or the phone locked), the phone itself may pause
+    // or resume the video. That isn't anyone's choice, so it doesn't go to the room; the lock
+    // screen's own play / pause buttons do. Coming back, the video catches up with the room.
+    let shownAt = 0;
+    document.addEventListener("visibilitychange", () => document.hidden || (shownAt = Date.now()));
+    const pageAway = () => (document.hidden || Date.now() - shownAt < 1500) && !together.fromMediaKeys();
+
     // Play/pause/seek/speed on a guest's own copy: the guest's own action, or the effect of following?
     const guestMediaEvent = type => {
         if (room.phase !== "in" || together.stream || !room.state || !ownMatches() || mainVideo.readyState < 1) return;
+        if ((type === "play" || type === "pause") && pageAway()) return;
         if (type === "seeked" && room.seekStarted) {
             // Seeking takes a moment; aim that much ahead next time
             room.seekLead = Math.min(1, Math.max(0.05, (now() - room.seekStarted) / 1000));

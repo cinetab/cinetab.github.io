@@ -88,10 +88,14 @@ const together = {
     active: () => false // in a room: going home keeps the video playing for everyone
 };
 
-// Hide Controls on Idle
+// Hide Controls on Idle (not while a menu or the settings sheet is open, or the timeline is
+// being dragged: they wait until it's closed)
+const controlsInUse = () => scrubbing || popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden;
 const hideControls = () => {
     if(together.stream ? together.stream.paused : mainVideo.paused) return;
+    clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
+        if (controlsInUse()) return hideControls();
         hideTooltip();
         container.classList.remove("show-controls");
         container.classList.add("hide-cursor");
@@ -104,7 +108,13 @@ container.addEventListener("pointermove", e => {
     container.classList.add("show-controls");
     container.classList.remove("hide-cursor");
     clearTimeout(idleTimer);
-    hideControls();   
+    hideControls();
+});
+
+// Touching a button or the timeline counts as using the controls: they stay a while longer
+container.addEventListener("pointerdown", e => {
+    if (e.pointerType !== "touch" || !container.classList.contains("show-controls")) return;
+    if (e.target.closest(".wrapper, .top-bar, .player-sheet")) hideControls();
 });
 
 // Show Center Visual Feedback Badge
@@ -745,16 +755,18 @@ const togglePopup = menu => {
     popupMenus.forEach(other => other.classList.toggle("show", other === menu && open));
     if (open && menu === moreOptions) renderMoreOptions();
 };
+const playerSheet = container.querySelector(".player-sheet");
 const closePopups = () => {
-    const open = popupMenus.some(menu => menu.classList.contains("show"));
+    const open = popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden;
     popupMenus.forEach(menu => menu.classList.remove("show"));
+    closeSheet();
     return open;
 };
 speedBtn.addEventListener("click", () => togglePopup(speedOptions));
 moreBtn.addEventListener("click", () => togglePopup(moreOptions));
 
 document.addEventListener("click", e => {
-    if (!e.target.closest(".popup-menu-wrapper")) closePopups();
+    if (!e.target.closest(".popup-menu-wrapper, .settings-btn, .player-sheet")) closePopups();
 });
 
 // Timeline Hover Live Preview & Seeking
@@ -923,7 +935,8 @@ const routeBoost = () => {
     }
 };
 
-const setBoost = level => {
+// `announce`: say so in the middle of the picture (not while a swipe is changing it)
+const setBoost = (level, announce = true) => {
     if (container.classList.contains("youtube")) return;
     if (level > 1 && !boost.ctx) {
         try {
@@ -954,7 +967,7 @@ const setBoost = level => {
         boost.ctx.resume().catch(() => {});
     }
     renderMoreOptions();
-    showFeedback(level > 1 ? "fa-volume-high" : "fa-volume-low", level > 1 ? `Boost ${Math.round(level * 100)}%` : "Boost off");
+    if (announce) showFeedback(level > 1 ? "fa-volume-high" : "fa-volume-low", level > 1 ? `Boost ${Math.round(level * 100)}%` : "Boost off");
 };
 boostChips.forEach(chip => chip.addEventListener("click", () => setBoost(+chip.dataset.boost)));
 mainVideo.addEventListener("volumechange", syncBoostVolume);
@@ -964,28 +977,156 @@ mainVideo.addEventListener("volumechange", syncBoostVolume);
 // The menu reflects what applies right now: YouTube's own player keeps its shape and volume
 function renderMoreOptions() {
     const youtube = container.classList.contains("youtube");
-    moreOptions.querySelector(".aspect-options").classList.toggle("disabled", youtube);
+    // On a touch screen YouTube's player fills the picture, so it can be Fit or Fill (not the
+    // other shapes); on a computer it keeps its own shape between the title bar and the controls
+    const ytShapes = youtube && matchMedia("(pointer: coarse)").matches;
+    aspectChips.forEach(chip => chip.hidden = ytShapes && !["fit", "fill"].includes(chip.dataset.aspect));
+    moreOptions.querySelector(".aspect-options").classList.toggle("disabled", youtube && !ytShapes);
     moreOptions.querySelector(".boost-options").classList.toggle("disabled", youtube);
     boostChips.forEach(chip => chip.classList.toggle("active", +chip.dataset.boost === boost.level));
     boostCurrent.textContent = youtube ? "—" : boost.level > 1 ? `${Math.round(boost.level * 100)}%` : "Off";
     moreNote.hidden = !youtube;
-    moreNote.textContent = youtube ? "YouTube's player keeps its own shape and volume (up to 100%)." : "";
+    moreNote.textContent = !youtube ? "" : ytShapes ? "YouTube's player keeps its own volume (up to 100%)." : "YouTube's player keeps its own shape and volume (up to 100%).";
+    if (!playerSheet.hidden) renderSheet();
 }
 renderMoreOptions();
 
-// Play / Pause
+// ---------- Settings sheet (phones and tablets): speed, picture, boost, subtitles and files
+// in one place, like YouTube's. Each choice is the same as the desktop menus' (it clicks them),
+// so both always agree. The sheet stays open, and the controls with it, until it's closed.
+const settingsBtn = container.querySelector(".settings-btn"),
+sheetMain = playerSheet.querySelector('[data-sheet="main"]'),
+sheetOptionsView = playerSheet.querySelector('[data-sheet="options"]'),
+sheetTitle = playerSheet.querySelector(".sheet-title"),
+sheetNote = playerSheet.querySelector(".sheet-note"),
+sheetOptions = playerSheet.querySelector(".sheet-options");
+const SHEET_LISTS = {
+    // A room's YouTube video or stream plays at the room's speed: the choice goes to the room
+    speed: { title: "Playback speed", chips: () => speedPresets, current: () => together.stream ? rateLabel(together.stream.rate) : speedCurrent.textContent,
+        active: chip => together.stream ? +chip.dataset.speed === together.stream.rate : chip.classList.contains("active"),
+        pick: chip => together.stream ? together.stream.request({ rate: +chip.dataset.speed }) : chip.click() },
+    aspect: { title: "Picture", chips: () => aspectChips, current: () => aspectCurrent.textContent },
+    boost: { title: "Volume boost", chips: () => boostChips, current: () => boostCurrent.textContent }
+};
+let sheetList = null;
+const rateLabel = rate => rate === 1 ? "Normal" : `${rate}x`;
+
+const sheetRow = name => playerSheet.querySelector(`[data-open="${name}"], [data-act="${name}"]`);
+
+function renderSheet() {
+    const youtube = container.classList.contains("youtube");
+    // The host's stream plays at the host's speed; YouTube keeps its own shape and volume
+    sheetRow("boost").hidden = youtube;
+    sheetRow("aspect").hidden = youtube && !isTouch;
+    Object.keys(SHEET_LISTS).forEach(name => sheetRow(name).querySelector(".sheet-value").textContent = SHEET_LISTS[name].current());
+    const subtitlesOn = subtitlesBtn.classList.contains("active");
+    sheetRow("subtitles").querySelector(".sheet-value").textContent = subtitlesOn ? "On" : youtube || together.stream || mainVideo.textTracks.length ? "Off" : "None";
+    if (sheetList) showSheetList(sheetList);
+}
+
+const showSheetList = name => {
+    const list = SHEET_LISTS[name];
+    sheetList = name;
+    sheetTitle.textContent = list.title;
+    sheetNote.hidden = name !== "boost";
+    sheetNote.textContent = name === "boost" ? "Louder than the phone's own maximum. Swiping up on the right side of the picture goes past 100% too." : "";
+    const current = list.current();
+    const chips = [...list.chips()].filter(chip => !chip.hidden);
+    const isActive = chip => list.active ? list.active(chip) : chip.classList.contains("active");
+    sheetOptions.replaceChildren(...chips.map(chip => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "sheet-option";
+        option.setAttribute("role", "radio");
+        const active = isActive(chip);
+        option.setAttribute("aria-checked", String(active));
+        option.innerHTML = `<i class="fa-solid fa-check"></i>`;
+        option.append(chip.textContent);
+        option.addEventListener("click", () => {
+            if (list.pick) list.pick(chip);
+            else chip.click();
+            // Back to the list, which now shows the new choice
+            showSheetMain();
+        });
+        return option;
+    }));
+    // A value between the presets (a custom speed, or a boost set by swiping)
+    if (!chips.some(isActive)) {
+        const custom = document.createElement("p");
+        custom.className = "sheet-custom";
+        custom.textContent = `Now: ${current}`;
+        sheetOptions.prepend(custom);
+    }
+    sheetMain.hidden = true;
+    sheetOptionsView.hidden = false;
+};
+
+const showSheetMain = () => {
+    sheetList = null;
+    sheetOptionsView.hidden = true;
+    sheetMain.hidden = false;
+    renderSheet();
+};
+
+const openSheet = () => {
+    popupMenus.forEach(menu => menu.classList.remove("show"));
+    sheetList = null;
+    sheetOptionsView.hidden = true;
+    sheetMain.hidden = false;
+    playerSheet.hidden = false;
+    // Also refreshes what applies now (YouTube: Fit / Fill, no boost) and the sheet with it
+    renderMoreOptions();
+    container.classList.add("show-controls", "sheet-open");
+    settingsBtn.setAttribute("aria-expanded", "true");
+    playerSheet.querySelector(".sheet-row:not([hidden])").focus({ preventScroll: true });
+};
+
+function closeSheet() {
+    if (playerSheet.hidden) return;
+    playerSheet.hidden = true;
+    container.classList.remove("sheet-open");
+    settingsBtn.setAttribute("aria-expanded", "false");
+    // The controls hide again a while after the sheet closes
+    hideControls();
+}
+
+settingsBtn.addEventListener("click", () => playerSheet.hidden ? openSheet() : closeSheet());
+// A tap outside the box closes it
+playerSheet.addEventListener("click", e => e.target === playerSheet && closeSheet());
+playerSheet.querySelector(".sheet-close").addEventListener("click", closeSheet);
+playerSheet.querySelector(".sheet-back").addEventListener("click", showSheetMain);
+sheetMain.addEventListener("click", e => {
+    const row = e.target.closest(".sheet-row");
+    if (!row) return;
+    if (row.dataset.open) return showSheetList(row.dataset.open);
+    const act = row.dataset.act;
+    if (act === "subtitles") {
+        // Directly: a click on the hidden button would count as a click outside the sheet
+        toggleSubtitles();
+        return renderSheet();
+    }
+    // These open something else: the sheet steps aside
+    closeSheet();
+    if (act === "subtitle-file") subtitleInput.click();
+    else if (act === "open") openFileBtn.click();
+});
+
+// Play / Pause. On a touch screen with the controls showing, the big button itself shows it.
+const playFeedback = icon => {
+    if (!(isTouch && container.classList.contains("show-controls"))) showFeedback(icon, "");
+};
 const togglePlay = () => {
     if (together.stream) {
         const play = together.stream.paused;
-        if (together.stream.request({ paused: !play })) showFeedback(play ? "fa-play" : "fa-pause", "");
+        if (together.stream.request({ paused: !play })) playFeedback(play ? "fa-play" : "fa-pause");
         return;
     }
     if(mainVideo.paused) {
         mainVideo.play().catch(() => {});
-        showFeedback("fa-play", "");
+        playFeedback("fa-play");
     } else {
         mainVideo.pause();
-        showFeedback("fa-pause", "");
+        playFeedback("fa-pause");
     }
 };
 
@@ -1003,17 +1144,74 @@ const showPlaying = playing => {
 mainVideo.addEventListener("play", () => together.stream || showPlaying(true));
 mainVideo.addEventListener("pause", () => together.stream || showPlaying(false));
 
-// Seek
-const seek = (seconds) => {
-    if (!mediaDuration()) return;
+// Seek; true if it jumped. `feedback`: say so in the middle (double taps show a ripple instead)
+const seek = (seconds, feedback = true) => {
+    if (!mediaDuration()) return false;
     if (together.stream) {
-        if (!together.stream.request({ time: together.stream.currentTime() + seconds })) return;
+        if (!together.stream.request({ time: together.stream.currentTime() + seconds })) return false;
     } else mainVideo.currentTime += seconds;
-    showFeedback(seconds > 0 ? "fa-forward" : "fa-backward", `${seconds > 0 ? '+' : ''}${seconds}s`);
+    if (feedback) showFeedback(seconds > 0 ? "fa-forward" : "fa-backward", `${seconds > 0 ? '+' : ''}${seconds}s`);
+    return true;
 };
 
 skipBackward.addEventListener("click", () => seek(-5));
 skipForward.addEventListener("click", () => seek(5));
+
+// ---------- Lock screen and notification controls (Media Session)
+// Phones show the video's title with play / pause and jumps on the lock screen and in the
+// notifications, and treat the page as media whose sound goes on when the browser is left or the
+// phone is locked. In a room these controls go to the room, like the player's own.
+let mediaKeyAt = 0;
+// A play or pause from these controls is the person's own; one while the page isn't on screen
+// otherwise comes from the phone (see room.js)
+together.fromMediaKeys = () => Date.now() - mediaKeyAt < 1500;
+const mediaPaused = () => together.stream ? together.stream.paused : mainVideo.paused;
+const mediaTime = () => together.stream ? together.stream.currentTime() : mainVideo.currentTime;
+
+const updateMediaSession = () => {
+    const session = navigator.mediaSession;
+    if (!session || !(currentFile || together.active())) return;
+    const title = videoTitle.textContent;
+    if (!session.metadata || session.metadata.title !== title) {
+        session.metadata = new MediaMetadata({
+            title,
+            artist: together.active() ? "CineTab · watching together" : "CineTab",
+            artwork: [
+                { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+                { src: "icon-512.png", sizes: "512x512", type: "image/png" }
+            ]
+        });
+    }
+    session.playbackState = mediaPaused() ? "paused" : "playing";
+    const duration = mediaDuration();
+    const position = mediaTime();
+    const rate = (together.stream ? together.stream.rate : mainVideo.playbackRate) || 1;
+    try {
+        if (Number.isFinite(duration) && duration > 0 && Number.isFinite(position)) {
+            session.setPositionState({ duration, position: Math.min(Math.max(0, position), duration), playbackRate: rate });
+        }
+    } catch (e) {}
+};
+
+if ("mediaSession" in navigator) {
+    const handle = (action, run) => {
+        try {
+            navigator.mediaSession.setActionHandler(action, details => {
+                mediaKeyAt = Date.now();
+                run(details || {});
+                updateMediaSession();
+            });
+        } catch (e) {}
+    };
+    handle("play", () => mediaPaused() && togglePlay());
+    handle("pause", () => !mediaPaused() && togglePlay());
+    handle("seekbackward", details => seek(-(details.seekOffset || 10), false));
+    handle("seekforward", details => seek(details.seekOffset || 10, false));
+    handle("seekto", details => Number.isFinite(details.seekTime) && seekTo(details.seekTime));
+    ["play", "pause", "loadedmetadata", "ratechange", "seeked", "emptied"].forEach(type => mainVideo.addEventListener(type, updateMediaSession));
+    // A room's YouTube video or stream has no events here; the position also drifts with time
+    setInterval(updateMediaSession, 5000);
+}
 
 // Playback Speed (presets, or any value from 0.25x to 4x; browsers mute audio outside that range)
 const speedPresets = speedOptions.querySelectorAll("li[data-speed]"),
@@ -1203,15 +1401,32 @@ const toggleCustomPiP = async () => {
         }
     }
 
-    // Native Browser PiP Fallback
+    // Native Browser PiP Fallback (phones: Android's floating window, the iPhone's PiP)
     if (document.pictureInPictureElement) {
-        document.exitPictureInPicture();
-    } else if (document.pictureInPictureEnabled) {
-        mainVideo.requestPictureInPicture();
+        document.exitPictureInPicture().catch(() => {});
+        return;
+    }
+    if (!mainVideo.currentSrc && !mainVideo.srcObject) return showFeedback("fa-clone", "Open a video first");
+    try {
+        // The page's own fullscreen and a floating window don't mix: leave fullscreen first
+        if (fullscreenElement()) await Promise.resolve(exitFullscreen()).catch(() => {});
+        if (document.pictureInPictureEnabled && !mainVideo.disablePictureInPicture) {
+            await mainVideo.requestPictureInPicture();
+        } else if (mainVideo.webkitSupportsPresentationMode && mainVideo.webkitSupportsPresentationMode("picture-in-picture")) {
+            // Older iPhones and iPads
+            mainVideo.webkitSetPresentationMode("picture-in-picture");
+        } else {
+            throw new Error("unsupported");
+        }
+    } catch (err) {
+        showFeedback("fa-clone", "Picture in picture isn't available here");
     }
 };
 
 pipBtn.addEventListener("click", toggleCustomPiP);
+// The button only where some kind of picture in picture works
+pipBtn.hidden = !("documentPictureInPicture" in window || document.pictureInPictureEnabled ||
+    (mainVideo.webkitSupportsPresentationMode && mainVideo.webkitSupportsPresentationMode("picture-in-picture")));
 
 // The whole player page goes fullscreen, so a room's chat can stay open beside the video.
 // Phones turn sideways for a wide video; the iPhone can only show the video itself fullscreen.
@@ -1231,7 +1446,6 @@ const toggleFullscreen = () => {
 const onFullscreenChange = () => {
     const isFullscreen = fullscreenElement() === playerPage;
     container.classList.toggle("fullscreen", isFullscreen);
-    if (!isFullscreen) container.classList.remove("pinch-zoomed");
     fullScreenBtn.className = isFullscreen ? "fa-solid fa-compress" : "fa-solid fa-expand";
     fullScreenBtn.parentNode.title = isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)";
     if (!isFullscreen && screen.orientation && screen.orientation.unlock) {
@@ -1243,8 +1457,9 @@ document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 fullScreenBtn.parentNode.addEventListener("click", toggleFullscreen);
 
-// Touch: a tap in the middle pauses or resumes; a double tap on the left or right third
-// jumps back or forward 10 seconds, while a middle double tap enters fullscreen.
+// Touch: a tap shows or hides the controls (play / pause is the big button in the middle); a
+// double tap on the left or right third jumps back or forward 10 seconds, while a middle double
+// tap enters fullscreen.
 let lastTap = { at: 0, x: 0 };
 let tapTimer = null;
 let touchedAt = 0;
@@ -1266,28 +1481,69 @@ const toggleControls = () => {
     }
 };
 
-mainVideo.addEventListener("pointerup", e => {
+// Touch gestures work on the video, and on the layer over a room's YouTube player
+const gestureSurfaces = [mainVideo, container.querySelector(".yt-shield")];
+const onSurface = (type, handler, options) => gestureSurfaces.forEach(surface => surface.addEventListener(type, handler, options));
+
+// Where a touch started: a finger that moved was a swipe (volume, brightness, fullscreen), not a tap
+let touchStart = null;
+onSurface("pointerdown", e => {
+    if (e.pointerType === "touch") touchStart = { x: e.clientX, y: e.clientY };
+});
+
+// Double taps on one side jump 10 seconds; more taps straight after keep going (-20s, -30s…),
+// shown as a ripple on that side, like YouTube
+const seekRipples = { left: container.querySelector(".seek-ripple.left"), right: container.querySelector(".seek-ripple.right") };
+let seekStreak = null;
+const rippleSeek = side => {
+    const seconds = side === "left" ? -10 : 10;
+    if (!seek(seconds, false)) return;
+    const streak = seekStreak && seekStreak.side === side ? seekStreak : { side, total: 0 };
+    clearTimeout(streak.timer);
+    streak.total += seconds;
+    streak.until = Date.now() + 650;
+    streak.timer = setTimeout(() => {
+        ripple.classList.remove("show");
+        if (seekStreak === streak) seekStreak = null;
+    }, 650);
+    seekStreak = streak;
+    const ripple = seekRipples[side];
+    Object.values(seekRipples).forEach(other => other !== ripple && other.classList.remove("show"));
+    ripple.querySelector("span").textContent = `${Math.abs(streak.total)} seconds`;
+    // Each tap pulses again
+    ripple.classList.remove("show", "pulse");
+    void ripple.offsetWidth;
+    ripple.classList.add("show", "pulse");
+};
+
+onSurface("pointerup", e => {
     if (e.pointerType !== "touch" || pinching) return;
-    if (ignoreNextTouchPointerUp) {
+    const moved = touchStart && Math.hypot(e.clientX - touchStart.x, e.clientY - touchStart.y) > 14;
+    touchStart = null;
+    if (ignoreNextTouchPointerUp || moved) {
         ignoreNextTouchPointerUp = false;
+        touchedAt = Date.now();
         return;
     }
     touchedAt = Date.now();
-    const rect = mainVideo.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const side = x < rect.width / 3 ? "left" : x > rect.width * 2 / 3 ? "right" : null;
+    // Still jumping: every tap on that side is another 10 seconds
+    if (seekStreak && side === seekStreak.side && touchedAt < seekStreak.until) {
+        clearTimeout(tapTimer);
+        lastTap.at = 0;
+        return rippleSeek(side);
+    }
     if (touchedAt - lastTap.at < 300 && Math.abs(x - lastTap.x) < 60) {
         clearTimeout(tapTimer);
         lastTap.at = 0;
-        if (x < rect.width / 3) seek(-10);
-        else if (x > rect.width * 2 / 3) seek(10);
+        if (side) rippleSeek(side);
         else toggleFullscreen();
         return;
     }
     lastTap = { at: touchedAt, x };
-    tapTimer = setTimeout(() => {
-        if (x >= rect.width / 3 && x <= rect.width * 2 / 3) togglePlay();
-        else toggleControls();
-    }, 300);
+    tapTimer = setTimeout(toggleControls, 300);
 });
 
 const pinchDistance = touches => {
@@ -1295,29 +1551,29 @@ const pinchDistance = touches => {
     return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
 };
 
-mainVideo.addEventListener("touchstart", e => {
-    if (e.touches.length !== 2 || !fullscreenElement()) return;
+// Pinch: spread two fingers to fill the screen, pinch them together to fit the whole picture.
+// It's the same setting as Picture in the menus (Fit / Fill), and it's remembered.
+onSurface("touchstart", e => {
+    if (e.touches.length !== 2) return;
     pinchStartDistance = pinchDistance(e.touches);
     pinchScale = 1;
     pinching = true;
+    mobileSwipe = null;
     clearTimeout(tapTimer);
 }, { passive: true });
 
-mainVideo.addEventListener("touchmove", e => {
+onSurface("touchmove", e => {
     if (!pinching || e.touches.length !== 2) return;
     pinchScale = pinchDistance(e.touches) / pinchStartDistance;
     e.preventDefault();
 }, { passive: false });
 
-mainVideo.addEventListener("touchend", () => {
+onSurface("touchend", e => {
     if (!pinching) return;
-    if (pinchScale > 1.08) {
-        container.classList.add("pinch-zoomed");
-        showFeedback("fa-magnifying-glass-plus", "Zoomed to fill");
-    } else if (pinchScale < 0.92) {
-        container.classList.remove("pinch-zoomed");
-        showFeedback("fa-expand", "Fit to screen");
-    }
+    // Decided when the fingers lift, once
+    if (e.touches.length) return;
+    if (pinchScale > 1.08) setAspect("fill", true);
+    else if (pinchScale < 0.92) setAspect("fit", true);
     pinchStartDistance = 0;
     pinchScale = 1;
     pinching = false;
@@ -1332,15 +1588,33 @@ const updateMobileBrightness = value => {
     mobileBrightness = Math.max(0.2, Math.min(1, value));
     mobileBrightnessLayer.style.opacity = String(1 - mobileBrightness);
 };
+// The sound as one number for swipes: 0-1 is the volume, 1-2 the boost from 100% to 300%, so
+// swiping up past full volume turns the boost up, and the menus' Volume boost shows it
+const soundLevel = () => boost.level > 1 ? 1 + (boost.level - 1) / 2 : mainVideo.volume;
+const setSoundLevel = value => {
+    const level = Math.max(0, Math.min(2, value));
+    if (level <= 1 || container.classList.contains("youtube")) {
+        if (boost.level > 1) setBoost(1, false);
+        setVolume(Math.round(Math.min(1, level) * 100) / 100);
+    } else {
+        if (mainVideo.volume < 1) setVolume(1);
+        // In steps of 5%, so the presets (150%, 200%, 300%) can be landed on
+        setBoost(Math.round((1 + (level - 1) * 2) * 20) / 20, false);
+    }
+};
+
 const showMobileAdjustment = (kind, value) => {
     const adjustment = kind === "brightness" ? mobileBrightnessAdjustment : mobileVolumeAdjustment;
     const icon = adjustment.querySelector("i");
     const fill = adjustment.querySelector(".mobile-adjustment-fill");
     const label = adjustment.querySelector("span");
-    const percent = Math.round(value * 100);
+    // Volume: the lower half of the bar is 0-100%, the upper half the boost up to 300%
+    const boosted = kind === "volume" && value > 1;
+    const percent = kind === "volume" ? Math.round(value <= 1 ? value * 100 : 100 + (value - 1) * 200) : Math.round(value * 100);
     icon.className = `fa-solid ${kind === "brightness" ? "fa-sun" : value ? "fa-volume-high" : "fa-volume-xmark"}`;
-    fill.style.height = `${percent}%`;
+    fill.style.height = `${kind === "volume" ? value * 50 : percent}%`;
     label.textContent = `${percent}%`;
+    adjustment.classList.toggle("boosted", boosted);
     mobileBrightnessAdjustment.classList.toggle("show", kind === "brightness");
     mobileVolumeAdjustment.classList.toggle("show", kind === "volume");
     clearTimeout(mobileAdjustmentTimer);
@@ -1350,11 +1624,11 @@ const showMobileAdjustment = (kind, value) => {
     }, 700);
 };
 
-mainVideo.addEventListener("touchstart", e => {
+onSurface("touchstart", e => {
     const portraitPhone = isTouch && matchMedia("(orientation: portrait)").matches;
     if (e.touches.length !== 1 || (!fullscreenElement() && !portraitPhone) || pinching) return;
     const touch = e.touches[0];
-    const rect = mainVideo.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const edge = touch.clientX - rect.left;
     const edgeWidth = rect.width * 0.22;
     const isFullscreen = Boolean(fullscreenElement());
@@ -1362,12 +1636,12 @@ mainVideo.addEventListener("touchstart", e => {
         x: touch.clientX,
         y: touch.clientY,
         kind: !isFullscreen ? "dismiss" : edge <= edgeWidth ? "brightness" : edge >= rect.width - edgeWidth ? "volume" : "dismiss",
-        startValue: edge <= edgeWidth ? mobileBrightness : mainVideo.volume,
+        startValue: edge <= edgeWidth ? mobileBrightness : soundLevel(),
         handled: false
     };
 }, { passive: true });
 
-mainVideo.addEventListener("touchmove", e => {
+onSurface("touchmove", e => {
     if (!mobileSwipe || e.touches.length !== 1) return;
     const touch = e.touches[0];
     const dx = touch.clientX - mobileSwipe.x;
@@ -1391,18 +1665,19 @@ mainVideo.addEventListener("touchmove", e => {
         showMobileAdjustment("brightness", mobileBrightness);
     } else if (mobileSwipe.kind === "volume" && Math.abs(dy) > 12) {
         mobileSwipe.handled = true;
-        setVolume(mobileSwipe.startValue - dy / 300);
-        showMobileAdjustment("volume", mainVideo.volume);
+        setSoundLevel(mobileSwipe.startValue - dy / 250);
+        showMobileAdjustment("volume", soundLevel());
     }
     if (mobileSwipe.handled) e.preventDefault();
 }, { passive: false });
 
-mainVideo.addEventListener("touchend", () => {
-    if (mobileSwipe?.handled) ignoreNextTouchPointerUp = true;
+onSurface("touchend", () => {
+    // Lifting the finger is what lets the browser start the boost's sound
+    if (mobileSwipe?.handled && boost.ctx && boost.ctx.state !== "running") boost.ctx.resume().catch(() => {});
     mobileSwipe = null;
 }, { passive: true });
 
-mainVideo.addEventListener("touchcancel", () => {
+onSurface("touchcancel", () => {
     mobileSwipe = null;
     pinching = false;
     pinchStartDistance = 0;

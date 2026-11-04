@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.3.0">
+  <meta name="version" content="1.3.1">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -48,7 +48,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.3.0",
+      "softwareVersion": "1.3.1",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -313,7 +313,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.3.0</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.3.1</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -555,6 +555,8 @@
     <video id="main-video" crossorigin="anonymous" playsinline webkit-playsinline></video>
     <!-- A YouTube video or playlist that the room watches together (room.js); YouTube's own player -->
     <div class="yt-frame"><div class="yt-mount"></div></div>
+    <!-- Phones: takes taps, swipes and pinches over YouTube's player, like on a video (script.js) -->
+    <div class="yt-shield" aria-hidden="true"></div>
     <div class="mobile-brightness" aria-hidden="true"></div>
 
     <!-- Controls Wrapper -->
@@ -640,9 +642,35 @@
           </div>
           <button class="shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i></button>
           <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
+          <!-- Phones and tablets: everything above in one settings sheet -->
+          <button class="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="dialog"><i class="fa-solid fa-gear"></i></button>
           <button class="fullscreen" title="Fullscreen (F)"><i class="fa-solid fa-expand"></i></button>
         </li>
       </ul>
+    </div>
+
+    <!-- Double tap on the left or right: how far it jumped -->
+    <div class="seek-ripple left" aria-hidden="true"><i class="fa-solid fa-backward"></i><span></span></div>
+    <div class="seek-ripple right" aria-hidden="true"><i class="fa-solid fa-forward"></i><span></span></div>
+
+    <!-- Phones and tablets: the player's settings, like YouTube's (script.js) -->
+    <div class="player-sheet" hidden>
+      <div class="player-sheet-box" role="dialog" aria-modal="true" aria-label="Player settings">
+        <div class="sheet-view" data-sheet="main">
+          <div class="sheet-head"><b>Settings</b><button type="button" class="sheet-close" title="Close" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button></div>
+          <button type="button" class="sheet-row" data-open="speed"><i class="fa-solid fa-gauge-high"></i><span>Playback speed</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
+          <button type="button" class="sheet-row" data-open="aspect"><i class="fa-solid fa-expand"></i><span>Picture</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
+          <button type="button" class="sheet-row" data-open="boost"><i class="fa-solid fa-volume-high"></i><span>Volume boost</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
+          <button type="button" class="sheet-row" data-act="subtitles"><i class="fa-regular fa-closed-captioning"></i><span>Subtitles</span><b class="sheet-value"></b></button>
+          <button type="button" class="sheet-row" data-act="subtitle-file"><i class="fa-solid fa-file-lines"></i><span>Choose a subtitle file</span></button>
+          <button type="button" class="sheet-row" data-act="open"><i class="fa-solid fa-folder-open"></i><span>Open another video</span></button>
+        </div>
+        <div class="sheet-view" data-sheet="options" hidden>
+          <div class="sheet-head"><button type="button" class="sheet-back" aria-label="Back to settings"><i class="fa-solid fa-chevron-left"></i></button><b class="sheet-title"></b></div>
+          <p class="sheet-note" hidden></p>
+          <div class="sheet-options" role="radiogroup"></div>
+        </div>
+      </div>
     </div>
   </div>
 

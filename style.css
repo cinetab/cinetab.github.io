@@ -953,10 +953,6 @@ body.watching {
   touch-action: none;
 }
 
-.container.pinch-zoomed video {
-  object-fit: cover;
-}
-
 .options button.subtitles.active {
   color: #3e97fd;
 }
@@ -1227,6 +1223,554 @@ video::cue {
   /* Short screens: dialogs skip their big icon */
   .box-scroll > i {
     display: none;
+  }
+}
+
+/* =================== PLAYER ON PHONES AND TABLETS ===================
+   Made for thumbs, like YouTube's app: play / pause and the jumps big in the middle of the
+   picture; at the bottom the time where the video is, the timeline, its length, Picture in
+   picture, Settings and Fullscreen. Everything else (speed, picture, volume boost, subtitles,
+   opening files) is in the Settings sheet. Sizes follow the space: the whole screen held upright or
+   sideways, or the strip above a room's chat. A room's YouTube video fills the picture the same
+   way, with the same controls over it. */
+
+/* The Settings button and sheet are for touch screens; elsewhere each menu has its own button */
+.options .settings-btn {
+  display: none;
+}
+
+.player-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  animation: sheet-fade 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-sheet[hidden] {
+  display: none;
+}
+
+.player-sheet-box {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: min(78vh, 560px);
+  max-height: min(78dvh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 0 max(12px, env(safe-area-inset-bottom));
+  color: #fff;
+  background: #1c1c22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
+  animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The grab handle */
+.player-sheet-box::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 6px 20px;
+  font-size: 15px;
+}
+
+.sheet-view[data-sheet="options"] .sheet-head {
+  padding-left: 8px;
+}
+
+.sheet-head b {
+  flex: 1;
+  font-weight: 600;
+}
+
+.sheet-close,
+.sheet-back {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 16px;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sheet-row,
+.sheet-option {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border: none;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sheet-row[hidden] {
+  display: none;
+}
+
+.sheet-row > i:first-child,
+.sheet-option > i {
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sheet-row > span {
+  flex: 1;
+}
+
+.sheet-value {
+  font-weight: 400;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sheet-row .fa-chevron-right {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.sheet-row:active,
+.sheet-option:active,
+.sheet-close:active,
+.sheet-back:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sheet-row:focus-visible,
+.sheet-option:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: -2px;
+}
+
+.sheet-option > i {
+  visibility: hidden;
+  color: #3e97fd;
+}
+
+.sheet-option[aria-checked="true"] {
+  color: #3e97fd;
+  font-weight: 600;
+}
+
+.sheet-option[aria-checked="true"] > i {
+  visibility: visible;
+}
+
+.sheet-note,
+.sheet-custom {
+  padding: 0 20px 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sheet-custom {
+  padding-top: 4px;
+  color: #3e97fd;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(40px); opacity: 0; }
+}
+
+@keyframes sheet-fade {
+  from { opacity: 0; }
+}
+
+/* Double tap on one side: a ripple on that side, with how far it jumped */
+.seek-ripple {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.13);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.seek-ripple.left {
+  left: 0;
+  clip-path: ellipse(100% 80% at 0% 50%);
+}
+
+.seek-ripple.right {
+  right: 0;
+  clip-path: ellipse(100% 80% at 100% 50%);
+}
+
+.seek-ripple.show {
+  opacity: 1;
+  transition-duration: 0.1s;
+}
+
+.seek-ripple i {
+  font-size: 22px;
+}
+
+.seek-ripple.pulse i {
+  animation: seek-pulse 0.4s ease;
+}
+
+@keyframes seek-pulse {
+  0% { transform: scale(0.7); opacity: 0.4; }
+  60% { transform: scale(1.15); }
+}
+
+/* Volume swipes: the lower half of the bar is 0-100%, the upper half the boost up to 300% */
+.mobile-volume-adjustment .mobile-adjustment-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.mobile-adjustment.boosted .mobile-adjustment-fill {
+  background: #ffa940;
+}
+
+.mobile-adjustment.boosted span {
+  color: #ffa940;
+}
+
+@media (pointer: coarse) {
+  .container {
+    --play: 66px;
+    --jump: 50px;
+    --btn: 40px;
+    --edge: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Fewer buttons: the rest are in Settings. Phones have volume buttons, and a swipe on the
+     right of the picture changes the volume (past 100% into the boost). Picture in picture keeps
+     its button: the video floats over other apps. */
+  .options :is(.volume, .open-file, .subtitles, .shortcuts-btn, .playback-content, .more-content),
+  .options input.volume-slider {
+    display: none;
+  }
+  .options .settings-btn,
+  .options button.pic-in-pic {
+    display: flex;
+  }
+  .options button.pic-in-pic svg {
+    width: calc(var(--btn) * 0.5);
+    height: calc(var(--btn) * 0.5);
+  }
+
+  .options button {
+    width: var(--btn);
+    height: var(--btn);
+    font-size: calc(var(--btn) * 0.45);
+    color: #fff;
+  }
+  /* A finger leaves no hover behind; a press shows while it lasts */
+  .options button:hover {
+    background: transparent;
+  }
+  .options button:active {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(0.9);
+  }
+  .container.sheet-open .settings-btn {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .video-controls .options {
+    gap: 0;
+  }
+  .options .video-timer {
+    margin-left: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .progress-bar::before {
+    width: 16px;
+    height: 16px;
+    right: -8px;
+  }
+
+  /* The controls cover the whole picture, so the middle buttons sit in its centre; taps anywhere
+     else still reach the video (tap to show or hide, double tap to jump, swipes, pinch) */
+  .container .wrapper {
+    top: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-content: end;
+    align-items: center;
+    column-gap: 12px;
+    pointer-events: none;
+    padding: 0 max(var(--edge), env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(var(--edge), env(safe-area-inset-left));
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.22) 40%, rgba(0, 0, 0, 0.22));
+    transform: none;
+  }
+  .container.show-controls .wrapper :is(button, .video-timeline) {
+    pointer-events: auto;
+  }
+  /* One row: 01:23 ━━━━●━━━━ 45:00  Settings  Fullscreen */
+  .container .wrapper :is(.video-controls, .options.left, .video-timer) {
+    display: contents;
+  }
+  .container .video-timer .separator {
+    display: none;
+  }
+  .container .video-timer .current-time {
+    order: 1;
+  }
+  .container .wrapper .video-timeline {
+    order: 2;
+    height: 34px;
+  }
+  .container .video-timer .video-duration {
+    order: 3;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .container .video-controls .options.right {
+    order: 4;
+    margin-right: calc(var(--btn) * -0.2);
+  }
+
+  .container .video-controls .options.center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    gap: clamp(22px, 9vw, 64px);
+    transform: translate(-50%, -50%) scale(0.9);
+    transition: transform 0.25s ease;
+  }
+  .container.show-controls .video-controls .options.center {
+    transform: translate(-50%, -50%);
+  }
+  .container .options.center button {
+    width: var(--jump);
+    height: var(--jump);
+    font-size: calc(var(--jump) * 0.36);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+  .container .options.center .play-pause {
+    width: var(--play);
+    height: var(--play);
+    font-size: calc(var(--play) * 0.38);
+    background: rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+  .container .options.center button:hover {
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .container .options.center button:active {
+    background: rgba(62, 151, 253, 0.6);
+    transform: scale(0.9);
+  }
+  /* The play triangle looks centred when nudged right */
+  .options.center .play-pause .fa-play {
+    margin-left: 0.14em;
+  }
+  .container .options.center :is(.prev-track, .next-track) {
+    width: calc(var(--jump) * 0.82);
+    height: calc(var(--jump) * 0.82);
+    background: transparent;
+    border-color: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .container .options.center button:disabled {
+    opacity: 0.3;
+  }
+
+  /* Messages ("+10s", "Subtitles On", "Fill") show above the middle buttons, as a pill */
+  .center-feedback {
+    top: 24%;
+    width: auto;
+    height: auto;
+    padding: 9px 16px;
+    flex-direction: row;
+    gap: 8px;
+    border-radius: 999px;
+  }
+  .center-feedback i {
+    font-size: 17px;
+  }
+  .center-feedback span {
+    margin-top: 0;
+    font-size: 13px;
+  }
+  .center-feedback span:empty {
+    display: none;
+  }
+
+  /* Notches and rounded corners in fullscreen */
+  .container.fullscreen .top-bar {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+}
+
+/* YouTube on a touch screen: its player fills the picture, Fit (all of it) or Fill (cropped to
+   the screen, also by spreading two fingers). The layer over it takes taps and swipes; while an ad
+   plays it steps aside, so YouTube's Skip button can be tapped. */
+@media (pointer: coarse) {
+  .container.youtube {
+    max-width: none;
+  }
+  .container.youtube .yt-frame {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    container-type: size;
+  }
+  .container.youtube.aspect-fill .yt-mount {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: max(100cqw, 177.78cqh);
+    height: max(100cqh, 56.25cqw);
+    transform: translate(-50%, -50%);
+  }
+  .container.youtube .yt-shield {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    touch-action: none;
+  }
+  .container.youtube.yt-ad .yt-shield {
+    display: none;
+  }
+}
+
+/* Upright, the whole screen: the biggest buttons */
+@media (pointer: coarse) and (orientation: portrait) {
+  .player-page:not(.room-open) .container.fullscreen {
+    --play: 76px;
+    --jump: 56px;
+    --btn: 44px;
+    --edge: 16px;
+  }
+  .player-page:not(.room-open) .container.fullscreen .wrapper {
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  /* The strip at the top of the screen (not fullscreen, or above a room's chat) */
+  .container:not(.fullscreen),
+  .player-page.room-open .container {
+    --play: 52px;
+    --jump: 40px;
+    --btn: 36px;
+    --edge: 10px;
+  }
+  .container:not(.fullscreen) .wrapper,
+  .player-page.room-open .container .wrapper {
+    column-gap: 8px;
+  }
+  .container:not(.fullscreen) .options .video-timer,
+  .player-page.room-open .container .options .video-timer {
+    font-size: 12px;
+  }
+  .container:not(.fullscreen) .center-feedback,
+  .player-page.room-open .container .center-feedback {
+    top: 30%;
+    padding: 7px 12px;
+  }
+}
+
+/* Sideways: the picture fills the screen; the controls keep clear of its edges. Settings opens
+   in the middle, as a card, so it doesn't cover the whole short screen. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .container {
+    --play: 64px;
+    --jump: 48px;
+    --btn: 42px;
+    --edge: 22px;
+  }
+  .container .wrapper {
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+  .player-page.room-open .container {
+    --edge: 12px;
+    --btn: 38px;
+  }
+  .player-sheet {
+    align-items: center;
+  }
+  .player-sheet-box {
+    width: min(440px, 92vw);
+    max-height: 92vh;
+    max-height: 92dvh;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+  }
+  .player-sheet-box::before {
+    display: none;
+  }
+  .sheet-row,
+  .sheet-option {
+    min-height: 46px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+}
+
+/* Very narrow phones */
+@media (pointer: coarse) and (max-width: 359px) {
+  .container,
+  .player-page:not(.room-open) .container.fullscreen {
+    --btn: 36px;
+  }
+  .options .video-timer {
+    font-size: 11px;
   }
 }
 
@@ -2719,29 +3263,8 @@ body > .room-toasts {
   border: 0;
 }
 
-.container.youtube {
-  flex-direction: column;
-  justify-content: flex-start;
-  aspect-ratio: auto;
-  max-width: calc((96vh - 150px) * 16 / 9);
-}
-
 .container.youtube .yt-frame {
   display: block;
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  flex: 0 0 auto;
-}
-
-.container.youtube.fullscreen {
-  max-width: 100%;
-}
-
-.container.youtube.fullscreen .yt-frame {
-  aspect-ratio: auto;
-  flex: 1 1 auto;
-  min-height: 0;
 }
 
 .container.youtube #main-video {
@@ -2752,35 +3275,70 @@ body > .room-toasts {
   pointer-events: none;
 }
 
-.container.youtube .top-bar,
-.container.youtube .wrapper {
-  position: relative;
-  flex: 0 0 auto;
-  width: 100%;
-  opacity: 1;
-  transform: none;
-  pointer-events: auto !important;
-}
-
-.container.youtube .top-bar {
-  padding-top: 12px;
-  padding-bottom: 12px;
-  background: #000;
-}
-
-.container.youtube .wrapper {
-  padding-top: 12px;
-  background: #000;
-}
-
-.container.youtube .top-bar button,
-.container.youtube .top-bar .video-title,
-.container.youtube .wrapper * {
-  pointer-events: auto !important;
-}
-
+/* Picture in picture can't take another site's player (YouTube's) out of the page */
 .container.youtube .pic-in-pic {
   display: none;
+}
+
+/* On phones and tablets YouTube's player fills the picture like any video (see the touch section);
+   a transparent layer over it takes the taps, so the controls come and go as usual */
+.yt-shield {
+  display: none;
+}
+
+/* Computers: YouTube's own player between the title bar and the controls, which stay on screen
+   and never cover it (YouTube's ads and their Skip button stay clickable) */
+@media not all and (pointer: coarse) {
+  .container.youtube {
+    flex-direction: column;
+    justify-content: flex-start;
+    aspect-ratio: auto;
+    max-width: calc((96vh - 150px) * 16 / 9);
+  }
+
+  .container.youtube .yt-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    flex: 0 0 auto;
+  }
+
+  .container.youtube.fullscreen {
+    max-width: 100%;
+  }
+
+  .container.youtube.fullscreen .yt-frame {
+    aspect-ratio: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .container.youtube .top-bar,
+  .container.youtube .wrapper {
+    position: relative;
+    flex: 0 0 auto;
+    width: 100%;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto !important;
+  }
+
+  .container.youtube .top-bar {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    background: #000;
+  }
+
+  .container.youtube .wrapper {
+    padding-top: 12px;
+    background: #000;
+  }
+
+  .container.youtube .top-bar button,
+  .container.youtube .top-bar .video-title,
+  .container.youtube .wrapper * {
+    pointer-events: auto !important;
+  }
 }
 
 /* Watching the host's stream: speed and scene previews belong to the host's copy */

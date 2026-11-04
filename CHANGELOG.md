@@ -4,6 +4,63 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-11-04
+
+### Player on phones and tablets
+- Play / pause and the jumps are big buttons in the middle of the picture. At the bottom, one row:
+  where the video is, the timeline, its length, **Picture in picture**, **Settings** and
+  **Fullscreen**
+- Picture in picture on phones: the video floats over other apps (Android's floating window, the
+  iPhone's PiP, older iPhones included); it leaves fullscreen first, and the button only shows
+  where the browser supports it
+- **Settings** (⚙) opens a sheet like YouTube's: playback speed, picture (Fit, Fill, Stretch,
+  16:9…), volume boost, subtitles on / off, choosing a subtitle file and opening another video.
+  Sideways it opens as a card in the middle
+- The controls stay on screen while Settings (or a menu) is open, and hide again a few seconds
+  after it closes
+- Swiping up on the right of the picture goes past 100% into the volume boost (up to 300%, shown
+  in orange); swiping down turns the boost off again. Settings shows the same boost
+- Pinching is the Picture setting: spread two fingers for Fill, pinch them together for Fit
+  (remembered, and it works outside fullscreen too)
+- Double taps on the left or right jump 10 seconds with a ripple on that side, and every further
+  tap straight after jumps 10 more (20 seconds, 30 seconds…)
+- A tap shows or hides the controls (it used to pause in the middle of the picture)
+- Fixed: after a volume or brightness swipe, the next tap was ignored and the swipe itself
+  counted as a tap
+- No grey flash on tapped buttons; a pressed button shrinks a little instead
+- Sized for the space: the whole screen held upright or sideways, or the strip above a room's
+  chat; clear of notches and the gesture bar in fullscreen
+- Messages such as "Subtitles On" show as a pill above the middle buttons instead of covering them
+
+### YouTube in a room, on phones and tablets
+- YouTube's player fills the picture like any video, with the same controls over it, instead of
+  sitting between a black title bar and a black controls bar. Fullscreen fills the screen
+  (sideways it was a small picture with wide black borders)
+- Upright, the player is just the video, so the room's panel below has much more room
+- Taps, double taps (with the ripple), volume swipes and pinches work on YouTube's picture too;
+  while an ad plays they're left to YouTube, so its Skip button can be tapped
+- Settings works for YouTube: playback speed (for everyone in the room), Picture Fit or Fill (Fill
+  crops to the screen, also by spreading two fingers), YouTube's captions on / off, and a
+  subtitle file. Volume boost and picture in picture aren't possible for YouTube's player, so
+  they're not offered
+- Fixed: Subtitles in the Settings sheet closed the sheet
+
+### Leaving the browser or locking the phone
+- Lock screen and notification controls: the video's title, play / pause, jumps and the
+  timeline (in a room they work for the room, like the player's own). It also tells the phone the
+  page is playing media, so its sound goes on in the background where the browser allows it
+- In a room, a pause the phone makes by itself while CineTab isn't on screen (some browsers pause
+  video in the background; YouTube's player always does on phones) no longer pauses the video for
+  everyone; coming back, the video catches up with the room
+- The mic stays on while another app is open, and turns off when the phone is locked (in Chrome
+  and Edge, which can tell when the screen is locked: a phone asks for that permission once, with
+  the mic). Coming back says why it's off. If the phone itself stops the mic, the Mic button shows
+  it's off
+
+### Watch-together rooms
+- The microphone no longer uses noise suppression, which cut out quiet or distant speech so others
+  couldn't hear well; echo cancellation stays on so the movie's sound isn't sent back
+
 ## [1.3.0] - 2026-11-04
 
 ### Watch-together rooms: YouTube queue
@@ -212,6 +269,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.3.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.1
 [1.3.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.3.0
 [1.2.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.8
 [1.2.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.5
