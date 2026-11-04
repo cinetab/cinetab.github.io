@@ -4,6 +4,35 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.5] - 2026-11-04
+
+### Watch-together rooms: share videos from any device
+- A *Now playing* bar in the room panel shows the current video and who shared it, with
+  **Share a video** / **Change** and a ✕ to remove it for everyone
+- Anyone can share a video from their device; it replaces the current one for everyone, and the
+  person whose video is replaced is told who started the new one
+- A guest's shared video plays in sync for everyone: play, pause, jumps and speed from anyone are
+  carried out in the sharing guest's player, and everyone's timeline follows it
+- The host watches a guest's video like everyone else and can control or remove it; opening a file
+  as host replaces it
+- Subtitles loaded by the guest who shares a video show up for everyone
+- People who join while a guest is sharing see that video straight away; a new video starts
+  playing as a stream automatically instead of asking for a copy of a file only one person has
+- If the sharing guest leaves or is removed, their video stops for everyone with a note in the chat
+- "Guests can share videos" (on by default) replaces "Guests can add media"
+- **Create a room** in the home page's top bar, which stays on screen while scrolling
+
+### Fixes
+- Guests watching the stream couldn't share a video: the chosen file never loaded
+- A guest's shared video didn't stay in sync: play, pause and jumps changed only the host's view
+  of the stream, not the video, and the guest sharing it was pulled back to the start
+- After switching between people's videos, the picture went black for everyone (Chrome ends the
+  tracks of a stream shown in a captured player when it switches source; the player now shows
+  copies)
+- Sharing the same movie a second time sent no picture
+- The host no longer sends a guest's own video back to them
+- Cancelling the file picker no longer leaves the next opened file marked for sharing
+
 ## [1.2.1] - 2026-11-04
 
 ### Mobile player
@@ -114,6 +143,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.2.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.5
 [1.2.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.1
 [1.2.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.1.0

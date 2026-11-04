@@ -601,22 +601,40 @@ const renderSavedList = async () => {
     savedList.replaceChildren(...items.map(renderSavedItem));
 };
 
-// Stop playback if the copy being played is about to be deleted
-const unloadPlayer = () => {
+// Stops and forgets the open video (the file itself is untouched). Used when a converted copy is
+// deleted, and in a room when the video is removed or someone else's video takes its place.
+const releaseMedia = () => {
+    savePosition();
+    cancelConversion();
+    removeSubtitles();
     [mainVideo, previewVideo].forEach(video => {
         video.removeAttribute("src");
         video.load();
     });
-    removeSubtitles();
+    if (currentURL) URL.revokeObjectURL(currentURL);
+    currentURL = null;
     currentFile = null;
+    currentSource = null;
+    currentFileKey = null;
     currentSavedKey = null;
     playbackMode = null;
+    compatBanner.classList.add("hidden");
+    container.classList.remove("audio-mode");
+    videoTitle.innerText = audioTitle.innerText = "No Video Loaded";
+    progressBar.style.width = "0%";
+    currentVidTime.innerText = videoDuration.innerText = formatTime(0);
+    showPlaying(false);
+};
+
+const unloadPlayer = () => {
+    releaseMedia();
     uploadOverlay.classList.remove("hidden");
 };
 
 const playSaved = async key => {
     const saved = await Converter.openSaved(key);
     if (!saved) return renderSavedList();
+    if (together.onFile) together.onFile({ name: saved.name, size: saved.sourceSize });
     prepareFor(saved.name, saved.sourceSize);
     currentFile = saved.file;
     // Already a converted copy, so there is nothing left to retry if it fails

@@ -24,6 +24,8 @@ The movie is never uploaded to a server. The page uses the browser's File API to
 2. Invite friends with the invite link, the QR code, or the room code and password.
 3. Let each person in as they arrive. Everyone watches your movie streamed from your browser, in step with you, and can chat beside the video.
 
+Anyone in the room can share a video from their own device: **Share a video** (or **Change**) in the *Now playing* bar at the top of the room panel. It replaces the current video for everyone, and the ✕ next to it removes the video for everyone. The person sharing plays the file in their browser and everyone else watches it in sync; play, pause, jumps and speed from anyone go to that person's player. The host can switch off **Guests can share videos** in Room settings, and then only the host shares and removes videos. Sharing from a guest's device needs Chrome or Edge there.
+
 The room lives in a side panel with separate **Chat**, **People**, **Invite** and **Settings** tabs. Everyone picks a name and an avatar (their initial on a colour, or an emoji) and can change them at any time with **Edit profile**. The host can give the room a name.
 
 The player's back button doesn't have to end the room: the host can go to the home page while the video keeps playing for everyone (a guest can likewise stay in the room), and a bar on the home page leads back. Closing the tab disconnects.
@@ -34,7 +36,7 @@ Friends who have the same movie can choose **My own copy** in Settings: CineTab 
 
 ### How rooms work, and what stays private
 
-- **No server of ours.** The site is still static files. Browsers connect to each other with WebRTC, and the host's browser is the hub: each guest connects only to the host, never to other guests. The host relays chat, sends playback updates and, if streaming is on, sends its video to the guests who want it.
+- **No server of ours.** The site is still static files. Browsers connect to each other with WebRTC, and the host's browser is the hub: each guest connects only to the host, never to other guests. The host relays chat, sends playback updates and, if streaming is on, sends its video to the guests who want it. When a guest shares a video, their browser sends it to the host, which passes it on to everyone else (so it also uses the host's upload).
 - **Encrypted end to end.** WebRTC encrypts the video, sound, chat and playback messages between browsers (DTLS/SRTP). Nothing is stored; when the room ends, the chat is gone.
 - **Finding each other.** Before they can connect, two browsers have to swap connection details. CineTab sends them through several free public relays at once, see `signaling.js`: two MQTT brokers ([EMQX](https://www.emqx.com/en/mqtt/public-mqtt5-broker) and [HiveMQ](https://www.hivemq.com/mqtt/public-mqtt-broker/), on ports 8084/8884) and four Nostr relays (nos.lol, relay.primal.net, nostr.mom, relay.snort.social), which use the normal HTTPS port 443 and so also get through networks that block everything else. Nostr relays only accept signed events, so each session signs with a throwaway key (BIP-340 Schnorr, implemented in `signaling.js`); the signature only satisfies the relay.
   - The room code and password go through PBKDF2-SHA256 (600,000 rounds) to produce both the broker topic and an AES-GCM key. Every message is encrypted and authenticated with that key, so a broker or anyone listening sees only random bytes on a random-looking topic, and can't forge messages. The password itself is never sent anywhere.

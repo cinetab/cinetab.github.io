@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.2.1">
+  <meta name="version" content="1.2.5">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -48,7 +48,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.2.1",
+      "softwareVersion": "1.2.5",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -93,7 +93,10 @@
         <a href="#features" title="What CineTab can do">Features</a>
         <a href="#faq" title="Common questions">FAQ</a>
       </nav>
-      <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-play"></i> Open a movie</button>
+      <div class="header-actions">
+        <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create room</span></button>
+        <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer" aria-label="Open a movie"><i class="fa-solid fa-play"></i> <span class="label-long">Open a movie</span><span class="label-short">Open movie</span></button>
+      </div>
     </header>
 
     <section class="hero">
@@ -310,7 +313,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.2.1</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.2.5</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -630,6 +633,14 @@
       <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
     </nav>
 
+    <!-- What everyone is watching, who shared it, and the way to share another or remove it -->
+    <div class="room-now">
+      <span class="room-now-icon"><i class="fa-solid fa-film"></i></span>
+      <span class="room-now-text"><b class="room-now-title">Nothing is playing</b><small class="room-now-meta"></small></span>
+      <button type="button" class="room-small-btn primary room-now-share"><i class="fa-solid fa-folder-open"></i> <span>Share a video</span></button>
+      <button type="button" class="room-icon-btn danger room-now-stop" hidden><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
     <ul class="room-requests"></ul>
 
     <section class="room-tab room-tab-chat" data-tab="chat" role="tabpanel">
@@ -676,7 +687,7 @@
         <label class="room-switch"><input type="checkbox" data-setting="lobby"><span><b>Ask before letting people in</b><small>You approve each person who knocks</small></span></label>
         <label class="room-switch"><input type="checkbox" data-setting="control"><span><b>Guests can control playback</b><small>Play, pause and jump for everyone</small></span></label>
         <label class="room-switch"><input type="checkbox" data-setting="streaming"><span><b>Stream my video</b><small>Guests without the movie watch your stream</small></span></label>
-        <label class="room-switch"><input type="checkbox" data-setting="media"><span><b>Guests can add media</b><small>Guests may publish a local video for everyone to watch</small></span></label>
+        <label class="room-switch"><input type="checkbox" data-setting="media"><span><b>Guests can share videos</b><small>Anyone can play a video from their device for everyone, or remove the current one</small></span></label>
         <label class="room-field room-quality"><span>Stream quality</span>
           <select data-setting="quality">
             <option value="saver">Data saver &middot; 480p, about 1.2 Mbit/s per viewer</option>
@@ -690,9 +701,7 @@
       <div class="room-guest-settings">
         <p class="room-section-title">How you watch</p>
         <button class="room-choice" data-watch="stream"><i class="fa-solid fa-tower-broadcast"></i><span><b>The host's stream</b><small></small></span></button>
-        <button class="room-choice" data-watch="own"><i class="fa-solid fa-film"></i><span><b>My own copy</b><small></small></span></button>
-        <button class="room-choice room-add-media" data-watch="add"><i class="fa-solid fa-cloud-arrow-up"></i><span><b>Add media for everyone</b><small></small></span></button>
-      </div>
+        <button class="room-choice" data-watch="own"><i class="fa-solid fa-film"></i><span><b>My own copy</b><small></small></span></button>      </div>
       <div class="room-browser-settings">
         <p class="room-section-title">This browser</p>
         <label class="room-switch"><input type="checkbox" class="room-remember"><span><b>Remember this room</b><small>Keeps its code and password here for one-click rejoining. Turning it off deletes them.</small></span></label>

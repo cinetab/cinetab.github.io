@@ -86,7 +86,11 @@
     peopleList = panel.querySelector(".room-people"),
     hostSettings = panel.querySelector(".room-host-settings"),
     guestSettings = panel.querySelector(".room-guest-settings"),
-    addMediaChoice = guestSettings.querySelector('[data-watch="add"]'),
+    nowBar = panel.querySelector(".room-now"),
+    nowTitle = nowBar.querySelector(".room-now-title"),
+    nowMeta = nowBar.querySelector(".room-now-meta"),
+    nowShareBtn = nowBar.querySelector(".room-now-share"),
+    nowStopBtn = nowBar.querySelector(".room-now-stop"),
     settingInputs = hostSettings.querySelectorAll("[data-setting]"),
     qualityField = hostSettings.querySelector(".room-quality"),
     streamNote = panel.querySelector(".room-stream-note"),
@@ -140,6 +144,8 @@
     const field = (form, name) => form.elements.namedItem(name);
     const hasMedia = () => (!!mainVideo.getAttribute("src") || !!mainVideo.srcObject) &&
         mainVideo.readyState > 0 && playbackMode !== "converting";
+    // The video in the room: who shared it and which file it is
+    const mediaKey = file => file ? `${file.from || ""}|${fileKey(file)}` : null;
     const clock = at => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     const allow = (peer, kind, max, perMs) => {
@@ -487,7 +493,7 @@
         room.memberCount = members.length;
         peopleCount.textContent = members.length;
         shareLabel.textContent = `Room · ${members.length}`;
-        const streaming = room.role === "host" ? room.settings.streaming && canStream : room.settings.streaming;
+        const file = room.file;
         peopleList.replaceChildren(...members.map(member => {
             const item = el("li", "room-person");
             const info = el("span", "room-person-info");
@@ -495,9 +501,12 @@
             const name = el("span", "room-person-name", member.name);
             if (you) name.append(el("span", "room-person-you", " (you)"));
             const route = room.role === "host" ? member.route : you ? room.peer && room.peer.route : null;
-            const meta = [member.host ? "Host" : member.stream && streaming ? "Watching the stream" : "Playing their own copy", ROUTE_LABEL[route]]
-                .filter(Boolean).join(" · ");
-            info.append(name, el("span", "room-person-meta", meta));
+            const watching = member.sharing ? "sharing the video"
+                : member.host || !file ? null
+                : member.stream && streamable() ? "watching the stream" : "playing their own copy";
+            const meta = [member.host && "Host", watching, ROUTE_LABEL[route]].filter(Boolean).join(" · ");
+            const metaText = meta.charAt(0).toUpperCase() + meta.slice(1);
+            info.append(name, el("span", "room-person-meta", metaText));
             item.append(makeAvatar(member.name, member.avatar), info);
             if (you) {
                 const edit = el("button", "room-icon-btn");
@@ -598,9 +607,10 @@
         together.following = room.role === "guest";
         together.openPanel = () => showPanel(panel.hidden);
         together.beforeHome = askBeforeHome;
-        together.onTitle = room.role === "host" ? () => broadcast({ t: "file", file: fileInfo() }) : null;
+        together.onTitle = room.role === "host" ? shareFile : () => room && room.presenting && sendPresent();
         together.active = () => !!room;
-        together.onFile = room.role === "guest" ? onGuestFile : null;
+        together.onFile = room.role === "host" ? onHostFile : onGuestFile;
+        renderNow();
         // A new host starts on the invite details, a guest on the chat
         showTab(room.role === "host" ? "invite" : "chat");
         showPanel(true);
@@ -616,6 +626,7 @@
         lastMessage = null;
         requestList.replaceChildren();
         peopleList.replaceChildren();
+        nowBar.classList.remove("live");
     };
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
@@ -866,7 +877,8 @@
         if (message.t !== "part") return onMessage(message);
 
         const { id, i, n, d } = message;
-        if (!allowParts || typeof id !== "string" || !Number.isInteger(n) || n < 2 || n > 200 ||
+        const parts = typeof allowParts === "function" ? allowParts() : allowParts;
+        if (!parts || typeof id !== "string" || !Number.isInteger(n) || n < 2 || n > 200 ||
             !Number.isInteger(i) || i < 0 || i >= n || typeof d !== "string") return;
         peer.parts ||= new Map();
         let entry = peer.parts.get(id);
@@ -894,22 +906,56 @@
         title: room.title
     });
 
-    const fileInfo = () => hasMedia() && currentSource ? {
+    // The file open in this browser's player (not a stream it's watching)
+    const fileInfo = () => hasMedia() && !together.stream && currentSource ? {
         name: currentSource.name,
         size: currentSource.size,
         duration: Number.isFinite(mainVideo.duration) ? mainVideo.duration : 0,
-        title: videoTitle.textContent,
+        title: savedTitle(currentSource.name, currentSource.size),
         audio: container.classList.contains("audio-mode")
     } : null;
 
-    // Who caused the next play/pause/seek: the host, or a guest whose request is being applied
-    const stateMessage = (cause = null) => {
-        const by = room.attribution && Date.now() < room.attribution.until ? room.attribution : { name: room.name, id: room.id };
+    // The room's video: the host's own file, or the one a guest is sharing from their device.
+    // `stream`: whether guests can watch it as a stream (a guest's video always comes that way).
+    const currentMedia = () => {
+        if (room.presenter) return { ...room.presentFile, from: room.presenter.id, fromName: room.presenter.name, stream: true };
+        const file = fileInfo();
+        return file && { ...file, from: room.id, fromName: room.name, stream: room.settings.streaming && canStream };
+    };
+
+    // Tells everyone which video is on, and announces a new one in the chat
+    const shareFile = () => {
+        if (!room || room.role !== "host") return;
+        const file = room.file = currentMedia();
+        broadcast({ t: "file", file });
+        const key = mediaKey(file);
+        if (key !== room.mediaKey) {
+            room.mediaKey = key;
+            if (file) notice(`${file.fromName} is playing “${file.title}”`);
+            shareMembers();
+        }
+        renderNow();
+    };
+
+    // Where the room's video is: the host's player, or the last report from the guest sharing it
+    const playback = () => room.presenter && room.state ? {
+        paused: room.state.paused,
+        time: Math.min(expectedTime(), room.presentFile.duration || Infinity),
+        rate: room.state.rate
+    } : {
+        paused: !hasMedia() || together.stream ? true : mainVideo.paused,
+        time: together.stream ? 0 : mainVideo.currentTime || 0,
+        rate: mainVideo.playbackRate
+    };
+
+    // Who caused the next play/pause/seek: the host, the guest sharing the video, or a guest
+    // whose request is being applied
+    const stateMessage = (cause = null, by = null) => {
+        by ||= room.attribution && Date.now() < room.attribution.until ? room.attribution
+            : room.presenter ? { name: room.presenter.name, id: room.presenter.id } : { name: room.name, id: room.id };
         return {
             t: "state",
-            paused: !hasMedia() || mainVideo.paused,
-            time: mainVideo.currentTime || 0,
-            rate: mainVideo.playbackRate,
+            ...playback(),
             at: now(),
             cause,
             by: cause ? by.name : null,
@@ -923,9 +969,11 @@
         return Array.from(track.cues).slice(0, 5000)
             .map(cue => [+cue.startTime.toFixed(3), +cue.endTime.toFixed(3), String(cue.text).slice(0, 500)]);
     };
+    // The subtitles of the room's video, for everyone but the guest sharing it
     const sendSubtitles = peer => {
-        const message = { t: "subs", cues: subtitleCues() };
-        peer ? send(peer, message) : broadcast(message);
+        const message = { t: "subs", cues: room.presenter ? room.presentCues : subtitleCues() };
+        if (peer) return send(peer, message);
+        guests().forEach(guest => guest !== room.presenter && send(guest, message));
     };
 
     const notice = text => {
@@ -958,9 +1006,10 @@
     };
 
     const shareMembers = () => {
+        const sharer = room.file ? room.file.from : null;
         const members = [
-            { id: room.id, name: room.name, avatar: room.avatar, host: true },
-            ...guests().map(peer => ({ id: peer.id, name: peer.name, avatar: peer.avatar, stream: peer.wantsStream, route: peer.route }))
+            { id: room.id, name: room.name, avatar: room.avatar, host: true, sharing: sharer === room.id },
+            ...guests().map(peer => ({ id: peer.id, name: peer.name, avatar: peer.avatar, stream: peer.wantsStream, sharing: sharer === peer.id, route: peer.route }))
         ];
         broadcast({ t: "members", members });
         renderPeople(members);
@@ -987,17 +1036,24 @@
     };
 
     const updateHostProfile = oldName => {
+        if (room.file && room.file.from === room.id) shareFile();
         shareMembers();
         if (oldName !== room.name) notice(`${oldName} is now ${room.name}`);
     };
 
     // ---------- Streaming the host's video
 
+    // The picture and sound of this browser's player. The host streams it to guests; a guest
+    // sharing a video sends it to the host, who passes it on.
+    const onCaptureChange = () => room && (room.role === "host" ? updateStreams() : syncPresenterTracks());
+    // When the player's source changes, Chrome adds the new picture and sound to the capture
+    // without always removing the old ones, so the newest track is the one that's playing
+    const newest = tracks => tracks.filter(track => track.readyState === "live").pop() || null;
     const captureSource = () => {
         if (!captured && canStream) {
             captured = mainVideo.captureStream();
-            captured.addEventListener("addtrack", updateStreams);
-            captured.addEventListener("removetrack", updateStreams);
+            captured.addEventListener("addtrack", onCaptureChange);
+            captured.addEventListener("removetrack", onCaptureChange);
         }
         return captured;
     };
@@ -1013,7 +1069,8 @@
             const params = sender.getParameters();
             if (!params.encodings || !params.encodings.length) return;
             if (kind === "video") {
-                const chosen = room.settings.quality;
+                // A guest sends their video to the host only, so it goes in high quality
+                const chosen = room.role === "host" ? room.settings.quality : "high";
                 const quality = peer.route === "lan" && chosen !== "saver" ? QUALITY.lan : QUALITY[chosen] || QUALITY.standard;
                 params.encodings[0].maxBitrate = quality.bitrate;
                 params.encodings[0].scaleResolutionDownBy = Math.max(1, (mainVideo.videoHeight || quality.height) / quality.height);
@@ -1031,19 +1088,109 @@
         sender.replaceTrack(track).then(done).catch(() => {});
     };
 
-    // Each guest who wants the stream gets the host's picture and sound; the rest get nothing
+    // Each guest who wants the stream gets the room's video: the host's own picture and sound, or
+    // the video a guest is sharing, passed on as it arrives. The guest sharing it gets nothing back.
     const updateStreams = () => {
         if (!room || room.role !== "host") return;
-        const source = room.mediaSource || (room.settings.streaming && guests().some(peer => peer.wantsStream) ? captureSource() : null);
-        const video = source && hasMedia() ? source.getVideoTracks()[0] || null : null;
-        const audio = source && hasMedia() ? source.getAudioTracks()[0] || null : null;
+        const presenter = room.presenter;
+        const source = presenter ? presenter.mediaStream
+            : room.settings.streaming && canStream && !together.stream && hasMedia() && guests().some(peer => peer.wantsStream) ? captureSource() : null;
+        const video = source ? newest(source.getVideoTracks()) : null;
+        const audio = source ? newest(source.getAudioTracks()) : null;
         if (video) video.contentHint = "motion";
         if (audio) audio.contentHint = "music";
         for (const peer of room.peers.values()) {
-            const on = peer.status === "admitted" && peer.wantsStream;
-        setTrack(peer.mediaVideoSender || peer.senders.video, on ? video : null, "video", peer);
-        setTrack(peer.mediaAudioSender || peer.senders.mediaAudio, on ? audio : null, "audio", peer);
+            const on = peer.status === "admitted" && peer.wantsStream && peer !== presenter;
+            setTrack(peer.senders.video, on ? video : null, "video", peer);
+            setTrack(peer.senders.mediaAudio, on ? audio : null, "audio", peer);
         }
+    };
+
+    // ---------- A guest sharing a video from their device
+    // Their browser plays the file and is in charge of it: it sends the picture and sound to the
+    // host, reports play/pause/jumps, and gets everyone else's requests passed on by the host.
+
+    const setPresenter = (peer, file, message) => {
+        const previous = room.presenter;
+        const same = previous === peer && room.presentFile && fileKey(room.presentFile) === fileKey(file);
+        if (previous && previous !== peer) send(previous, { t: "present-end", reason: "replaced", by: peer.name });
+        room.presenter = peer;
+        room.presentFile = file;
+        room.state = { ...validState(message), at: now() };
+        if (!same) room.presentCues = null;
+        room.cues = room.presentCues;
+        // The host's own video gives way, and the host watches like everyone else
+        if (!together.stream) releaseMedia();
+        stopCapture();
+        room.remote = peer.mediaStream;
+        shareFile();
+        enterStream();
+        broadcast(stateMessage());
+        if (!same) sendSubtitles();
+        updateStreams();
+        shareMembers();
+    };
+
+    // Back to no video (the host's player shows "Select a movie")
+    const clearPresenter = () => {
+        if (!room.presenter) return;
+        room.presenter = room.presentFile = room.presentCues = room.state = room.cues = room.remote = null;
+        leaveStream();
+        uploadOverlay.classList.remove("hidden");
+        shareFile();
+        broadcast(stateMessage());
+        sendSubtitles();
+        updateStreams();
+        shareMembers();
+    };
+
+    const onPresenterState = (peer, message) => {
+        const previous = room.state;
+        room.state = { ...validState(message), at: now() };
+        if (finite(message.duration, 1, 1e7) && Math.abs(message.duration - room.presentFile.duration) > 1) {
+            room.presentFile.duration = message.duration;
+            shareFile();
+        }
+        const cause = ["play", "pause", "seek", "rate"].includes(message.cause) ? message.cause : null;
+        // A change someone asked for is theirs, not the presenter's
+        const asker = message.by === room.id ? { id: room.id, name: room.name } : guests().find(guest => guest.id === message.by);
+        const by = asker ? { id: asker.id, name: asker.name } : { id: peer.id, name: peer.name };
+        broadcast(stateMessage(cause, by));
+        if (cause && by.id !== room.id) stateFeedback(previous, room.state, cause, by.name);
+        streamTick();
+        renderHomeBar();
+    };
+
+    // Play, pause, jumps and speed for a guest's video happen in that guest's browser
+    const controlPresenter = (by, change) => {
+        const message = { t: "pcontrol", by: by.id };
+        if (finite(change.rate, 0.25, 4)) message.rate = Math.round(change.rate * 100) / 100;
+        if (finite(change.time, 0, 1e7)) message.time = change.time;
+        if (typeof change.paused === "boolean") message.paused = change.paused;
+        send(room.presenter, message);
+    };
+
+    // Takes the room's video off for everyone. `by`: the host or a guest
+    const removeMedia = by => {
+        const file = room.file;
+        if (!file) return;
+        if (room.presenter) {
+            if (room.presenter !== by) send(room.presenter, { t: "present-end", reason: "removed", by: by.name });
+            clearPresenter();
+        } else {
+            unloadPlayer();
+            shareFile();
+            broadcast(stateMessage());
+            updateStreams();
+        }
+        notice(`${by.name} removed “${file.title}”`);
+    };
+
+    // The host opening a video replaces a guest's for everyone
+    const onHostFile = () => {
+        if (!room || !room.presenter) return;
+        send(room.presenter, { t: "present-end", reason: "replaced", by: room.name });
+        clearPresenter();
     };
 
     const syncSettingsUI = () => {
@@ -1077,6 +1224,7 @@
         if (key === "streaming" || key === "quality") updateStreams();
         if (key === "control" || key === "streaming" || key === "media") {
             broadcast({ t: "settings", ...publicSettings() });
+            if (key === "streaming") shareFile();
             shareMembers();
         }
         // Turning the lobby off lets in everyone who's waiting
@@ -1094,15 +1242,13 @@
         closePeer(peer);
         renderRequests();
         if (wasIn) {
-            if (room.mediaPeer === peer) {
-                room.mediaPeer = null;
-                room.mediaSource = null;
-                mainVideo.srcObject = null;
-                room.file = null;
-            }
+            const sharing = room.presenter === peer;
+            if (sharing) clearPresenter();
             shareMembers();
             updateStreams();
-            if (!quietly) notice(`${peer.name} left`);
+            if (!quietly) notice(sharing ? `${peer.name} left, so their video stopped` : `${peer.name} left`);
+        } else if (room.presenter === peer) {
+            clearPresenter();
         }
     };
 
@@ -1112,6 +1258,7 @@
         send(peer, { t: "denied", reason });
         peer.status = "refused";
         renderRequests();
+        if (room.presenter === peer) clearPresenter();
         if (wasIn) {
             shareMembers();
             updateStreams();
@@ -1142,7 +1289,7 @@
             host: room.name,
             hostId: room.id,
             settings: publicSettings(),
-            file: fileInfo()
+            file: currentMedia()
         });
         sendSubtitles(peer);
         renderRequests();
@@ -1172,7 +1319,8 @@
 
     // A guest's playback request (when guests may control playback)
     const applyControl = (peer, message) => {
-        if (!hasMedia()) return;
+        if (room.presenter) return room.presenter !== peer && controlPresenter(peer, message);
+        if (!hasMedia() || together.stream) return;
         room.attribution = { name: peer.name, id: peer.id, until: Date.now() + 1500 };
         if (finite(message.rate, 0.25, 4)) mainVideo.defaultPlaybackRate = mainVideo.playbackRate = Math.round(message.rate * 100) / 100;
         if (finite(message.time, 0, 1e7)) mainVideo.currentTime = Math.min(message.time, mainVideo.duration || message.time);
@@ -1212,20 +1360,27 @@
             if (typeof message.id === "string" && allow(peer, "react", 20, 10000)) applyReaction(peer.id, peer.name, message.id, message.emoji);
         } else if (message.t === "control") {
             if (room.settings.control && allow(peer, "control", 12, 5000)) applyControl(peer, message);
-        } else if (message.t === "media") {
-            if (room.settings.media !== true || !peer.mediaStream) return;
+        } else if (message.t === "present") {
+            // A guest shares a video from their device (or updates the one they're sharing)
+            if (!allow(peer, "present", 6, 10000) || !peer.mediaStream) return;
             const file = validFile(message.file);
             if (!file) return;
-            room.mediaPeer = peer;
-            room.file = file;
-            room.mediaSource = peer.mediaStream;
-            currentSource = { name: file.name, size: file.size };
-            videoTitle.textContent = audioTitle.textContent = file.title;
-            mainVideo.srcObject = peer.mediaStream;
-            mainVideo.play().catch(() => {});
-            broadcast({ t: "file", file });
-            updateStreams();
-            shareMembers();
+            if (room.settings.media !== true && room.presenter !== peer) return send(peer, { t: "present-end", reason: "off" });
+            setPresenter(peer, file, message);
+        } else if (message.t === "pstate") {
+            if (room.presenter === peer && allow(peer, "pstate", 80, 10000)) onPresenterState(peer, message);
+        } else if (message.t === "psubs") {
+            if (room.presenter !== peer || !allow(peer, "psubs", 4, 10000)) return;
+            room.presentCues = room.cues = validCues(message.cues);
+            if (together.stream) subtitlesBtn.classList.toggle("active", !!room.cues && room.cuesOn);
+            sendSubtitles();
+        } else if (message.t === "unpresent") {
+            if (room.presenter !== peer) return;
+            const title = room.presentFile.title;
+            clearPresenter();
+            notice(`${peer.name} stopped sharing “${title}”`);
+        } else if (message.t === "remove") {
+            if (room.settings.media === true && allow(peer, "remove", 4, 10000)) removeMedia(peer);
         } else if (message.t === "want") {
             peer.wantsStream = message.stream === true;
             updateStreams();
@@ -1235,6 +1390,7 @@
             const old = peer.name;
             peer.name = clean(message.name, 30) || old;
             peer.avatar = validAvatar(message.avatar);
+            if (room.presenter === peer) shareFile();
             shareMembers();
             if (peer.name !== old) notice(`${old} is now ${peer.name}`);
         } else if (message.t === "bye") {
@@ -1254,7 +1410,8 @@
             peer.pc.ontrack = event => {
                 pendingTracks.push(event);
             };
-            wirePeer(peer, message => room === host && hostHandle(peer, message), () => dropPeer(peer), false);
+            // Long messages (a shared video's subtitles) only from people who are in
+            wirePeer(peer, message => room === host && hostHandle(peer, message), () => dropPeer(peer), () => peer.status === "admitted");
             watchRoute(peer, () => {
                 updateStreams();
                 shareMembers();
@@ -1274,14 +1431,11 @@
                     peer.voiceSender = transceiver.sender;
                 }
             }
+            // The picture and sound of a video this guest shares (silent until they do)
             peer.mediaStream = new MediaStream();
             peer.pc.ontrack = event => {
                 if (event.transceiver === peer.voiceTransceiver) return attachRemoteVoice(peer, event.track);
-                peer.mediaStream.addTrack(event.track);
-                if (room.mediaPeer === peer) {
-                    mainVideo.srcObject = peer.mediaStream;
-                    mainVideo.play().catch(() => {});
-                }
+                if (!peer.mediaStream.getTracks().includes(event.track)) peer.mediaStream.addTrack(event.track);
             };
             pendingTracks.forEach(event => peer.pc.ontrack(event));
             syncMicrophonePeer(peer);
@@ -1327,8 +1481,12 @@
             title: title || `${name}'s room`,
             password, name, avatar, relay, remember,
             id: Signaling.newId(),
-            settings: { lobby: true, control: true, streaming: canStream, media: false, quality: "standard", locked: false },
+            settings: { lobby: true, control: true, streaming: canStream, media: true, quality: "standard", locked: false },
             approved: approvedTickets(hostCode),
+            // The room's video (see currentMedia) and, while a guest shares one, their playback
+            file: null, mediaKey: null,
+            presenter: null, presentFile: null, presentCues: null,
+            state: null, offset: 0, remote: null, cues: null, cuesOn: true,
             peers: new Map(),
             knocks: new Map(),
             tickets: new Set(),
@@ -1356,6 +1514,9 @@
         // Regular updates keep guests' timelines and sync accurate
         host.timers.push(setInterval(() => broadcast(stateMessage()), 3000));
         syncSettingsUI();
+        // A video that's already open becomes the room's video
+        host.file = currentMedia();
+        host.mediaKey = mediaKey(host.file);
         enterRoomUI();
         rememberRoom();
         renderPeople([{ id: host.id, name: host.name, avatar: host.avatar, host: true }]);
@@ -1381,8 +1542,17 @@
         size: file.size,
         duration: finite(file.duration, 0, 1e7) ? file.duration : 0,
         title: clean(file.title, 255) || clean(file.name, 255),
-        audio: file.audio === true
+        audio: file.audio === true,
+        // Who shared it, and whether it comes as a stream (older hosts don't say)
+        from: typeof file.from === "string" ? file.from.slice(0, 40) : null,
+        fromName: clean(file.fromName, 30),
+        stream: typeof file.stream === "boolean" ? file.stream : null
     } : null;
+
+    // The room's video can be watched as a stream
+    const streamable = () => !!room.file && (room.file.stream ?? room.settings.streaming === true);
+    // Name of whoever shared the room's video
+    const sharerName = () => room.file && room.file.fromName || room.hostName || "The host";
 
     const validState = message => ({
         paused: message.paused !== false,
@@ -1421,7 +1591,7 @@
 
     // A guest playing their own copy gets the host's subtitles unless they loaded their own
     const applyHostSubtitles = () => {
-        if (together.stream || !ownMatches() || !hasMedia()) return;
+        if (together.stream || room.presenting || !ownMatches() || !hasMedia()) return;
         const track = mainVideo.textTracks[0];
         if (track && track.label !== HOST_SUBTITLES) return;
         if (room.cues) applySubtitles(toVtt(room.cues), HOST_SUBTITLES);
@@ -1451,7 +1621,7 @@
         renderCue(time);
         const live = room.remote.getTracks().some(track => !track.muted);
         streamWait.hidden = live;
-        if (!live) streamWaitText.textContent = `Connecting to ${room.hostName}'s stream…`;
+        if (!live) streamWaitText.textContent = `Connecting to ${sharerName()}'s video…`;
     };
 
     // What the player's controls do while watching the stream (see `together` in script.js)
@@ -1490,19 +1660,38 @@
     // Only the browser's autoplay rule needs a tap; a play() cut short by a pause is normal
     const playBlocked = error => error && error.name === "NotAllowedError" && needsTap();
 
+    // Chrome ends the tracks a <video> was playing when it switches to another source, once
+    // captureStream() has been called on it (to stream or share a video). The connection's tracks
+    // have to outlive that, so the player only ever gets copies of them.
+    let shownRemote = null, shownCopy = null;
+    const showRemote = stream => {
+        const old = shownCopy;
+        shownRemote = stream;
+        shownCopy = stream ? new MediaStream(stream.getTracks().map(track => track.clone())) : null;
+        mainVideo.srcObject = shownCopy;
+        if (old) old.getTracks().forEach(track => track.stop());
+    };
+
     const enterStream = () => {
         const file = room.file;
         videoTitle.textContent = audioTitle.textContent = file.title;
         container.classList.toggle("audio-mode", file.audio);
-        if (together.stream) return;
+        if (together.stream) {
+            // Another person's video, or a new connection: same player, new source
+            if (shownRemote !== room.remote) {
+                showRemote(room.remote);
+                mainVideo.play().catch(playBlocked);
+            }
+            subtitlesBtn.classList.toggle("active", !!room.cues && room.cuesOn);
+            return streamTick();
+        }
         cancelConversion();
         mainVideo.pause();
         removeSubtitles();
         [uploadOverlay, errorOverlay, compatBanner].forEach(item => item.classList.add("hidden"));
         together.stream = streamControls;
         container.classList.add("remote");
-        mainVideo.srcObject = room.remote;
-        previewVideo.srcObject = room.remote;
+        showRemote(room.remote);
         mainVideo.play().catch(playBlocked);
         room.shownPlaying = null;
         subtitlesBtn.classList.toggle("active", !!room.cues && room.cuesOn);
@@ -1518,8 +1707,7 @@
         container.classList.remove("remote", "audio-mode");
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
-        mainVideo.srcObject = null;
-        previewVideo.srcObject = null;
+        showRemote(null);
         videoTitle.textContent = audioTitle.textContent = currentSource ? savedTitle(currentSource.name, currentSource.size) : "No Video Loaded";
         subtitlesBtn.classList.remove("active");
         progressBar.style.width = "0%";
@@ -1530,7 +1718,7 @@
     // ---------- Following the host with this browser's own copy
 
     const followHost = () => {
-        if (!room || room.role !== "guest" || room.phase !== "in" || together.stream || !ownMatches() || !hasMedia() || !room.state) return;
+        if (!room || room.role !== "guest" || room.phase !== "in" || together.stream || room.presenting || !ownMatches() || !hasMedia() || !room.state) return;
         const state = room.state;
         if (mainVideo.playbackRate !== state.rate) mainVideo.playbackRate = state.rate;
         const end = Number.isFinite(mainVideo.duration) ? mainVideo.duration : Infinity;
@@ -1546,14 +1734,21 @@
         else if (!state.paused && mainVideo.paused) mainVideo.play().catch(playBlocked);
     };
 
-    // Asks the host to play, pause, jump or change speed; acts right away and the host confirms
+    // Asks for play, pause, a jump or a speed change; acts right away and whoever's video it is
+    // confirms. A guest asks the host; the host asks the guest who's sharing the video.
     const request = change => {
-        if (!room || room.role !== "guest" || room.phase !== "in" || !room.file) return false;
-        if (!room.settings.control) {
-            showFeedback("fa-lock", "Host only");
-            return false;
+        if (!room || !room.file) return false;
+        if (room.role === "host") {
+            if (!room.presenter) return false;
+            controlPresenter({ id: room.id, name: room.name }, change);
+        } else {
+            if (room.phase !== "in") return false;
+            if (!room.settings.control) {
+                showFeedback("fa-lock", "Host only");
+                return false;
+            }
+            send(room.peer, { t: "control", ...change });
         }
-        send(room.peer, { t: "control", ...change });
         const state = room.state || { paused: true, time: 0, rate: 1 };
         room.state = {
             paused: change.paused ?? state.paused,
@@ -1584,37 +1779,44 @@
         if (change && !request(change)) setTimeout(followHost, 0);
     };
 
-    // Settings tab for guests: the host's stream or their own copy
+    // Settings tab for guests: the stream or their own copy
     const renderGuestWatch = () => {
-        const host = room.hostName;
         const file = room.file;
-        const streaming = room.settings.streaming && !!file;
-        const own = !together.stream && ownMatches();
-        streamChoice.disabled = !streaming;
+        const by = sharerName();
+        const sharing = !!room.presenting;
+        const streaming = streamable();
+        const own = !together.stream && !sharing && ownMatches();
+        streamChoice.disabled = !streaming || sharing;
         streamChoice.classList.toggle("active", !!together.stream);
-        streamChoice.querySelector("b").textContent = `${host}'s stream`;
-        streamChoice.querySelector("small").textContent = !file ? `Available when ${host} starts a video`
-            : !room.settings.streaming ? `${host} isn't streaming right now`
+        streamChoice.querySelector("b").textContent = file && !sharing ? `${by}'s stream` : "The stream";
+        streamChoice.querySelector("small").textContent = sharing ? "You're sharing the video from this device"
+            : !file ? "Available when someone starts a video"
+            : !streaming ? `${by} isn't streaming right now`
             : together.stream ? "Watching now · nothing to download" : "Watch as it plays · nothing to download";
-        ownChoice.disabled = !file;
-        ownChoice.classList.toggle("active", own);
-        ownChoice.querySelector("small").textContent = !file ? `Available when ${host} starts a video`
-            : own ? "Playing now, in step with the host · choose another file" : "The same movie on this device · sharpest picture";
-        addMediaChoice.disabled = room.settings.media !== true;
-        addMediaChoice.classList.toggle("active", false);
-        addMediaChoice.querySelector("small").textContent = room.settings.media === true
-            ? "Publish a local video for everyone in the room"
-            : `${host} hasn't enabled guest media`;
+        ownChoice.disabled = !file || sharing;
+        ownChoice.classList.toggle("active", own || sharing);
+        ownChoice.querySelector("small").textContent = sharing ? "Everyone watches the video playing here"
+            : !file ? "Available when someone starts a video"
+            : own ? `Playing now, in step with ${by} · choose another file` : "The same movie on this device · sharpest picture";
+    };
+
+    // The file picker opens either a copy of the room's video (`share` false) or a video to share
+    const pickFile = share => {
+        if (room && room.role === "guest") room.sharePending = share;
+        fileInput.click();
+    };
+    fileInput.addEventListener("cancel", () => room && (room.sharePending = false));
+
+    const canShare = () => !!room && (room.role === "host" || (room.phase === "in" && room.settings.media === true && canStream));
+
+    const shareVideo = () => {
+        if (!room) return;
+        if (!canShare()) return showFeedback("fa-lock", canStream ? "Host only" : "Needs Chrome or Edge");
+        pickFile(true);
     };
 
     streamChoice.addEventListener("click", () => room && room.role === "guest" && !together.stream && setWatching("stream"));
-    ownChoice.addEventListener("click", () => room && room.role === "guest" && fileInput.click());
-    addMediaChoice.addEventListener("click", () => {
-        if (room?.role === "guest" && room.settings.media === true) {
-            room.publishMedia = true;
-            fileInput.click();
-        }
-    });
+    ownChoice.addEventListener("click", () => room && room.role === "guest" && pickFile(false));
 
     const setWatching = mode => {
         room.watching = mode;
@@ -1622,56 +1824,79 @@
         refreshGuestView();
     };
 
-    // Decides what a guest sees: the host's stream, their own copy, or a prompt
+    // Decides what a guest sees: their own shared video, the stream, their own copy, or a prompt
     const refreshGuestView = () => {
         if (!room || room.role !== "guest" || room.phase !== "in") return;
-        const host = room.hostName;
         const file = room.file;
+        const by = sharerName();
         // Guests get the room's own prompts instead of "Select a movie"
         uploadOverlay.classList.add("hidden");
-        if (!file) {
+        if (room.presenting) {
+            // Sharing: the video plays here and everyone else follows it
+            leaveStream();
+            hideOverlay();
+        } else if (!file) {
             leaveStream();
             if (hasMedia()) mainVideo.pause();
+            const share = canShare();
             showStatus({
                 icon: "fa-couch",
-                title: `Waiting for ${host} to start a video`,
-                text: "Chat with everyone in the meantime. The video shows up here as soon as it starts."
+                title: "Nothing is playing yet",
+                text: share ? "Share a video from this device, or wait for someone to start one. Chat with everyone in the meantime."
+                    : `Waiting for ${room.hostName} to start a video. Chat with everyone in the meantime.`,
+                actions: share ? [{ label: "Share a video", icon: "fa-folder-open", onClick: shareVideo }] : []
             });
-        } else if (room.watching === "stream" && room.settings.streaming) {
+        } else if (streamable() && (room.watching === "stream" || !ownMatches())) {
+            // A new video plays straight away as a stream, unless this browser has its own copy open
+            if (room.watching !== "stream") {
+                room.watching = "stream";
+                send(room.peer, { t: "want", stream: true });
+            }
             hideOverlay();
             enterStream();
+        } else if (ownMatches()) {
+            leaveStream();
+            hideOverlay();
+            followHost();
         } else {
             leaveStream();
-            if (ownMatches()) {
-                hideOverlay();
-                followHost();
-            } else {
-                if (hasMedia()) mainVideo.pause();
-                const details = [formatBytes(file.size), file.duration && formatTime(file.duration)].filter(Boolean).join(", ");
-                showStatus({
-                    icon: "fa-film",
-                    title: `Open your copy of “${file.title}”`,
-                    text: `${host} is playing ${file.name} (${details}). Choose the same movie on this device and CineTab keeps it in step with ${host}.` +
-                        (room.settings.streaming ? "" : ` ${host} isn't streaming it right now.`),
-                    actions: [
-                        { label: "Choose my copy", icon: "fa-folder-open", onClick: () => fileInput.click() },
-                        room.settings.streaming && { label: `Watch ${host}'s stream`, secondary: true, onClick: () => setWatching("stream") }
-                    ].filter(Boolean)
-                });
-            }
+            if (hasMedia()) mainVideo.pause();
+            const details = [formatBytes(file.size), file.duration && formatTime(file.duration)].filter(Boolean).join(", ");
+            showStatus({
+                icon: "fa-film",
+                title: `Open your copy of “${file.title}”`,
+                text: `${by} is playing ${file.name} (${details}) but isn't streaming it right now. Choose the same movie on this device and CineTab keeps it in step with ${by}.`,
+                actions: [{ label: "Choose my copy", icon: "fa-folder-open", onClick: () => pickFile(false) }]
+            });
         }
         renderGuestWatch();
+        renderNow();
     };
 
-    // A guest opening a file switches to their own copy of the host's movie
+    // A guest opening a file: a video to share with everyone, or their own copy of the room's video
     const onGuestFile = file => {
         if (!room || room.phase !== "in") return;
-        if (room.publishMedia) {
-            room.pendingPublish = file;
+        const share = (room.sharePending || room.presenting || !room.file) && canShare();
+        room.sharePending = false;
+        if (share) {
+            // `from`: the file open until now. Leaving the stream briefly loads it again, and it
+            // may be the same movie, so sharing waits for the newly chosen one (see sendPresent).
+            room.presenting = { key: fileKey(file), live: false, from: mainVideo.getAttribute("src") };
             room.ownFor = fileKey(file);
-            room.watching = "own";
+            room.checkedFor = null;
+            together.following = false;
+            if (room.watching !== "own") {
+                room.watching = "own";
+                send(room.peer, { t: "want", stream: false });
+            }
+            leaveStream();
+            hideOverlay();
+            renderGuestWatch();
+            renderNow();
+            // Sent once the video is ready to play (see loadedmetadata)
             return;
         }
+        if (room.presenting) stopPresenting(true);
         room.ownFor = room.file ? fileKey(room.file) : null;
         room.checkedFor = null;
         if (room.watching !== "own") {
@@ -1682,9 +1907,154 @@
         hideOverlay();
         renderGuestWatch();
         if (room.file && file.name !== room.file.name) {
-            addMessage({ system: true, text: `Your file's name is different from ${room.hostName}'s (${room.file.name}). If it's the same movie it will play in step; if not, watch ${room.hostName}'s stream instead.` });
+            const by = sharerName();
+            addMessage({ system: true, text: `Your file's name is different from ${by}'s (${room.file.name}). If it's the same movie it will play in step; if not, watch ${by}'s stream instead.` });
         }
+        renderNow();
     };
+
+    // ---------- Sharing a video from this guest's device
+
+    const presenterPlayback = () => ({
+        paused: mainVideo.paused,
+        time: mainVideo.currentTime || 0,
+        rate: mainVideo.playbackRate,
+        duration: Number.isFinite(mainVideo.duration) ? mainVideo.duration : 0
+    });
+
+    // The picture and sound go to the host, who passes them on to everyone else
+    const syncPresenterTracks = () => {
+        const peer = room && room.role === "guest" ? room.peer : null;
+        if (!peer) return;
+        const source = room.presenting && room.presenting.live ? captured : null;
+        const video = source ? newest(source.getVideoTracks()) : null;
+        const audio = source ? newest(source.getAudioTracks()) : null;
+        if (video) video.contentHint = "motion";
+        if (audio) audio.contentHint = "music";
+        setTrack(peer.mediaVideoSender, video, "video", peer);
+        setTrack(peer.mediaAudioSender, audio, "audio", peer);
+    };
+
+    const sendPresenterSubs = () => {
+        if (room && room.role === "guest" && room.presenting && room.presenting.live) send(room.peer, { t: "psubs", cues: subtitleCues() });
+    };
+
+    // Starts (or updates) sharing once the chosen video is ready to play
+    const sendPresent = () => {
+        const sharing = room && room.role === "guest" && room.presenting;
+        if (!sharing || !room.peer || room.phase !== "in" || together.stream || !hasMedia() ||
+            !currentSource || fileKey(currentSource) !== sharing.key) return;
+        if (sharing.from) {
+            if (mainVideo.getAttribute("src") === sharing.from) return;
+            sharing.from = null;
+        }
+        if (!captureSource()) {
+            stopPresenting(true);
+            refreshGuestView();
+            return showFeedback("fa-triangle-exclamation", "Needs Chrome or Edge");
+        }
+        sharing.live = true;
+        syncPresenterTracks();
+        send(room.peer, {
+            t: "present",
+            file: {
+                name: currentSource.name,
+                size: currentSource.size,
+                duration: Number.isFinite(mainVideo.duration) ? mainVideo.duration : 0,
+                title: savedTitle(currentSource.name, currentSource.size),
+                audio: container.classList.contains("audio-mode")
+            },
+            ...presenterPlayback()
+        });
+        sendPresenterSubs();
+        renderNow();
+    };
+
+    // Play, pause, jumps and speed changes go to the host, who tells everyone. A change someone
+    // else asked for (within the last moment) carries their id.
+    const sendPstate = (cause = null) => {
+        if (!room || room.role !== "guest" || !room.presenting || !room.presenting.live || !hasMedia()) return;
+        // Dragging along the timeline seeks many times a second: send the latest, a few times a second
+        clearTimeout(room.pstateTimer);
+        const wait = 150 - (now() - (room.pstateAt || 0));
+        if (wait > 0) {
+            room.pstateTimer = setTimeout(() => sendPstate(cause), wait);
+            return;
+        }
+        room.pstateAt = now();
+        const asked = cause && room.asked && now() < room.asked.until ? room.asked.by : undefined;
+        send(room.peer, { t: "pstate", cause, by: asked, ...presenterPlayback() });
+    };
+
+    // Someone asked for a change to the video playing here
+    const applyAsked = message => {
+        if (!room.presenting || !room.presenting.live || !hasMedia()) return;
+        room.asked = { by: typeof message.by === "string" ? message.by.slice(0, 40) : undefined, until: now() + 2000 };
+        if (finite(message.rate, 0.25, 4)) mainVideo.defaultPlaybackRate = mainVideo.playbackRate = message.rate;
+        if (finite(message.time, 0, 1e7)) mainVideo.currentTime = Math.min(message.time, mainVideo.duration || message.time);
+        if (message.paused === true) mainVideo.pause();
+        else if (message.paused === false) mainVideo.play().catch(playBlocked);
+    };
+
+    // Stops sharing. `tell`: let the host know (not needed when the host ended it)
+    const stopPresenting = tell => {
+        if (!room || room.role !== "guest" || !room.presenting) return;
+        if (tell) send(room.peer, { t: "unpresent" });
+        room.presenting = null;
+        room.ownFor = null;
+        room.asked = null;
+        together.following = true;
+        syncPresenterTracks();
+        stopCapture();
+        if (hasMedia() && !together.stream) mainVideo.pause();
+        renderNow();
+    };
+
+    // ---------- Now playing: what everyone watches, and sharing another video or removing it
+
+    const renderNow = () => {
+        if (!room) return;
+        const host = room.role === "host";
+        const file = room.file;
+        const sharing = !host && room.presenting;
+        const mine = sharing || (!!file && file.from === room.id);
+        const on = !!file || !!sharing;
+        nowBar.classList.toggle("live", on);
+        if (sharing) {
+            nowTitle.textContent = currentSource ? savedTitle(currentSource.name, currentSource.size) : "Your video";
+            nowMeta.textContent = sharing.live ? "You're sharing it" : "Getting your video ready…";
+        } else if (file) {
+            nowTitle.textContent = file.title;
+            nowMeta.textContent = mine ? "You're sharing it" : `Shared by ${sharerName()}`;
+        } else {
+            nowTitle.textContent = "Nothing is playing";
+            nowMeta.textContent = canShare() ? "Share a video from your device" : `Waiting for ${room.hostName || "the host"} to start a video`;
+        }
+        nowTitle.title = nowTitle.textContent;
+        const allowed = host || room.settings.media === true;
+        nowShareBtn.hidden = !allowed;
+        nowShareBtn.disabled = !canShare();
+        nowShareBtn.title = !canStream && !host ? "Sharing a video needs Chrome or Edge"
+            : on ? "Play a different video from this device for everyone" : "Play a video from this device for everyone";
+        nowShareBtn.querySelector("span").textContent = on ? "Change" : "Share a video";
+        nowStopBtn.hidden = !on || !(allowed || mine);
+        nowStopBtn.title = mine ? "Stop sharing your video" : "Remove this video for everyone";
+        nowStopBtn.setAttribute("aria-label", nowStopBtn.title);
+    };
+
+    nowShareBtn.addEventListener("click", shareVideo);
+    nowStopBtn.addEventListener("click", () => {
+        if (!room) return;
+        if (room.role === "guest" && room.presenting) {
+            stopPresenting(true);
+            if (room.file && room.file.from === room.id) room.file = null;
+            return refreshGuestView();
+        }
+        const file = room.file;
+        if (!file || !confirm(`Remove “${file.title}” for everyone?`)) return;
+        if (room.role === "host") removeMedia({ id: room.id, name: room.name });
+        else send(room.peer, { t: "remove" });
+    });
 
     // ---------- Clock: the host's time on this computer
 
@@ -1713,18 +2083,22 @@
 
     // ---------- Messages from the host
 
+    // Shows who played, paused, jumped or changed the speed
+    const stateFeedback = (previous, state, cause, by) => {
+        if (!previous || !cause) return;
+        if (cause === "play" && previous.paused && !state.paused) showFeedback("fa-play", by);
+        else if (cause === "pause" && !previous.paused && state.paused) showFeedback("fa-pause", by);
+        else if (cause === "seek") showFeedback(state.time >= previous.time ? "fa-forward" : "fa-backward", by);
+        else if (cause === "rate" && previous.rate !== state.rate) showFeedback("fa-gauge-high", `${state.rate}x`);
+    };
+
     const applyState = message => {
         const previous = room.state;
         const state = room.state = validState(message);
-        if (previous && message.cause && message.byId !== room.id) {
-            const by = clean(message.by, 30);
-            if (message.cause === "play" && previous.paused && !state.paused) showFeedback("fa-play", by);
-            else if (message.cause === "pause" && !previous.paused && state.paused) showFeedback("fa-pause", by);
-            else if (message.cause === "seek") showFeedback(state.time >= previous.time ? "fa-forward" : "fa-backward", by);
-            else if (message.cause === "rate" && previous.rate !== state.rate) showFeedback("fa-gauge-high", `${state.rate}x`);
-        }
+        if (message.byId !== room.id) stateFeedback(previous, state, message.cause, clean(message.by, 30));
         if (together.stream) streamTick();
         else followHost();
+        renderHomeBar();
     };
 
     const guestHandle = message => {
@@ -1775,6 +2149,15 @@
                 }
                 renderState();
                 rememberRoom();
+                // Back after a dropped connection while sharing: share again, unless someone else
+                // started a video in the meantime
+                if (guest.presenting) {
+                    if (guest.presenting.live && guest.file) stopPresenting(false);
+                    else {
+                        guest.presenting.live = false;
+                        sendPresent();
+                    }
+                }
                 return refreshGuestView();
             }
         }
@@ -1784,12 +2167,36 @@
                 return applyState(message);
             case "file": {
                 const file = validFile(message.file);
-                const changed = !file || !guest.file || fileKey(file) !== fileKey(guest.file) || file.duration !== guest.file.duration;
+                const old = guest.file;
+                const other = mediaKey(file) !== mediaKey(old);
+                const changed = other || (!!file && (file.duration !== old.duration || file.stream !== old.stream));
                 guest.file = file;
-                if (!file) guest.cues = guest.ownCues ? guest.cues : null;
-                // Just renamed by the host
+                // Subtitles belong to the video they were loaded for
+                if (other) {
+                    guest.cues = null;
+                    guest.ownCues = false;
+                }
                 if (changed) refreshGuestView();
-                else if (together.stream) videoTitle.textContent = audioTitle.textContent = file.title;
+                else {
+                    // Just renamed
+                    if (together.stream && file) videoTitle.textContent = audioTitle.textContent = file.title;
+                    renderGuestWatch();
+                    renderNow();
+                }
+                if (guest.members) renderPeople(guest.members);
+                return;
+            }
+            case "pcontrol":
+                return applyAsked(message);
+            case "present-end": {
+                // The host ended this guest's sharing: someone else's video, removed, or not allowed
+                if (!guest.presenting) return;
+                stopPresenting(false);
+                const by = clean(message.by, 30) || guest.hostName;
+                toast(message.reason === "off" ? `${guest.hostName} isn't letting guests share videos right now`
+                    : message.reason === "replaced" ? `${by} started another video` : `${by} removed your video`);
+                // The new video (or none) follows in a moment; only a refusal changes nothing else
+                if (message.reason === "off") refreshGuestView();
                 return;
             }
             case "settings":
@@ -1808,7 +2215,7 @@
                 if (!Array.isArray(message.members)) return;
                 const members = message.members.slice(0, MAX_GUESTS + 1)
                     .filter(member => member && typeof member.id === "string")
-                    .map(member => ({ id: member.id, name: clean(member.name, 30) || "Guest", avatar: validAvatar(member.avatar), host: member.host === true, stream: member.stream === true }));
+                    .map(member => ({ id: member.id, name: clean(member.name, 30) || "Guest", avatar: validAvatar(member.avatar), host: member.host === true, stream: member.stream === true, sharing: member.sharing === true }));
                 guest.members = members;
                 const host = members.find(member => member.host);
                 if (host && host.name !== guest.hostName) {
@@ -1985,7 +2392,7 @@
         guest.remote = new MediaStream(pc.getReceivers()
             .filter(receiver => receiver !== peer.voiceTransceiver.receiver)
             .map(receiver => receiver.track));
-        if (together.stream) mainVideo.srcObject = guest.remote;
+        if (together.stream) showRemote(guest.remote);
         wirePeer(peer, message => room === guest && guestHandle(message), () => lost(peer), true);
         watchRoute(peer, () => {
             renderState();
@@ -2068,9 +2475,11 @@
             id: Signaling.newId(),
             ticket,
             phase: "finding",
-            settings: { control: true, streaming: false },
+            settings: { control: true, streaming: false, media: false },
             state: null, file: null, cues: null, cuesOn: true, ownCues: false,
             watching: "stream", ownFor: null,
+            // A video this guest shares: { key, live } (see onGuestFile)
+            presenting: null, sharePending: false, asked: null,
             offset: null, samples: [], seekLead: 0.15, seekStarted: 0,
             retries: 0, timers: []
         };
@@ -2090,6 +2499,8 @@
             return;
         }
         if (room !== guest) return guest.signal.close();
+        // While sharing a video, regular updates keep everyone's timeline and sync accurate
+        guest.timers.push(setInterval(() => room === guest && sendPstate(), 2000));
         knock();
     };
 
@@ -2098,8 +2509,10 @@
     ["play", "pause", "seeked", "ratechange"].forEach(type => mainVideo.addEventListener(type, () => {
         if (!room) return;
         renderHomeBar();
-        if (room.role === "guest") return guestMediaEvent(type);
         const cause = { play: "play", pause: "pause", seeked: "seek", ratechange: "rate" }[type];
+        if (room.role === "guest") return room.presenting ? sendPstate(cause) : guestMediaEvent(type);
+        // The host watching a guest's video: the player only shows it, the guest's browser plays it
+        if (together.stream) return;
         const byGuest = room.attribution && Date.now() < room.attribution.until;
         if (byGuest && type !== "ratechange") {
             showFeedback({ play: "fa-play", pause: "fa-pause", seeked: "fa-forward" }[type], room.attribution.name);
@@ -2110,27 +2523,13 @@
     mainVideo.addEventListener("loadedmetadata", () => {
         if (!room || together.stream) return;
         if (room.role === "host") {
-            broadcast({ t: "file", file: fileInfo() });
+            shareFile();
             broadcast(stateMessage());
             sendSubtitles();
             updateStreams();
             return;
         }
-        if (room.role === "guest" && room.pendingPublish && room.peer) {
-            const file = room.pendingPublish;
-            room.pendingPublish = null;
-            room.publishMedia = false;
-            room.mediaStream = mainVideo.captureStream?.();
-            if (!room.mediaStream) return showFeedback("fa-triangle-exclamation", "Streaming isn't supported here");
-            room.peer.mediaVideoSender?.replaceTrack(room.mediaStream.getVideoTracks()[0] || null).catch(() => {});
-            room.peer.mediaAudioSender?.replaceTrack(room.mediaStream.getAudioTracks()[0] || null).catch(() => {});
-            send(room.peer, {
-                t: "media",
-                file: { name: file.name, size: file.size, duration: mainVideo.duration || 0, title: videoTitle.textContent, audio: container.classList.contains("audio-mode") }
-            });
-            addMessage({ system: true, text: "Your media is now available to everyone in the room." });
-            return;
-        }
+        if (room.presenting) return sendPresent();
         if (room.phase !== "in" || !ownMatches()) return;
         // Warn once if this copy is a different length from the host's
         const key = fileKey(room.file);
@@ -2144,19 +2543,21 @@
     });
 
     mainVideo.addEventListener("emptied", () => {
-        if (room && room.role === "host") {
-            broadcast({ t: "file", file: null });
+        if (room && room.role === "host" && !together.stream) {
+            shareFile();
             updateStreams();
         }
     });
 
-    // Subtitles the host loads or removes go to everyone
-    mainVideo.addEventListener("load", e => {
-        if (e.target.tagName === "TRACK" && room && room.role === "host") sendSubtitles();
-    }, true);
-    mainVideo.textTracks.addEventListener("removetrack", () => {
-        if (room && room.role === "host") sendSubtitles();
-    });
+    // Subtitles loaded or removed for the room's video go to everyone: the host's, or those of the
+    // guest sharing the video (through the host)
+    const subtitlesChanged = () => {
+        if (!room) return;
+        if (room.role === "host") sendSubtitles();
+        else sendPresenterSubs();
+    };
+    mainVideo.addEventListener("load", e => e.target.tagName === "TRACK" && subtitlesChanged(), true);
+    mainVideo.textTracks.addEventListener("removetrack", subtitlesChanged);
 
     // Guests following with their own copy check in once a second
     setInterval(() => room && room.role === "guest" && followHost(), 1000);
@@ -2180,14 +2581,12 @@
         clearInterval(old.offerTimer);
         clearInterval(old.streamTimer);
         clearTimeout(old.pingTimer);
+        clearTimeout(old.pstateTimer);
         clearTimeout(old.connectTimer);
         old.timers.forEach(clearInterval);
-        if (old.role === "host") {
-            old.peers.forEach(closePeer);
-            stopCapture();
-        } else {
-            closePeer(old.peer);
-        }
+        if (old.role === "host") old.peers.forEach(closePeer);
+        else closePeer(old.peer);
+        stopCapture();
         if (old.signal) old.signal.close();
         together.following = false;
         together.onFile = null;
@@ -2399,7 +2798,8 @@
         const forget = homeBar.querySelector(".room-home-forget");
         const close = homeBar.querySelector(".room-home-dismiss");
         if (room) {
-            const playing = room.role === "host" ? hasMedia() && !mainVideo.paused : !!room.state && !room.state.paused;
+            const playing = room.role === "host" && !room.presenter ? hasMedia() && !mainVideo.paused
+                : room.presenting ? hasMedia() && !mainVideo.paused : !!room.state && !room.state.paused;
             homeBar.hidden = false;
             homeBar.classList.add("live");
             title.textContent = room.title || "Joining a room…";
