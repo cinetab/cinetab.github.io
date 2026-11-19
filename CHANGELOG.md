@@ -4,6 +4,35 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.3] - 2026-11-20
+
+### Swipes in the room (phones and tablets)
+- Swipe left or right on the room panel to move between Chat, Queue, People, Invite and Settings
+- Phones held upright: swipe the panel down to close it, like a bottom sheet (a small handle at
+  its top shows it can be pulled); swipe up on the title bar under the video to open it again
+- Swipes only start once the finger clearly picks a direction, so taps, scrolling the chat and
+  typing work as before
+
+### Queue
+- The video playing now has animated equalizer bars over its picture; they move while it plays
+  and freeze while it's paused (still bars for people who asked for less motion)
+- Previous / Next beside the play button are always there for YouTube, and with Autoplay on, Next
+  loads the next suggestion straight away. Autoplay adds what's next to the queue while the last
+  video plays, and anything you add goes before the Autoplay picks
+
+### Ambient mode
+- Installed as an app on a phone, the status bar takes on the glow's colour from the top of the
+  picture, easing as the video changes, and goes back to the usual dark when the glow isn't shown
+- Phones held upright: the title bar under the video has crisp rounded corners, with the glow
+  only inside it
+
+### Room
+- Leave opens a small menu: Just leave (the room goes on) or End room, which ends it for everyone
+  and can be chosen by anyone in the room
+- Now playing's stop button is a stop icon, "Stop video for everyone"
+- Phones held upright: the Room button at the top right of the player is gone where the room is
+  already just below the picture (it stays sideways, in fullscreen, and before a video is open)
+
 ## [1.5.2] - 2026-11-20
 
 ### YouTube Autoplay & Recommendations

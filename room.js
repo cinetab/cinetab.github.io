@@ -141,6 +141,10 @@
     chatInput = panel.querySelector(".room-chat-input"),
     replyBar = panel.querySelector(".room-reply-bar"),
     meBtn = panel.querySelector(".room-me"),
+    leaveWrap = panel.querySelector(".room-leave-wrap"),
+    leavePopover = panel.querySelector(".room-leave-popover"),
+    leaveJustBtn = panel.querySelector(".leave-just"),
+    leaveEndBtn = panel.querySelector(".leave-end"),
     leaveBtn = panel.querySelector(".room-leave-btn"),
     leaveLabel = leaveBtn.querySelector("span"),
     micBtn = panel.querySelector(".room-mic-btn"),
@@ -554,7 +558,8 @@
         ], { duration: 320, easing: PANEL_EASE });
     };
 
-    const showPanel = show => {
+    // `from`: where a swipe down left it (a transform and opacity), to close from there
+    const showPanel = (show, from = null) => {
         const open = !panel.hidden && !panelClosing;
         const move = show !== open && !playerPage.hidden && !calmer();
         // Opened again while it was going: it stays
@@ -564,8 +569,9 @@
         }
         if (!move) return setPanel(show);
         if (!show) {
-            const offset = panelOffset();
-            const going = panelClosing = panel.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: offset }], { duration: 200, easing: "cubic-bezier(0.4, 0, 1, 1)" });
+            const offset = from ? "translateY(100%)" : panelOffset();
+            const start = from || { opacity: 1, transform: "none" };
+            const going = panelClosing = panel.animate([start, { opacity: 0, transform: offset }], { duration: from ? 220 : 200, easing: from ? "cubic-bezier(0.2, 0.6, 0.4, 1)" : "cubic-bezier(0.4, 0, 1, 1)" });
             going.onfinish = () => {
                 if (panelClosing !== going) return;
                 panelClosing = null;
@@ -852,7 +858,7 @@
         guestSettings.hidden = room.role === "host";
         // Leaving doesn't end the room: it goes on with everyone else. Its owner can end it.
         leaveLabel.textContent = "Leave";
-        leaveBtn.title = room.ownerSecret ? "Leave the room, or end it for everyone" : "Leave the room (it goes on with everyone else)";
+        leaveBtn.title = "Leave or end the room";
         chatInput.disabled = false;
         if (!keepChat) {
             chatList.replaceChildren();
@@ -881,7 +887,15 @@
         renderState();
     };
 
+    const toggleLeaveMenu = show => {
+        if (!leavePopover) return;
+        const open = typeof show === "boolean" ? show : leavePopover.hidden;
+        leavePopover.hidden = !open;
+        leaveBtn.setAttribute("aria-expanded", String(open));
+    };
+
     const closeRoomUI = () => {
+        toggleLeaveMenu(false);
         showPanel(false);
         chatUnread = 0;
         updateBadges();
@@ -903,11 +917,178 @@
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
     panel.querySelector(".room-invite-more").addEventListener("click", () => showTab("invite"));
     hidePanelBtn.addEventListener("click", () => showPanel(false));
+
+    // ---------- Swipes on a phone or tablet: left and right on the panel go to the next or previous
+    // tab (Chat, Queue, People, Invite, Settings); down closes it, like a bottom sheet, on a phone
+    // held upright (from its tabs, or anywhere once what's under the finger is scrolled to the top);
+    // up on the title bar under the video opens it again. Only once the finger has clearly picked
+    // a direction, so taps, scrolling and typing work as before.
+    const touchOnly = matchMedia("(pointer: coarse)");
+    const SLOP = 10;
+    // Something under the finger that scrolls that way itself, and isn't at its end yet
+    const scrollsAlong = (target, root, axis, towardStart) => {
+        for (let node = target; node && node !== root.parentNode; node = node.parentElement) {
+            const style = getComputedStyle(node);
+            if (axis === "x") {
+                if (/(auto|scroll)/.test(style.overflowX) && node.scrollWidth > node.clientWidth + 1) return true;
+            } else if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) {
+                if (towardStart ? node.scrollTop > 0 : node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
+            }
+        }
+        return false;
+    };
+    const swipeIgnored = target => !!target.closest("input, textarea, select, [contenteditable], .room-sheet, .room-react-picker, .room-leave-popover");
+    const visibleTabs = () => [...tabButtons].filter(button => !button.hidden).map(button => button.dataset.tab);
+    const openSection = () => [...tabPanels].find(section => !section.hidden);
+
+    let swipe = null;
+    panel.addEventListener("touchstart", event => {
+        swipe = null;
+        if (!touchOnly.matches || event.touches.length !== 1 || panel.hidden || panelClosing || swipeIgnored(event.target)) return;
+        const touch = event.touches[0];
+        swipe = { x: touch.clientX, y: touch.clientY, at: performance.now(), axis: null, target: event.target, dx: 0, dy: 0 };
+    }, { passive: true });
+
+    panel.addEventListener("touchmove", event => {
+        if (!swipe || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        const dx = touch.clientX - swipe.x;
+        const dy = touch.clientY - swipe.y;
+        if (!swipe.axis) {
+            if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
+            const sideways = Math.abs(dx) > Math.abs(dy) * 1.2;
+            const down = !sideways && dy > 0 && playerPage.classList.contains("now-below");
+            // Not ours: the page (or a list) scrolls as usual
+            if ((!sideways && !down) || !event.cancelable ||
+                (sideways && (visibleTabs().length < 2 || scrollsAlong(swipe.target, panel, "x"))) ||
+                (down && scrollsAlong(swipe.target, panel, "y", true))) {
+                swipe = null;
+                return;
+            }
+            swipe.axis = sideways ? "x" : "y";
+            swipe.section = openSection();
+            // From here on, relative to where the finger was when it picked a direction
+            swipe.x = touch.clientX;
+            swipe.y = touch.clientY;
+            swipe.at = performance.now();
+            panel.classList.add("swiping");
+        }
+        event.preventDefault();
+        swipe.dx = touch.clientX - swipe.x;
+        swipe.dy = touch.clientY - swipe.y;
+        if (swipe.axis === "y") {
+            // The panel follows the finger down (a little resistance going up)
+            const y = swipe.dy > 0 ? swipe.dy : swipe.dy / 4;
+            panel.style.transform = `translateY(${y}px)`;
+            panel.style.opacity = String(Math.max(0.35, 1 - Math.max(0, y) / (panel.offsetHeight * 1.4)));
+        } else if (swipe.section) {
+            // The tab follows the finger, held back at the first and last tab
+            const tabs = visibleTabs();
+            const index = tabs.indexOf(activeTab);
+            const edge = (swipe.dx > 0 && index <= 0) || (swipe.dx < 0 && index >= tabs.length - 1);
+            const x = edge ? swipe.dx / 4 : swipe.dx * 0.6;
+            swipe.section.style.transform = `translateX(${x}px)`;
+            swipe.section.style.opacity = String(Math.max(0.4, 1 - Math.abs(x) / 320));
+        }
+    }, { passive: false });
+
+    const endSwipe = cancelled => {
+        const done = swipe;
+        swipe = null;
+        if (!done || !done.axis) return;
+        panel.classList.remove("swiping");
+        const time = Math.max(1, performance.now() - done.at);
+        if (done.axis === "y") {
+            const fast = done.dy / time > 0.5 && done.dy > 30;
+            const from = { transform: panel.style.transform || "none", opacity: panel.style.opacity || "1" };
+            panel.style.transform = panel.style.opacity = "";
+            if (!cancelled && (done.dy > Math.min(120, panel.offsetHeight * 0.25) || fast)) showPanel(false, from);
+            else if (!calmer()) panel.animate([from, { transform: "none", opacity: 1 }], { duration: 220, easing: PANEL_EASE });
+            return;
+        }
+        const section = done.section;
+        if (!section) return;
+        const from = { transform: section.style.transform || "none", opacity: section.style.opacity || "1" };
+        section.style.transform = section.style.opacity = "";
+        const tabs = visibleTabs();
+        const index = tabs.indexOf(activeTab);
+        const fast = Math.abs(done.dx) / time > 0.4 && Math.abs(done.dx) > 30;
+        const next = cancelled || !(Math.abs(done.dx) > 70 || fast) ? -1 : index + (done.dx < 0 ? 1 : -1);
+        if (next < 0 || next >= tabs.length) {
+            if (!calmer()) section.animate([from, { transform: "none", opacity: 1 }], { duration: 200, easing: PANEL_EASE });
+            return;
+        }
+        showTab(tabs[next]);
+        // The new tab comes in from the side the finger went toward
+        const incoming = openSection();
+        if (incoming && !calmer()) incoming.animate([
+            { transform: `translateX(${done.dx < 0 ? 40 : -40}px)`, opacity: 0 },
+            { transform: "none", opacity: 1 }
+        ], { duration: 240, easing: PANEL_EASE });
+        // Its tab button in view (the row of tabs can be narrower than all of them)
+        panel.querySelector(`.room-tab-btn[data-tab="${tabs[next]}"]`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    };
+    panel.addEventListener("touchend", () => endSwipe(false));
+    panel.addEventListener("touchcancel", () => endSwipe(true));
+
+    // Up on the title bar under the video (the panel closed): the room opens
+    if (metaBox) {
+        let lift = null;
+        metaBox.addEventListener("touchstart", event => {
+            lift = touchOnly.matches && room && event.touches.length === 1 && panel.hidden && !swipeIgnored(event.target) &&
+                !event.target.closest(".room-yt-form") ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+        }, { passive: true });
+        metaBox.addEventListener("touchmove", event => {
+            if (!lift) return;
+            const dx = event.touches[0].clientX - lift.x;
+            const dy = event.touches[0].clientY - lift.y;
+            if (Math.abs(dy) < SLOP && Math.abs(dx) < SLOP) return;
+            // Upward and clearly so: open (anything else isn't ours)
+            if (dy < -30 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+                lift = null;
+                showPanel(true);
+            } else if (dy > 0 || Math.abs(dx) > Math.abs(dy)) lift = null;
+        }, { passive: true });
+        metaBox.addEventListener("touchend", () => lift = null);
+    }
     panel.querySelector('[data-copy="code"]').addEventListener("click", () => copy(Signaling.formatCode(room.code), "Room code"));
     panel.querySelector('[data-copy="password"]').addEventListener("click", () => copy(room.password, "Password"));
     copyLinkBtn.addEventListener("click", () => copy(inviteLink(), "Invite link"));
     linkPasswordBox.addEventListener("change", () => renderQr(inviteLink()));
-    leaveBtn.addEventListener("click", () => leaveRoom(true));
+
+    leaveBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        toggleLeaveMenu();
+    });
+
+    if (leaveJustBtn) {
+        leaveJustBtn.addEventListener("click", e => {
+            e.stopPropagation();
+            toggleLeaveMenu(false);
+            leaveRoom(false, false, false);
+        });
+    }
+
+    if (leaveEndBtn) {
+        leaveEndBtn.addEventListener("click", e => {
+            e.stopPropagation();
+            toggleLeaveMenu(false);
+            leaveRoom(false, false, true);
+        });
+    }
+
+    document.addEventListener("click", e => {
+        if (leavePopover && !leavePopover.hidden && leaveWrap && !leaveWrap.contains(e.target)) {
+            toggleLeaveMenu(false);
+        }
+    });
+
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && leavePopover && !leavePopover.hidden) {
+            e.stopPropagation();
+            toggleLeaveMenu(false);
+        }
+    });
 
     chatForm.addEventListener("submit", e => {
         e.preventDefault();
@@ -2285,13 +2466,17 @@
             updateStreams();
             shareMembers();
         } else if (message.t === "end") {
-            // The room's owner, as a participant, ends it for everyone
-            if (typeof message.owner !== "string" || !room.ownerTag || !allow(peer, "end", 3, 10000)) return;
+            // A participant or owner ends the room for everyone
+            if (!allow(peer, "end", 3, 10000)) return;
             const host = room;
-            fingerprint(message.owner.slice(0, 128)).then(hash => {
-                if (room !== host || hash !== host.ownerTag) return;
-                endedByOwner(peer.name);
-            });
+            if (typeof message.owner === "string" && host.ownerTag) {
+                fingerprint(message.owner.slice(0, 128)).then(hash => {
+                    if (room !== host || hash !== host.ownerTag) return;
+                    endedByOwner(message.by || peer.name);
+                });
+            } else {
+                endedByOwner(message.by || peer.name);
+            }
         } else if (message.t === "mic") {
             if (peer.status !== "admitted" || !allow(peer, "mic", 10, 10000)) return;
             const on = message.on === true;
@@ -3216,14 +3401,18 @@
         y.title = item.title;
         y.by = item.by;
         y.duration = 0;
-        // Clear any pre-fetched autoplay suggestion — it was for the previous video
         y.autoFor = null;
-        y.autoSuggestion = null;
+        // Clean up any unplayed autoplay items after this video so the next video matches this one
+        const oldAutoIndex = y.queue.findIndex((entry, i) => i > y.index && entry.auto);
+        if (oldAutoIndex >= 0) y.queue.splice(oldAutoIndex);
         room.state = { paused: false, time: start, rate: room.state ? room.state.rate : 1, at: now() };
         shareFile();
         broadcast(stateMessage());
         shareQueue();
         ytTick();
+        if (autoplayOn() && y.index === y.queue.length - 1) {
+            autoplayNext();
+        }
     };
 
     // A YouTube link from `by` (the host or a guest). `where`: "end" of the queue, "play" (right
@@ -3253,6 +3442,7 @@
             y.index += before.length;
             shareFile();
             shareQueue();
+            if (autoplayOn() && y.index === y.queue.length - 1) autoplayNext();
             return fetchTitles();
         }
         // Into the queue of what's on
@@ -3261,19 +3451,20 @@
         if (!ids && ref.id) ids = [ref.id];
         if (!room || room.role !== "host" || room.yt !== y) return;
         if (!ids) return notice(`Couldn't open the YouTube playlist ${sharer.name} added. It may be private, or YouTube didn't answer.`);
+        // User is adding video(s): remove any unplayed autoplay items after current video so user's video is next
+        const autoAt = y.queue.findIndex((item, i) => i > y.index && item.auto);
+        if (autoAt >= 0) y.queue.splice(autoAt);
         const space = QUEUE_MAX - y.queue.length;
         if (space <= 0) return notice(`The queue is full (${QUEUE_MAX} videos).`);
         const items = ids.slice(0, space).map(id => queueItem(id, sharer));
         const at = where === "end" ? y.queue.length : y.index + 1;
         y.queue.splice(at, 0, ...items);
-        // A song was added after the current one: discard any pre-fetched autoplay suggestion
-        // so it doesn't get committed to the queue when the current video ends
-        if (at > y.index) { y.autoSuggestion = null; y.autoFor = null; }
         if (where === "play") playQueued(at, items.length === 1 ? ref.start : 0);
         else {
             notice(items.length > 1 ? `${sharer.name} added ${items.length} videos to the queue` : `${sharer.name} added a video to the queue`);
             shareFile();
             shareQueue();
+            if (autoplayOn() && y.index === y.queue.length - 1) autoplayNext();
         }
         fetchTitles();
     };
@@ -3329,6 +3520,7 @@
             else if (at === y.index) return playQueued(Math.min(at, y.queue.length - 1));
             shareFile();
             shareQueue();
+            if (autoplayOn() && y.index === y.queue.length - 1) autoplayNext();
         } else if (message.op === "move" && Number.isInteger(message.to)) {
             const to = Math.max(0, Math.min(y.queue.length - 1, message.to));
             if (to === at) return;
@@ -3338,6 +3530,7 @@
             y.index = y.queue.indexOf(current);
             shareFile();
             shareQueue();
+            if (autoplayOn() && y.index === y.queue.length - 1) autoplayNext();
         }
     };
 
@@ -3372,73 +3565,74 @@
         renderHomeBar();
     };
 
-    // The previous or next video in the queue
-    const ytStep = step => {
-        const y = room.yt;
-        if (y && y.index + step >= 0 && y.index + step < y.queue.length) playQueued(y.index + step);
-    };
-
     // ---------- Autoplay (the host's switch at the top of the player, youtube.js): while the
     // queue is on its last video, a video like it is added after it ("Added by Autoplay"), so the
-    // room goes on when the queue ends and everyone can see, move or remove what's next. YouTube
-    // won't open its Mixes in an embedded player, so it's what YouTube suggests beside the video,
-    // or else another one from its channel (the artist, for a song), never one the room had.
+    // next video is always ready in the queue, and the next button stays active always.
     const AUTOPLAY_BY = { id: "autoplay", name: "Autoplay" };
     const autoplayOn = () => !!(together.solo && together.solo.autoplay);
 
-    // Pre-fetches the next suggested video for Autoplay while the current video plays, without
-    // adding it to the queue yet. The result is cached in y.autoSuggestion so that when the video
-    // ends there is no extra delay. Only fetches when the current video is the last in the queue.
-    const autoplayPrefetch = async () => {
-        const host = room;
-        const y = host && host.role === "host" && host.yt;
-        if (!y || !autoplayOn() || !window.CineYouTube || y.index < y.queue.length - 1 || y.queue.length >= QUEUE_MAX) return;
-        const item = y.queue[y.index];
-        if (y.autoFor === item.k) return; // already fetched for this video
-        y.autoFor = item.k;
-        y.autoSuggestion = null; // clear any old suggestion while fetching
-        const next = await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || item.channel || "" });
-        // Cache the result only if we're still on the same video and it's still the last one
-        if (!next || room !== host || host.yt !== y || y.queue[y.queue.length - 1] !== item || !autoplayOn()) return;
-        y.autoSuggestion = { next, item };
-    };
-
-    // Adds the next video after the last one when the current video ends; true if one was added.
-    // Uses the pre-fetched suggestion if available, otherwise fetches fresh. `again`: try even if
-    // it was tried for this video already (at its end).
+    // Adds the next video after the last one; true if one was added. `again`: try even if
+    // it was tried for this video already.
     const autoplayNext = async (again = false) => {
         const host = room;
         const y = host && host.role === "host" && host.yt;
-        // Only fire when there is truly no next song in the queue
         if (!y || !autoplayOn() || !window.CineYouTube || y.index < y.queue.length - 1 || y.queue.length >= QUEUE_MAX) return false;
         const item = y.queue[y.index];
-        // Use the cached suggestion if it is for the current (last) video
-        const cached = y.autoSuggestion && y.autoSuggestion.item === item ? y.autoSuggestion.next : null;
-        if (!again && !cached && y.autoFor === item.k) return false; // fetch already attempted, nothing found
-        const next = cached || await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || item.channel || "" });
-        y.autoSuggestion = null; // consume the cached suggestion
-        // Still the last video, and still wanted
-        if (!next || room !== host || host.yt !== y || y.queue[y.queue.length - 1] !== item || !autoplayOn()) return false;
-        const added = queueItem(next.id, AUTOPLAY_BY);
-        added.title = next.title;
-        added.channel = next.channel;
-        added.auto = true;
-        y.queue.push(added);
-        shareFile();
-        shareQueue();
-        return true;
+        if (y.autoFetching) return false;
+        if (y.autoFor === item.k && !again) return false;
+        y.autoFor = item.k;
+        y.autoFetching = true;
+        try {
+            const next = await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || item.channel || "" });
+            // Still the last video, and still wanted
+            if (!next || room !== host || host.yt !== y || y.queue[y.queue.length - 1] !== item || !autoplayOn()) return false;
+            const added = queueItem(next.id, AUTOPLAY_BY);
+            added.title = next.title;
+            added.channel = next.channel;
+            added.auto = true;
+            y.queue.push(added);
+            shareFile();
+            shareQueue();
+            return true;
+        } finally {
+            if (host && host.yt === y) y.autoFetching = false;
+        }
+    };
+
+    // The previous or next video in the queue
+    const ytStep = step => {
+        const y = room.yt;
+        if (!y) return;
+        if (y.index + step >= 0 && y.index + step < y.queue.length) {
+            return playQueued(y.index + step);
+        }
+        if (step > 0 && autoplayOn()) {
+            const current = y.queue[y.index];
+            showFeedback("fa-forward-step", "Loading next video…");
+            autoplayNext(true).then(added => {
+                if (added && room && room.yt === y && y.queue[y.index] === current && y.index + 1 < y.queue.length) {
+                    playQueued(y.index + 1);
+                }
+            });
+        }
     };
 
     // The switch turned: on, what's next is found now; off, what Autoplay added (not yet played) goes
     together.onAutoplay = on => {
         const y = room && room.role === "host" && room.yt;
         if (!y) return;
-        if (on) return autoplayNext(true);
+        if (on) {
+            if (y.index === y.queue.length - 1) autoplayNext(true);
+            renderNow();
+            return;
+        }
         const kept = y.queue.filter((item, i) => i <= y.index || !item.auto);
-        if (kept.length === y.queue.length) return;
-        y.queue = kept;
-        shareFile();
-        shareQueue();
+        if (kept.length !== y.queue.length) {
+            y.queue = kept;
+            shareFile();
+            shareQueue();
+        }
+        renderNow();
     };
 
     // The end of a video: the next one in the queue, or (with Autoplay) one like it, or stop
@@ -3448,11 +3642,12 @@
         room.state = { paused: true, time: y.duration || expectedTime(), rate: room.state.rate, at: now() };
         broadcast(stateMessage());
         ytTick();
-        // Nothing found while it played: one more try, and on as soon as there is one
         if (autoplayOn()) {
             const ended = y.queue[y.index];
             autoplayNext(true).then(added => {
-                if (added && room && room.yt === y && y.queue[y.index] === ended && room.state.paused) playQueued(y.index + 1);
+                if (added && room && room.yt === y && y.queue[y.index] === ended && room.state.paused && y.index + 1 < y.queue.length) {
+                    playQueued(y.index + 1);
+                }
             });
         }
     };
@@ -3473,9 +3668,8 @@
                     }
                     // Its channel, for Autoplay to find another like it
                     y.channel = clean(data.author || "", 100);
-                    // The last video in the queue is playing: Autoplay pre-fetches what's next
-                    // (but does NOT add it to the queue yet — that only happens when the video ends)
-                    if (y.title && yt.player.getPlayerState() === YT.PLAYING) autoplayPrefetch();
+                    // The last video in the queue is playing: Autoplay finds what's next
+                    if (autoplayOn() && y.index === y.queue.length - 1 && yt.player.getPlayerState() === YT.PLAYING) autoplayNext();
                     // Only while the video itself plays, not an ad
                     const length = yt.player.getDuration();
                     if (yt.player.getPlayerState() === YT.PLAYING && yt.player.getCurrentTime() > 1 && length > 1 && Math.abs(length - y.duration) > 1) {
@@ -3853,21 +4047,32 @@
             : on ? "Play a different video from this device for everyone" : "Play a video from this device for everyone";
         nowShareBtn.querySelector("span").textContent = on ? "Change" : "Share a video";
         nowStopBtn.hidden = !on || !(allowed || mine);
-        nowStopBtn.title = mine && !youtube ? "Stop sharing your video" : "Remove this video for everyone";
+        nowStopBtn.title = mine && !youtube ? "Stop sharing your video" : "Stop video for everyone";
         nowStopBtn.setAttribute("aria-label", nowStopBtn.title);
         // YouTube links: for anyone who may share videos (no Chrome or Edge needed)
         nowYtBtn.hidden = !allowed;
         if (!allowed) closeYouTubeForm();
-        // A playlist: which video, and the previous / next one for everyone
-        const list = youtube && file.yt.count > 1 ? file.yt : null;
-        nowList.hidden = !list;
-        // ... in the bar and beside the player's play button
-        prevTrackBtn.hidden = nextTrackBtn.hidden = !list;
-        if (list) {
-            const control = host || room.settings.control;
-            nowCount.textContent = `${list.index + 1} of ${list.count}`;
-            nowPrevBtn.disabled = prevTrackBtn.disabled = !control || list.index === 0;
-            nowNextBtn.disabled = nextTrackBtn.disabled = !control || list.index + 1 >= list.count;
+        // A playlist or queue: which video, and the previous / next one for everyone
+        const control = host || room.settings.control;
+        const hasNext = youtube ? (file.yt.index + 1 < file.yt.count || autoplayOn()) : false;
+        const hasPrev = youtube ? (file.yt.index > 0) : false;
+
+        // In the player controls: Next button is active whenever YouTube is on and there is a next video or autoplay is on
+        nextTrackBtn.hidden = !youtube;
+        nextTrackBtn.disabled = !control || !hasNext;
+        nextTrackBtn.title = hasNext ? "Next video in the queue (Shift + N)" : "Next video";
+
+        prevTrackBtn.hidden = !youtube;
+        prevTrackBtn.disabled = !control || !hasPrev;
+        prevTrackBtn.title = "Previous video in the queue (Shift + P)";
+
+        // Playlist / queue indicator in the Now Playing bar
+        const showNowList = youtube && (file.yt.count > 1 || autoplayOn());
+        nowList.hidden = !showNowList;
+        if (showNowList) {
+            nowCount.textContent = file.yt.count > 1 ? `${file.yt.index + 1} of ${file.yt.count}` : (autoplayOn() ? "Autoplay on" : "");
+            nowPrevBtn.disabled = !control || !hasPrev;
+            nowNextBtn.disabled = !control || !hasNext;
         }
         // The YouTube queue gets its own tab while YouTube is on, and opens when it starts
         // (and stays open while someone searches there before anything plays)
@@ -4005,11 +4210,20 @@
             thumb.alt = "";
             thumb.loading = "lazy";
             thumb.draggable = false;
+            // The one playing: equalizer bars over its picture, moving while it plays (style.css)
+            const cover = el("span", "room-queue-cover");
+            cover.append(thumb);
+            if (current) {
+                const eq = el("span", "room-eq");
+                eq.setAttribute("aria-hidden", "true");
+                eq.append(el("i"), el("i"), el("i"), el("i"));
+                cover.append(eq);
+            }
             const info = el("span", "room-queue-info");
             const title = el("b", null, item.title || "YouTube video");
             title.title = item.title || item.id;
             info.append(title, el("small", null, current ? "Now playing" : `Added by ${item.by}`));
-            li.append(thumb, info);
+            li.append(cover, info);
             if (edit) {
                 const actions = el("span", "room-queue-actions");
                 const action = (op, icon, label, disabled = false) => {
@@ -4239,7 +4453,7 @@
             return refreshGuestView();
         }
         const file = room.file;
-        if (!file || !confirm(`Remove “${file.title}” for everyone?`)) return;
+        if (!file || !confirm(`Stop “${file.title}” for everyone?`)) return;
         if (room.role === "host") removeMedia({ id: room.id, name: room.name });
         else send(room.peer, { t: "remove" });
     });
@@ -5045,6 +5259,7 @@
 
     // Stops everything network-related; the chat stays visible until the panel is closed
     const teardown = () => {
+        toggleLeaveMenu(false);
         const old = room;
         if (!old) return;
         leaveStream();
@@ -5101,11 +5316,11 @@
         });
     };
 
-    // `ask`: the owner chooses between leaving (the room goes on) and ending it for everyone
+    // `ask`: gives the user two options — just leave the room (it goes on) or end the room completely
     const leaveRoom = (ask, home = false, end = false) => {
-        if (room && ask && room.ownerSecret && (room.role === "guest" || guests().length)) return askLeave(home);
+        if (room && ask) return askLeave(home);
         if (room) {
-            if (end && room.role === "guest") send(room.peer, { t: "end", owner: room.ownerSecret });
+            if (end && room.role === "guest") send(room.peer, { t: "end", by: room.name, owner: room.ownerSecret || undefined });
             if (end) forgetRoom(room.code, false);
             sayBye(end);
             teardown();
@@ -5118,13 +5333,17 @@
 
     const askLeave = home => {
         const back = () => room && room.role === "guest" ? refreshGuestView() : hideOverlay();
+        const isHost = room && room.role === "host";
+        const hasOthers = isHost ? guests().length > 0 : true;
         showStatus({
             icon: "fa-right-from-bracket",
-            title: "Leave the room, or end it?",
-            text: "You created this room. If you leave, it goes on with everyone else, and you can come back any time. Ending it closes it for everyone, for good.",
+            title: "Leave or end room?",
+            text: hasOthers
+                ? "You can just leave the room while it carries on with others, or end the room completely."
+                : "You can just leave the room, or end the room completely.",
             actions: [
-                { label: "Leave, the room goes on", icon: "fa-right-from-bracket", onClick: () => leaveRoom(false, home) },
-                { label: "End the room for everyone", icon: "fa-door-closed", secondary: true, onClick: () => leaveRoom(false, home, true) }
+                { label: "Just leave the room", icon: "fa-right-from-bracket", onClick: () => leaveRoom(false, home, false) },
+                { label: "End the room", icon: "fa-door-closed", secondary: true, onClick: () => leaveRoom(false, home, true) }
             ],
             onClose: back
         });

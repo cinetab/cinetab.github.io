@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.5.2">
+  <meta name="version" content="1.5.3">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.5.2",
+      "softwareVersion": "1.5.3",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.5.2</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.5.3</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -799,7 +799,7 @@
       <span class="room-now-text"><b class="room-now-title">Nothing is playing</b><small class="room-now-meta"></small></span>
       <button type="button" class="room-icon-btn room-now-yt" title="Search YouTube or paste a link, to play for everyone" aria-label="Search YouTube or paste a link, to play for everyone"><i class="fa-brands fa-youtube"></i></button>
       <button type="button" class="room-small-btn primary room-now-share"><i class="fa-solid fa-folder-open"></i> <span>Share a video</span></button>
-      <button type="button" class="room-icon-btn danger room-now-stop" hidden><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" class="room-icon-btn danger room-now-stop" title="Stop video for everyone" aria-label="Stop video for everyone" hidden><i class="fa-solid fa-stop"></i></button>
       <!-- A YouTube playlist: the video before and after this one -->
       <div class="room-now-list" hidden>
         <button type="button" class="room-small-btn room-now-prev" title="Previous video in the playlist, for everyone"><i class="fa-solid fa-backward-step"></i> Previous</button>
@@ -915,7 +915,13 @@
       <button class="room-me" title="Change your name or avatar"><span class="room-avatar"></span><span class="room-me-text"><b class="room-me-name"></b><small>Edit profile</small></span></button>
       <button class="room-mic-btn" type="button" title="Turn microphone on" aria-pressed="false"><i class="fa-solid fa-microphone-slash"></i><span>Mic off</span></button>
       <button class="room-mic-btn room-cam-btn" type="button" title="Turn camera on" aria-pressed="false"><i class="fa-solid fa-video-slash"></i><span>Cam off</span></button>
-      <button class="room-leave-btn"><i class="fa-solid fa-right-from-bracket"></i> <span>Leave</span></button>
+      <div class="room-leave-wrap">
+        <div class="room-leave-popover" hidden>
+          <button class="room-leave-opt leave-just" type="button" title="Leave the room (keeps it open for others)"><i class="fa-solid fa-right-from-bracket"></i> <span>Just leave</span></button>
+          <button class="room-leave-opt leave-end" type="button" title="End the room completely"><i class="fa-solid fa-door-closed"></i> <span>End room</span></button>
+        </div>
+        <button class="room-leave-btn" type="button" aria-expanded="false" title="Leave or end the room"><i class="fa-solid fa-right-from-bracket"></i> <span>Leave</span></button>
+      </div>
     </footer>
 
     <!-- Your name and avatar -->

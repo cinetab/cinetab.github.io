@@ -137,9 +137,33 @@ body.watching {
   display: block;
   flex-shrink: 0;
   padding: 10px 16px;
+  position: relative;
   border-radius: 20px 20px 0 0;
   background: rgba(255, 255, 255, 0.04);
   margin-top: -1px;
+}
+
+/* Outside its two rounded top corners, the page's own colour: the ambient glow behind shows only
+   inside the card, so its corners stay crisp instead of blurring into the glow around them */
+.player-page:is(.title-below, .now-below) > .player-meta::before,
+.player-page:is(.title-below, .now-below) > .player-meta::after {
+  content: "";
+  position: absolute;
+  /* (just below the 1px it tucks under the video, so the picture's bottom edge stays whole) */
+  top: 1px;
+  width: 20px;
+  height: 19px;
+  pointer-events: none;
+}
+
+.player-page:is(.title-below, .now-below) > .player-meta::before {
+  left: 0;
+  background: radial-gradient(circle at 100% 100%, transparent 19.5px, #0f0f11 20px);
+}
+
+.player-page:is(.title-below, .now-below) > .player-meta::after {
+  right: 0;
+  background: radial-gradient(circle at 0 100%, transparent 19.5px, #0f0f11 20px);
 }
 
 /* About the video (phones held upright, the room's panel closed; script.js): a rounded card under
@@ -4108,6 +4132,14 @@ button.footer-download {
   border-color: rgba(62, 151, 253, 0.6);
 }
 
+/* Phones held upright, not fullscreen: the room is just below the picture (the Room button under
+   the title, or Create / Join in the video's details), so not again at the top of the player. It
+   stays sideways and fullscreen, and before a video is open (the only way in there). */
+.player-page.now-below .container:not(.fullscreen) .share-help-btn,
+.player-page.title-below:has(> .player-details:not([hidden])) .container:not(.fullscreen) .share-help-btn {
+  display: none;
+}
+
 /* Room dialogs over the player */
 .room-overlay {
   position: absolute;
@@ -5094,6 +5126,10 @@ body > .room-toasts {
   color: #ff4e45;
 }
 
+.room-now .room-now-stop {
+  font-size: 12px;
+}
+
 /* A YouTube playlist: previous / next for everyone */
 .room-now-list {
   flex-basis: 100%;
@@ -5303,6 +5339,95 @@ body > .room-toasts {
   border-radius: 6px;
   object-fit: cover;
   background: #000;
+}
+
+.room-queue-cover {
+  position: relative;
+  flex-shrink: 0;
+  display: block;
+  width: 64px;
+  height: 36px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.room-queue-cover .room-queue-thumb {
+  display: block;
+}
+
+/* Now playing: equalizer bars over a dimmed picture, bouncing while the video plays and resting
+   frozen while it's paused (the player is .is-playing while it plays; script.js) */
+.room-eq {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding-bottom: 9px;
+  background: rgba(8, 10, 18, 0.55);
+}
+
+.room-eq i {
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: #6fb0ff;
+  box-shadow: 0 0 6px rgba(62, 151, 253, 0.6);
+  transform-origin: bottom;
+  transform: scaleY(0.25);
+  animation: roomEq 0.9s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+
+.room-eq i:nth-child(1) {
+  animation-duration: 0.82s;
+  animation-delay: -0.3s;
+}
+
+.room-eq i:nth-child(2) {
+  animation-duration: 0.64s;
+  animation-delay: -0.5s;
+}
+
+.room-eq i:nth-child(3) {
+  animation-duration: 0.95s;
+  animation-delay: -0.15s;
+}
+
+.room-eq i:nth-child(4) {
+  animation-duration: 0.72s;
+  animation-delay: -0.6s;
+}
+
+.player-page:has(.container.is-playing) .room-eq i {
+  animation-play-state: running;
+}
+
+@keyframes roomEq {
+  0% {
+    transform: scaleY(0.2);
+  }
+  35% {
+    transform: scaleY(0.9);
+  }
+  60% {
+    transform: scaleY(0.45);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+/* Less motion asked for: still bars, at different heights */
+@media (prefers-reduced-motion: reduce) {
+  .room-eq i {
+    animation: none;
+  }
+  .room-eq i:nth-child(1) { transform: scaleY(0.55); }
+  .room-eq i:nth-child(2) { transform: scaleY(0.9); }
+  .room-eq i:nth-child(3) { transform: scaleY(0.4); }
+  .room-eq i:nth-child(4) { transform: scaleY(0.7); }
 }
 
 .room-queue-info {
@@ -6035,6 +6160,12 @@ body > .room-toasts {
   text-overflow: ellipsis;
 }
 
+.room-leave-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
 .room-leave-btn {
   flex-shrink: 0;
   display: flex;
@@ -6051,8 +6182,108 @@ body > .room-toasts {
   transition: background 0.2s ease;
 }
 
-.room-leave-btn:hover {
+.room-leave-btn:hover,
+.room-leave-btn[aria-expanded="true"] {
   background: #cf3a3f;
+}
+
+/* Leave popover: compact inline options right above the Leave button */
+.room-leave-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  min-width: 148px;
+  background: rgba(22, 22, 28, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  z-index: 100;
+  animation: roomLeavePopIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: bottom right;
+}
+
+.room-leave-popover[hidden] {
+  display: none;
+}
+
+.room-leave-popover::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  right: 28px;
+  width: 10px;
+  height: 10px;
+  background: rgba(22, 22, 28, 0.96);
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  transform: rotate(45deg);
+}
+
+@keyframes roomLeavePopIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.room-leave-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #f0f0f4;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.room-leave-opt i {
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.room-leave-opt.leave-just:hover,
+.room-leave-opt.leave-just:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  outline: none;
+}
+
+.room-leave-opt.leave-end {
+  color: #ff6b6b;
+}
+
+.room-leave-opt.leave-end i {
+  color: #ff6b6b;
+}
+
+.room-leave-opt.leave-end:hover,
+.room-leave-opt.leave-end:focus-visible {
+  background: rgba(229, 72, 77, 0.18);
+  color: #ff8585;
+  outline: none;
 }
 
 /* Profile editor, over the panel */
@@ -6899,7 +7130,31 @@ body > .room-toasts {
 }
 
 .player-page.now-below .room-tabbar {
-  margin-top: 8px;
+  margin-top: 16px;
+}
+
+/* A grab handle at the top: swiping down closes the panel, like a bottom sheet (room.js) */
+.player-page.now-below .room-panel::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+}
+
+/* While a swipe moves the panel or a tab, nothing in it gets selected or highlighted */
+.room-panel.swiping {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.room-panel.swiping .room-tab {
+  will-change: transform, opacity;
 }
 
 /* (the Room button under the title opens and closes it there) */

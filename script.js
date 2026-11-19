@@ -1981,8 +1981,10 @@ const ambientThumb = id => {
         ambient.thumbId = id;
         ambient.still = 0;
         ambient.fresh = true;
-        // Only drawn, never read back, so it needs no permission from YouTube's server
+        // Read back for the phone's status bar colour (below), so asked for with CORS, which
+        // YouTube's image server allows for anyone
         ambient.thumb = new Image();
+        ambient.thumb.crossOrigin = "anonymous";
         ambient.thumb.referrerPolicy = "no-referrer";
         ambient.thumb.src = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
     }
@@ -2070,6 +2072,67 @@ const setAmbient = (on, announce = false) => {
 };
 ambientChips.forEach(chip => chip.addEventListener("click", () => setAmbient(chip.dataset.ambient === "on", true)));
 setAmbient(storage.get(AMBIENT_KEY) !== "off");
+
+// ---------- The phone's status bar joins the glow: an installed app (and a browser whose bar
+// follows the page) is coloured by the page's theme-color, as the page can't draw under it. While
+// the glow shows, that colour comes from the top edge of the picture, saturated and dimmed like
+// the glow itself, easing from one colour to the next as the video changes; otherwise the page's
+// own dark. A YouTube video gives its thumbnail's colour (its player can't be read).
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+const THEME_BASE = [15, 15, 17];
+const tint = { ctx: null, now: THEME_BASE.slice(), target: THEME_BASE, written: "", sampledAt: 0 };
+try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 8;
+    canvas.height = 2;
+    tint.ctx = canvas.getContext("2d", { willReadFrequently: true });
+} catch (e) {}
+
+// The average colour of the top strip of a picture, or null where it can't be read
+const tintSample = source => {
+    const width = source.videoWidth || source.naturalWidth, height = source.videoHeight || source.naturalHeight;
+    if (!tint.ctx || !width || !height) return null;
+    try {
+        tint.ctx.drawImage(source, 0, 0, width, Math.max(1, height * 0.12), 0, 0, 8, 2);
+        const data = tint.ctx.getImageData(0, 0, 8, 2).data;
+        const sum = [0, 0, 0];
+        for (let i = 0; i < data.length; i += 4) for (let c = 0; c < 3; c++) sum[c] += data[i + c];
+        return sum.map(c => c / (data.length / 4));
+    } catch (e) {
+        return null;
+    }
+};
+
+// As the glow shows it: saturated (like its saturate(1.4)), part-way over the page's dark, and
+// never so bright that the bar's white clock and icons stop reading
+const glowTone = rgb => {
+    const luma = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const grey = luma(rgb);
+    let tone = rgb.map((c, i) => THEME_BASE[i] + (Math.min(255, Math.max(0, grey + (c - grey) * 1.4)) - THEME_BASE[i]) * 0.55);
+    const bright = luma(tone);
+    if (bright > 96) tone = tone.map(c => c * 96 / bright);
+    return tone;
+};
+
+const statusTick = () => {
+    if (!themeMeta) return;
+    if (!playerPage.classList.contains("ambient-on") || document.hidden) tint.target = THEME_BASE;
+    else if (performance.now() - tint.sampledAt > 400) {
+        tint.sampledAt = performance.now();
+        const youtube = container.classList.contains("youtube");
+        const id = youtube ? youTubeIdShown() : null;
+        const source = youtube ? id && ambientThumb(id) : mainVideo.readyState >= 2 && mainVideo;
+        const color = source ? tintSample(source) : null;
+        if (color) tint.target = glowTone(color);
+    }
+    tint.now = tint.now.map((c, i) => c + (tint.target[i] - c) * 0.3);
+    const hex = `#${tint.now.map(c => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
+    if (hex !== tint.written) {
+        tint.written = hex;
+        themeMeta.setAttribute("content", hex);
+    }
+};
+setInterval(statusTick, 150);
 
 // ---------- Background play (phones and tablets): what happens to a video or song playing on your
 // own when the browser is left (home button, another app, the screen turned off).

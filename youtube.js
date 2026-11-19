@@ -991,7 +991,8 @@
         // The previous / next video of a playlist, beside the play button (with Autoplay, Next
         // also goes past the end, to the Mix)
         const ids = playlist();
-        prevTrackBtn.hidden = nextTrackBtn.hidden = !autoplay && (!ids || ids.length < 2);
+        prevTrackBtn.hidden = (!ids || ids.length < 2);
+        nextTrackBtn.hidden = !autoplay && (!ids || ids.length < 2);
         prevTrackBtn.disabled = !canStep(-1);
         nextTrackBtn.disabled = !canStep(1);
         // Still loading, an error, or a browser that wants a tap on YouTube's player first. On a
@@ -1247,7 +1248,7 @@
         const ids = playlist();
         const index = ids ? playlistIndex() : -1;
         if (n < 0) return !!ids && index > 0;
-        return (!!ids && index < ids.length - 1) || (autoplay && !solo.wantAfter && !solo.finding && !together.active());
+        return (!!ids && index < ids.length - 1) || (autoplay && !together.active());
     };
 
     // The previous / next video of a playlist (buttons beside play, Shift + P / N, the lock screen)
