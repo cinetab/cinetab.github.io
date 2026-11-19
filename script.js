@@ -887,6 +887,7 @@ videoTimeline.addEventListener("mousemove", showPreview);
 const mediaDuration = () => together.stream ? together.stream.duration : mainVideo.duration;
 
 const seekTo = time => {
+    if (handoffMedia()) return handoffMedia().currentTime = time;
     if (together.stream) return together.stream.request({ time });
     mainVideo.currentTime = time;
 };
@@ -1117,11 +1118,11 @@ function renderSheet() {
     Object.keys(SHEET_LISTS).forEach(name => sheetRow(name).querySelector(".sheet-value").textContent = SHEET_LISTS[name].current());
     const subtitlesOn = subtitlesBtn.classList.contains("active");
     sheetRow("subtitles").querySelector(".sheet-value").textContent = subtitlesOn ? "On" : youtube || together.stream || mainVideo.textTracks.length ? "Off" : "None";
-    // Autoplay is for a YouTube video watched on your own; in a room, the room decides what plays
-    // and whether it goes on while someone's phone is away
-    const soloYouTube = !!(together.solo && together.solo.active);
-    sheetRow("autoplay").hidden = !soloYouTube;
-    if (soloYouTube) sheetRow("autoplay").querySelector(".sheet-value").textContent = together.solo.autoplay ? "On" : "Off";
+    // Autoplay: a YouTube video watched on your own, or the room's queue (its host decides)
+    const autoplayHere = !!together.solo && (together.solo.active || container.classList.contains("yt-host"));
+    sheetRow("autoplay").hidden = !autoplayHere;
+    if (autoplayHere) sheetRow("autoplay").querySelector(".sheet-value").textContent = together.solo.autoplay ? "On" : "Off";
+    // In a room, the room's own rules apply while a phone is away (room.js)
     sheetRow("background").hidden = together.active();
     if (sheetList) showSheetList(sheetList);
 }
@@ -1225,6 +1226,16 @@ const playFeedback = icon => {
 // When the person last paused (Background play never undoes their own pause)
 let userPausedAt = 0;
 const togglePlay = () => {
+    // The sound playing on its own while the page is away (Background play)
+    const sound = handoffMedia();
+    if (sound) {
+        if (sound.paused) sound.play().catch(() => {});
+        else {
+            userPausedAt = Date.now();
+            sound.pause();
+        }
+        return;
+    }
     if (together.stream) {
         const play = together.stream.paused;
         if (!play) userPausedAt = Date.now();
@@ -1258,7 +1269,8 @@ mainVideo.addEventListener("pause", () => together.stream || showPlaying(false))
 // Seek; true if it jumped. `feedback`: say so in the middle (double taps show a ripple instead)
 const seek = (seconds, feedback = true) => {
     if (!mediaDuration()) return false;
-    if (together.stream) {
+    if (handoffMedia()) handoffMedia().currentTime += seconds;
+    else if (together.stream) {
         if (!together.stream.request({ time: together.stream.currentTime() + seconds })) return false;
     } else mainVideo.currentTime += seconds;
     if (feedback) showFeedback(seconds > 0 ? "fa-forward" : "fa-backward", `${seconds > 0 ? '+' : ''}${seconds}s`);
@@ -1276,8 +1288,8 @@ let mediaKeyAt = 0;
 // A play or pause from these controls is the person's own; one while the page isn't on screen
 // otherwise comes from the phone (see room.js)
 together.fromMediaKeys = () => Date.now() - mediaKeyAt < 1500;
-const mediaPaused = () => together.stream ? together.stream.paused : mainVideo.paused;
-const mediaTime = () => together.stream ? together.stream.currentTime() : mainVideo.currentTime;
+const mediaPaused = () => handoffMedia() ? handoffMedia().paused : together.stream ? together.stream.paused : mainVideo.paused;
+const mediaTime = () => handoffMedia() ? handoffMedia().currentTime : together.stream ? together.stream.currentTime() : mainVideo.currentTime;
 
 // The YouTube video in the player (on your own, or the room's), for its picture
 const youTubeIdShown = () => (together.solo && together.solo.active && together.solo.videoId) ||
@@ -1547,6 +1559,13 @@ const toggleCustomPiP = async () => {
         document.exitPictureInPicture().catch(() => {});
         return;
     }
+    // YouTube's player belongs to YouTube: no floating window of its own from here, but the phone
+    // floats it from fullscreen
+    if (container.classList.contains("youtube")) {
+        const frame = [...container.querySelectorAll(".yt-frame iframe")].find(item => item.getClientRects().length);
+        if (!isTouch || !floatFromFullscreen(frame)) showFeedback("fa-clone", "Picture in picture isn't available for YouTube here");
+        return;
+    }
     if (!mainVideo.currentSrc && !mainVideo.srcObject) return showFeedback("fa-clone", "Open a video first");
     try {
         // The page's own fullscreen and a floating window don't mix: leave fullscreen first
@@ -1563,18 +1582,52 @@ const toggleCustomPiP = async () => {
             throw new Error("unsupported");
         }
     } catch (err) {
-        showFeedback("fa-clone", "Picture in picture isn't available here");
+        // A browser that doesn't let pages float a video (Brave, some others on Android): the
+        // video fullscreen on its own, with the browser's controls; going to the home screen
+        // floats it, where the phone allows that browser to
+        if (!isTouch || !floatFromFullscreen(mainVideo)) showFeedback("fa-clone", "Picture in picture isn't available here");
     }
 };
 
+// The video (or YouTube's player) fullscreen on its own, to be floated by the phone. True if
+// that could be asked for.
+let floatElement = null;
+const floatFromFullscreen = item => {
+    if (!item) return false;
+    const enter = item.requestFullscreen || item.webkitRequestFullscreen;
+    if (!enter) {
+        // iPhones: the system's own player, which has a picture in picture button
+        if (item !== mainVideo || !mainVideo.webkitEnterFullscreen) return false;
+        mainVideo.webkitEnterFullscreen();
+        return true;
+    }
+    showFeedback("fa-clone", "Go to your home screen to float it");
+    const request = () => Promise.resolve(enter.call(item)).then(() => {
+        floatElement = item;
+        if (item === mainVideo) mainVideo.controls = true;
+    });
+    // From the page's own fullscreen, straight into the video's
+    request().catch(() => fullscreenElement() && Promise.resolve(exitFullscreen()).then(request).catch(() => {}));
+    return true;
+};
+const endFloatFullscreen = () => {
+    if (!floatElement || fullscreenElement() === floatElement) return;
+    if (floatElement === mainVideo) mainVideo.controls = false;
+    floatElement = null;
+};
+document.addEventListener("fullscreenchange", endFloatFullscreen);
+document.addEventListener("webkitfullscreenchange", endFloatFullscreen);
+
 pipBtn.addEventListener("click", toggleCustomPiP);
-// The button only where some kind of picture in picture works
-pipBtn.hidden = !("documentPictureInPicture" in window || document.pictureInPictureEnabled ||
-    (mainVideo.webkitSupportsPresentationMode && mainVideo.webkitSupportsPresentationMode("picture-in-picture")));
 
 // The whole player page goes fullscreen, so a room's chat can stay open beside the video.
 // Phones turn sideways for a wide video; the iPhone can only show the video itself fullscreen.
 const isTouch = matchMedia("(pointer: coarse)").matches;
+
+// The button where some kind of picture in picture works; phones and tablets always have it (it
+// floats the video from fullscreen where the browser has no picture in picture for pages)
+pipBtn.hidden = !(isTouch || "documentPictureInPicture" in window || document.pictureInPictureEnabled ||
+    (mainVideo.webkitSupportsPresentationMode && mainVideo.webkitSupportsPresentationMode("picture-in-picture")));
 
 const toggleFullscreen = () => {
     if (fullscreenElement()) return exitFullscreen();
@@ -1601,78 +1654,205 @@ document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 fullScreenBtn.parentNode.addEventListener("click", toggleFullscreen);
 
-// ---------- Ambient mode, like YouTube's: the picture's colours glow softly around the player.
-// A tiny copy of the picture is taken a few times a second and blended into the last one, so the
-// glow drifts from scene to scene; the page blurs and spreads it behind the player. YouTube's
-// player can't be read from this page, so a YouTube video glows with its thumbnail. Nothing is
-// drawn while there's nothing around the player to glow on (fullscreen, a phone held sideways).
+// ---------- Ambient mode, like YouTube's: a soft, blurred copy of what's playing glows around the
+// player, and behind a room's panel too (which lets it through). Your own video is copied as it
+// plays, frame by frame and small, into a canvas that the page blurs and spreads. YouTube's player
+// can't be read from this page, so a YouTube video gets a second, muted, small YouTube player of
+// the same video, kept in step with the real one and blurred the same way (being small, it gets
+// YouTube's lowest quality). Until that one shows the video, its thumbnail stands in. Nothing runs
+// while there's nothing around the player to glow on (fullscreen, a phone held sideways), or while
+// the page isn't on screen.
 const AMBIENT_KEY = "cinetab:ambient";
 const ambientCanvas = document.querySelector(".ambient"),
 ambientChips = moreOptions.querySelectorAll("li[data-ambient]"),
-ambientCurrent = moreOptions.querySelector(".ambient-current");
-// `still`: how many times an unchanging picture has been drawn (enough, and it stops)
-const ambient = { on: true, ctx: null, shown: false, box: "", fresh: true, still: 0, thumbId: null, thumb: null };
+ambientCurrent = moreOptions.querySelector(".ambient-current"),
+roomPanel = document.querySelector(".room-panel");
+// `kind`: what glows now ("file" or "youtube"); `still`: how many times an unchanging picture
+// has been drawn (enough, and it stops)
+const ambient = { on: true, ctx: null, shown: false, kind: null, box: "", fresh: true, still: 0, drawnAt: 0, thumbId: null, thumb: null };
 try {
     ambient.ctx = ambientCanvas.getContext("2d");
 } catch (e) {}
 
-const ambientSource = () => {
-    if (container.classList.contains("youtube")) {
-        const id = youTubeIdShown();
-        if (!id) return null;
-        if (ambient.thumbId !== id) {
-            ambient.thumbId = id;
-            ambient.still = 0;
-            // Only drawn, never read back, so it needs no permission from YouTube's server
-            ambient.thumb = new Image();
-            ambient.thumb.referrerPolicy = "no-referrer";
-            ambient.thumb.src = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+// One small picture of the video into the canvas; a little of the last one stays, so a cut
+// doesn't flash
+const ambientDraw = image => {
+    ambient.ctx.globalAlpha = ambient.fresh ? 1 : 0.55;
+    ambient.fresh = false;
+    ambient.drawnAt = performance.now();
+    try {
+        ambient.ctx.drawImage(image, 0, 0, ambientCanvas.width, ambientCanvas.height);
+    } catch (e) {}
+};
+
+// Your own video, at every new frame it shows (about 30 a second at most)
+const ambientFrame = () => {
+    if (ambient.shown && ambient.kind === "file" && performance.now() - ambient.drawnAt > 30) ambientDraw(mainVideo);
+    mainVideo.requestVideoFrameCallback(ambientFrame);
+};
+const ambientFrames = typeof mainVideo.requestVideoFrameCallback === "function";
+if (ambientFrames) mainVideo.requestVideoFrameCallback(ambientFrame);
+
+// YouTube's own copy: { layer, player, ready, id (its video), syncedAt }
+const ambientYT = { layer: document.createElement("div"), player: null, ready: false, creating: null, id: null, syncedAt: 0 };
+ambientYT.layer.className = "ambient-yt";
+ambientYT.layer.setAttribute("aria-hidden", "true");
+ambientCanvas.after(ambientYT.layer);
+
+const ambientPlayer = () => ambientYT.creating ||= window.CineYouTube.api().then(YT => new Promise(resolve => {
+    const mount = document.createElement("div");
+    ambientYT.layer.replaceChildren(mount);
+    const player = new YT.Player(mount, {
+        host: "https://www.youtube-nocookie.com",
+        width: 320,
+        height: 180,
+        playerVars: { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, mute: 1, origin: location.origin },
+        events: {
+            onReady: () => {
+                try {
+                    player.mute();
+                    const frame = player.getIframe();
+                    frame.tabIndex = -1;
+                    frame.title = "";
+                } catch (e) {}
+                ambientYT.player = player;
+                ambientYT.ready = true;
+                resolve(player);
+            }
         }
-        const image = ambient.thumb;
-        return image.complete && image.naturalWidth ? { image, moving: false } : null;
+    });
+})).catch(error => {
+    ambientYT.creating = null;
+    throw error;
+});
+
+// Keeps the copy on video `id` and in step with the player (once a second); true while it shows
+// that video (not an ad of its own, not loading)
+const ambientYouTube = id => {
+    const stream = together.stream;
+    if (!window.CineYouTube || !stream) return false;
+    if (!ambientYT.ready) {
+        ambientPlayer().catch(() => {});
+        return false;
     }
-    if (container.classList.contains("audio-mode") || mainVideo.readyState < 2 || !mainVideo.videoWidth) return null;
-    return { image: mainVideo, moving: !mainVideo.paused && !mainVideo.ended };
+    const player = ambientYT.player;
+    const S = YT.PlayerState;
+    try {
+        const time = stream.currentTime();
+        const paused = stream.paused;
+        if (ambientYT.id !== id) {
+            ambientYT.id = id;
+            ambientYT.syncedAt = performance.now();
+            player.mute();
+            if (paused) player.cueVideoById({ videoId: id, startSeconds: time });
+            else player.loadVideoById({ videoId: id, startSeconds: time });
+            return false;
+        }
+        const state = player.getPlayerState();
+        if (performance.now() - ambientYT.syncedAt > 1000) {
+            ambientYT.syncedAt = performance.now();
+            if (player.getPlaybackRate() !== stream.rate) player.setPlaybackRate(stream.rate);
+            if (paused && (state === S.PLAYING || state === S.BUFFERING)) player.pauseVideo();
+            else if (!paused && state !== S.PLAYING && state !== S.BUFFERING) player.playVideo();
+            // A live stream has no timeline to follow
+            const drift = player.getCurrentTime() - time;
+            if (stream.duration && Math.abs(drift) > (paused ? 0.5 : 1.5)) player.seekTo(time + (paused ? 0 : 0.3), true);
+        }
+        const data = player.getVideoData();
+        return !!data && data.video_id === id && [S.PLAYING, S.PAUSED, S.BUFFERING].includes(state);
+    } catch (e) {
+        return false;
+    }
+};
+
+// Not needed now (nothing shown, the page away; `forget`: no YouTube at all): it stops, using
+// no data
+const ambientYouTubeRest = (forget = false) => {
+    if (!ambientYT.ready) return;
+    try {
+        const state = ambientYT.player.getPlayerState();
+        if (forget && ambientYT.id) ambientYT.player.stopVideo();
+        else if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) ambientYT.player.pauseVideo();
+    } catch (e) {}
+    if (forget) ambientYT.id = null;
+};
+
+// A YouTube video's thumbnail, standing in until the copy shows the video
+const ambientThumb = id => {
+    if (ambient.thumbId !== id) {
+        ambient.thumbId = id;
+        ambient.still = 0;
+        ambient.fresh = true;
+        // Only drawn, never read back, so it needs no permission from YouTube's server
+        ambient.thumb = new Image();
+        ambient.thumb.referrerPolicy = "no-referrer";
+        ambient.thumb.src = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+    }
+    return ambient.thumb.complete && ambient.thumb.naturalWidth ? ambient.thumb : null;
 };
 
 const ambientTick = () => {
     if (!ambient.ctx) return;
+    const youtube = container.classList.contains("youtube");
+    const kind = youtube ? "youtube" : "file";
     let show = ambient.on && !playerPage.hidden && !document.hidden;
-    let rect = null, page = null, source = null;
+    let rect = null, page = null;
     if (show) {
         rect = container.getBoundingClientRect();
         page = playerPage.getBoundingClientRect();
         show = rect.width > 0 && (rect.width < page.width - 8 || rect.height < page.height - 8);
     }
-    if (show) source = ambientSource();
-    show = show && !!source;
-    if (ambient.shown !== show) {
-        ambient.shown = show;
-        ambientCanvas.classList.toggle("on", show);
+    const id = youtube ? youTubeIdShown() : null;
+    if (show) show = youtube ? !!id : !container.classList.contains("audio-mode") && mainVideo.readyState >= 2 && mainVideo.videoWidth > 0;
+    // YouTube: its live copy, or the thumbnail meanwhile
+    let live = false, thumb = null;
+    if (show && youtube) {
+        live = ambientYouTube(id);
+        thumb = live ? null : ambientThumb(id);
+    } else ambientYouTubeRest(!youtube);
+    const canvasOn = show && (kind === "file" || !!thumb);
+    if (ambient.kind !== kind) {
+        ambient.kind = kind;
+        ambient.still = 0;
     }
+    ambient.shown = canvasOn;
+    ambientCanvas.classList.toggle("on", canvasOn);
+    ambientYT.layer.classList.toggle("on", show && live);
+    // A room's panel lets the glow through
+    playerPage.classList.toggle("ambient-on", show && (canvasOn || live));
     if (!show) return;
-    // Exactly behind the player, wherever the layout put it (a room's panel beside it, a phone)
-    const box = [rect.left - page.left, rect.top - page.top, rect.width, rect.height].map(Math.round);
+    // Behind the player, and behind the room's panel while it's open beside or below it
+    let [left, top, right, bottom] = [rect.left, rect.top, rect.right, rect.bottom];
+    if (roomPanel && !roomPanel.hidden && playerPage.classList.contains("room-open")) {
+        const panel = roomPanel.getBoundingClientRect();
+        if (panel.width) [left, top, right, bottom] = [Math.min(left, panel.left), Math.min(top, panel.top), Math.max(right, panel.right), Math.max(bottom, panel.bottom)];
+    }
+    const box = [left - page.left, top - page.top, right - left, bottom - top].map(Math.round);
     if (box.join() !== ambient.box) {
         ambient.box = box.join();
-        const [left, top, width, height] = box;
-        Object.assign(ambientCanvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
-        const rows = Math.max(4, Math.round(32 * height / width));
-        if (ambientCanvas.width !== 32 || ambientCanvas.height !== rows) {
-            ambientCanvas.width = 32;
+        const [x, y, width, height] = box;
+        const place = { left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` };
+        Object.assign(ambientCanvas.style, place);
+        Object.assign(ambientYT.layer.style, place);
+        // YouTube's copy keeps its small size (so its low quality), stretched over the box
+        ambientYT.layer.style.setProperty("--sx", width / 320);
+        ambientYT.layer.style.setProperty("--sy", height / 180);
+        const rows = Math.max(4, Math.min(160, Math.round(64 * height / width)));
+        if (ambientCanvas.width !== 64 || ambientCanvas.height !== rows) {
+            ambientCanvas.width = 64;
             ambientCanvas.height = rows;
             ambient.fresh = true;
         }
         ambient.still = 0;
     }
-    if (!source.moving && ambient.still > 24) return;
-    ambient.still = source.moving ? 0 : ambient.still + 1;
-    // A new picture blends into the last one, so the colours change gently
-    ambient.ctx.globalAlpha = ambient.fresh ? 1 : 0.2;
-    ambient.fresh = false;
-    try {
-        ambient.ctx.drawImage(source.image, 0, 0, ambientCanvas.width, ambientCanvas.height);
-    } catch (e) {}
+    if (!canvasOn) return;
+    // Your own video while it plays is drawn at each of its frames (above); here only where the
+    // browser can't say when a frame changes. Paused: a few times, then not until it changes.
+    const moving = kind === "file" && !mainVideo.paused && !mainVideo.ended;
+    if (moving && ambientFrames && !ambient.fresh) return;
+    if (!moving && ambient.still > 12) return;
+    ambient.still = moving ? 0 : ambient.still + 1;
+    ambientDraw(kind === "file" ? mainVideo : thumb);
 };
 setInterval(ambientTick, 150);
 // A paused picture that changed (a jump, another file) is drawn again
@@ -1704,14 +1884,16 @@ setAmbient(storage.get(AMBIENT_KEY) !== "off");
 // leaving, is undone (never one of the person's own, from the lock screen or headphones, or later
 // on, like a call or unplugged headphones). In a room, the room's own rules apply (room.js).
 const BACKGROUND_KEY = "cinetab:background";
-const BACKGROUND_NOTE = "When you leave the browser or turn the screen off. Picture in picture floats the video over other apps where your phone allows it, and otherwise keeps the sound playing (a YouTube video keeps its sound). Play, pause and skip from the lock screen or the notification.";
+const BACKGROUND_NOTE = "When you leave the browser or turn the screen off. Picture in picture floats the video over other apps where your phone allows it, and otherwise keeps the sound playing (a YouTube video keeps its sound). Play, pause and skip from the lock screen or the notification." +
+    // Brave stops other sites' YouTube players in the background unless its own setting allows it
+    (navigator.brave ? " In Brave, a YouTube video keeps playing only with Brave's own Background video playback turned on (Brave's settings, under Media); your own videos and songs play on either way." : "");
 const backgroundChips = [["pip", "Picture in picture"], ["audio", "Sound only"], ["off", "Off (pause)"]].map(([mode, label]) => {
     const chip = el("li", null, label);
     chip.dataset.background = mode;
     chip.addEventListener("click", () => setBackground(mode, true));
     return chip;
 });
-const background = { mode: "pip", hiddenAt: 0, wasPlaying: false, resumes: 0, autoPausedAt: 0, autoPip: false };
+const background = { mode: "pip", hiddenAt: 0, wasPlaying: false, resumes: 0, autoPausedAt: 0, autoPip: false, handoffTimer: null };
 const backgroundLabel = () => (backgroundChips.find(chip => chip.dataset.background === background.mode) || backgroundChips[0]).textContent;
 
 // What plays here on its own: "youtube", "file" or nothing (in a room: nothing)
@@ -1760,18 +1942,89 @@ together.keepPlaying = kind => isTouch && background.mode !== "off" && document.
     Date.now() - background.hiddenAt < 5000 && Date.now() - userPausedAt > 1500 && Date.now() - mediaKeyAt > 1500 &&
     soloMedia() === kind && background.resumes++ < 3;
 
+// Sound only, the way every phone allows: some browsers (Brave, Safari) stop a page's video once
+// it leaves the screen, but not its sound. So the sound goes on in a sound-only player, from the
+// same file and the same moment, and the video carries on from where that got to when the page is
+// back. Meanwhile the lock screen's buttons work on that player.
+const bgAudio = document.createElement("audio");
+bgAudio.preload = "auto";
+const handoff = { on: false, primed: false };
+
+// A sound-only player some phones (iPhones) only let play later on if it played once on a tap:
+// on the first tap with a file open, it plays it silently for a moment
+document.addEventListener("touchend", () => {
+    if (handoff.primed || handoff.on || !currentURL || together.active()) return;
+    handoff.primed = true;
+    bgAudio.muted = true;
+    bgAudio.src = currentURL;
+    bgAudio.play().then(() => bgAudio.pause(), () => handoff.primed = false).finally(() => {
+        if (!handoff.on) bgAudio.muted = false;
+    });
+}, { passive: true });
+
+const handToAudio = () => {
+    if (handoff.on || soloMedia() !== "file" || !currentURL || mainVideo.ended || floating()) return;
+    handoff.on = true;
+    handoff.at = Date.now();
+    if (bgAudio.src !== currentURL) bgAudio.src = currentURL;
+    bgAudio.currentTime = mainVideo.currentTime;
+    bgAudio.playbackRate = mainVideo.playbackRate;
+    bgAudio.volume = mainVideo.volume;
+    bgAudio.muted = mainVideo.muted;
+    bgAudio.play().then(() => {
+        if (!handoff.on) return bgAudio.pause();
+        // The video waits (and stays where it was, so the sound doesn't play twice)
+        mainVideo.pause();
+        updateMediaSession();
+    }, () => {
+        if (!handoff.on) return;
+        handoff.on = false;
+        // Paused meanwhile (the lock screen): so is the video. Otherwise not allowed: the video's
+        // own sound goes on where the browser lets it.
+        if (userPausedAt >= handoff.at) mainVideo.pause();
+        else if (mainVideo.paused) mainVideo.play().catch(() => {});
+    });
+};
+
+// Back to the video, from where the sound got to
+const backFromAudio = () => {
+    if (!handoff.on) return;
+    handoff.on = false;
+    const playing = !bgAudio.paused && !bgAudio.ended;
+    const time = bgAudio.ended ? mainVideo.duration : bgAudio.currentTime;
+    bgAudio.pause();
+    if (Number.isFinite(time)) mainVideo.currentTime = time;
+    if (playing) mainVideo.play().catch(() => {});
+    updateMediaSession();
+};
+// A new file or a room: the sound-only player lets go
+["emptied", "loadstart"].forEach(type => mainVideo.addEventListener(type, () => {
+    if (!handoff.on) return;
+    handoff.on = false;
+    bgAudio.pause();
+}));
+["play", "pause", "ratechange", "seeked"].forEach(type => bgAudio.addEventListener(type, () => handoff.on && updateMediaSession()));
+// Where you are, for opening the file again later (as the video does)
+bgAudio.addEventListener("pause", () => handoff.on && currentFileKey && storage.set(currentFileKey, bgAudio.currentTime));
+// The lock screen's buttons, while the sound plays on its own (see togglePlay, seek, seekTo)
+const handoffMedia = () => handoff.on ? bgAudio : null;
+
 mainVideo.addEventListener("pause", () => {
-    if (mainVideo.ended) return;
+    if (mainVideo.ended || handoff.on) return;
     if (Date.now() - userPausedAt > 1500) background.autoPausedAt = Date.now();
-    if (together.keepPlaying("file")) mainVideo.play().catch(() => {});
+    // Paused by the phone as the page left the screen: on as sound
+    if (together.keepPlaying("file")) handToAudio();
 });
 
 document.addEventListener("visibilitychange", () => {
     if (!isTouch) return;
+    clearTimeout(background.handoffTimer);
     if (!document.hidden) {
-        // Back: a floating window opened on the way out closes again
+        // Back: a floating window opened on the way out closes again, and the video takes over
+        // from the sound
         if (background.autoPip && document.pictureInPictureElement === mainVideo) document.exitPictureInPicture().catch(() => {});
         background.autoPip = false;
+        backFromAudio();
         return;
     }
     background.hiddenAt = Date.now();
@@ -1788,8 +2041,17 @@ document.addEventListener("visibilitychange", () => {
         else mainVideo.pause();
         return;
     }
-    if (what === "file" && mainVideo.paused && together.keepPlaying("file")) mainVideo.play().catch(() => {});
-    if (background.mode === "pip") autoPip();
+    if (what !== "file") return;
+    // A song (no picture) plays on as it is; a video's sound goes on in the sound-only player:
+    // straight away, or with Picture in picture once it's clear the video didn't float
+    if (container.classList.contains("audio-mode")) {
+        if (mainVideo.paused && together.keepPlaying("file")) mainVideo.play().catch(() => {});
+        return;
+    }
+    if (background.mode === "pip") {
+        autoPip();
+        background.handoffTimer = setTimeout(() => document.hidden && !floating() && handToAudio(), 900);
+    } else handToAudio();
 });
 
 // Touch: a tap shows or hides the controls (play / pause is the big button in the middle); a

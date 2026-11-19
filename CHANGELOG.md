@@ -4,6 +4,34 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.6] - 2026-11-19
+
+### Autoplay in rooms
+- The host has the Autoplay switch while the room watches YouTube. While the last video in the
+  queue plays, a video like it is added after it ("Added by Autoplay"), so the room goes on for
+  everyone when the queue ends; anyone who can edit the queue can move or remove it
+- What's next: what YouTube suggests beside the video, or another from its channel (the artist,
+  for a song), never one the room already had. Turning Autoplay off takes out what it added
+- The title at the top follows the queue when it moves on to a video whose title was known already
+
+### Background play and picture in picture on phones (Brave and others)
+- The picture in picture button is on every phone and tablet. Where the browser doesn't let pages
+  float a video (Brave), it shows the video fullscreen on its own, with the browser's controls:
+  going to the home screen floats it where the phone allows. A YouTube video gets the same
+- Your own videos keep their sound in the background in browsers that stop a page's video when
+  it leaves the screen (Brave, Safari): the sound goes on in a sound-only player from the same
+  moment, the lock screen's buttons work on it, and the video carries on from there when you're
+  back
+- In Brave, Settings → Background play says how to keep YouTube videos playing (Brave's own
+  Background video playback setting)
+
+### Ambient mode, live
+- The glow is a soft, blurred copy of what's playing, as it plays: your own video frame by frame,
+  and a YouTube video through a second, muted, small copy of it kept in step with the player
+  (YouTube sends that one at its lowest quality; its thumbnail stands in while it loads). It
+  stops whenever nothing around the player can show it, or the page isn't on screen
+- In a room, the glow reaches behind the side panel, which lets it through like frosted glass
+
 ## [1.4.5] - 2026-11-19
 
 ### Ambient mode
@@ -360,6 +388,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.6
 [1.4.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.5
 [1.4.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.2
 [1.4.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.1

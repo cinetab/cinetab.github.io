@@ -2067,7 +2067,7 @@
         const wasYouTube = together.stream === ytControls;
         together.stream = null;
         if (room) clearInterval(room.streamTimer);
-        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad");
+        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad", "yt-host");
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
         if (wasYouTube) ytStop();
@@ -2292,6 +2292,17 @@
 
     const ytTick = () => {
         if (together.stream !== ytControls || !room || !room.file || !room.file.yt) return;
+        // The host has the Autoplay switch: it decides whether the room goes on after the queue
+        if (container.classList.contains("yt-host") !== (room.role === "host")) {
+            container.classList.toggle("yt-host", room.role === "host");
+            if (together.solo) together.solo.renderAutoplay();
+        }
+        // The title of the video on now (the queue moved on to one whose title was known already)
+        const shownTitle = room.file.title;
+        if (shownTitle && videoTitle.textContent !== shownTitle && !videoTitle.querySelector("input")) {
+            videoTitle.textContent = audioTitle.textContent = shownTitle;
+            videoTitle.title = shownTitle;
+        }
         const duration = room.file.duration;
         const time = duration ? Math.min(expectedTime(), duration) : expectedTime();
         showProgress(time, duration || Infinity);
@@ -2642,13 +2653,61 @@
         if (y && y.index + step >= 0 && y.index + step < y.queue.length) playQueued(y.index + step);
     };
 
-    // The end of a video: the next one in the queue, or stop at the end
+    // ---------- Autoplay (the host's switch at the top of the player, youtube.js): while the
+    // queue is on its last video, a video like it is added after it ("Added by Autoplay"), so the
+    // room goes on when the queue ends and everyone can see, move or remove what's next. YouTube
+    // won't open its Mixes in an embedded player, so it's what YouTube suggests beside the video,
+    // or else another one from its channel (the artist, for a song), never one the room had.
+    const AUTOPLAY_BY = { id: "autoplay", name: "Autoplay" };
+    const autoplayOn = () => !!(together.solo && together.solo.autoplay);
+
+    // Adds the next video after the last one; true if one was added. `again`: try even if it was
+    // tried for this video already (at its end)
+    const autoplayNext = async (again = false) => {
+        const host = room;
+        const y = host && host.role === "host" && host.yt;
+        if (!y || !autoplayOn() || !window.CineYouTube || y.index < y.queue.length - 1 || y.queue.length >= QUEUE_MAX) return false;
+        const item = y.queue[y.index];
+        if (y.autoFor === item.k && !again) return false;
+        y.autoFor = item.k;
+        const next = await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || "" });
+        // Still the last video, and still wanted
+        if (!next || room !== host || host.yt !== y || y.queue[y.queue.length - 1] !== item || !autoplayOn()) return false;
+        const added = queueItem(next.id, AUTOPLAY_BY);
+        added.title = next.title;
+        added.auto = true;
+        y.queue.push(added);
+        shareFile();
+        shareQueue();
+        return true;
+    };
+
+    // The switch turned: on, what's next is found now; off, what Autoplay added (not yet played) goes
+    together.onAutoplay = on => {
+        const y = room && room.role === "host" && room.yt;
+        if (!y) return;
+        if (on) return autoplayNext(true);
+        const kept = y.queue.filter((item, i) => i <= y.index || !item.auto);
+        if (kept.length === y.queue.length) return;
+        y.queue = kept;
+        shareFile();
+        shareQueue();
+    };
+
+    // The end of a video: the next one in the queue, or (with Autoplay) one like it, or stop
     const ytFinished = () => {
         const y = room.yt;
         if (y.index + 1 < y.queue.length) return ytStep(1);
         room.state = { paused: true, time: y.duration || expectedTime(), rate: room.state.rate, at: now() };
         broadcast(stateMessage());
         ytTick();
+        // Nothing found while it played: one more try, and on as soon as there is one
+        if (autoplayOn()) {
+            const ended = y.queue[y.index];
+            autoplayNext(true).then(added => {
+                if (added && room && room.yt === y && y.queue[y.index] === ended && room.state.paused) playQueued(y.index + 1);
+            });
+        }
     };
 
     // Once a second: the title and length from the host's player, and the end of the video
@@ -2665,6 +2724,10 @@
                         titleKnown(y.queue[y.index], title);
                         changed = true;
                     }
+                    // Its channel, for Autoplay to find another like it
+                    y.channel = clean(data.author || "", 100);
+                    // The last video in the queue is playing: Autoplay finds what's next
+                    if (y.title && yt.player.getPlayerState() === YT.PLAYING) autoplayNext();
                     // Only while the video itself plays, not an ad
                     const length = yt.player.getDuration();
                     if (yt.player.getPlayerState() === YT.PLAYING && yt.player.getCurrentTime() > 1 && length > 1 && Math.abs(length - y.duration) > 1) {

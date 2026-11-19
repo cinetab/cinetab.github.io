@@ -65,10 +65,12 @@ body.watching {
   border-radius: 0px;
 }
 
-/* Ambient mode: a tiny copy of the picture behind the player (script.js places it there),
-   spread and blurred into a soft glow of its colours, like YouTube's. Below everything else on
-   the player page, the room's panel included. */
-.ambient {
+/* Ambient mode: a small live copy of what's playing behind the player (and a room's panel;
+   script.js places it): your own video drawn frame by frame (.ambient), or a muted copy of the
+   YouTube video (.ambient-yt), spread and blurred into a soft glow, like YouTube's. Below
+   everything else on the player page. */
+.ambient,
+.ambient-yt {
   position: absolute;
   z-index: -1;
   left: 0;
@@ -82,17 +84,36 @@ body.watching {
   transition: opacity 1.2s ease;
 }
 
-.ambient.on {
+.ambient-yt {
+  overflow: hidden;
+}
+
+/* YouTube's copy stays small (so YouTube sends it at its lowest quality), stretched over the box */
+.ambient-yt iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 320px;
+  height: 180px;
+  border: 0;
+  transform-origin: 0 0;
+  transform: scale(var(--sx, 1), var(--sy, 1));
+}
+
+.ambient.on,
+.ambient-yt.on {
   opacity: 0.6;
 }
 
 /* Phones: the player is narrower than its glow could be; a little stronger there */
 @media (pointer: coarse) {
-  .ambient {
+  .ambient,
+  .ambient-yt {
     transform: scale(1.06, 1.25);
     filter: blur(40px) saturate(1.4);
   }
-  .ambient.on {
+  .ambient.on,
+  .ambient-yt.on {
     opacity: 0.7;
   }
 }
@@ -156,7 +177,8 @@ body.watching {
   -webkit-tap-highlight-color: transparent;
 }
 
-.container.solo-yt .yt-autoplay {
+.container.solo-yt .yt-autoplay,
+.container.youtube.yt-host .yt-autoplay {
   display: flex;
 }
 
@@ -4334,6 +4356,15 @@ body > .room-toasts {
   background: #17171c;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
+  transition: background 1.2s ease;
+}
+
+/* Ambient mode: the panel lets the blurred video behind it through, like frosted glass, dark
+   enough to keep everything readable */
+.player-page.ambient-on .room-panel {
+  background: rgba(23, 23, 28, 0.62);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
 }
 
 .room-head {

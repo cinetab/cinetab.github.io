@@ -1087,7 +1087,9 @@
     const renderAutoplay = () => {
         if (!autoplayBtn) return;
         autoplayBtn.setAttribute("aria-checked", String(autoplay));
-        autoplayBtn.title = autoplay ? "Autoplay is on: when this ends, its YouTube Mix plays next" : "Autoplay is off: playback stops at the end";
+        const room = together.active();
+        autoplayBtn.title = autoplay ? (room ? "Autoplay is on: when the queue ends, a video like the last one plays next, for everyone" : "Autoplay is on: when this ends, its YouTube Mix plays next")
+            : room ? "Autoplay is off: the room stops at the end of the queue" : "Autoplay is off: playback stops at the end";
         autoplayBtn.querySelector(".yt-autoplay-track i").className = `fa-solid ${autoplay ? "fa-play" : "fa-pause"}`;
     };
 
@@ -1096,6 +1098,8 @@
         storage.set(AUTOPLAY_KEY, on ? "on" : "off");
         renderAutoplay();
         showFeedback(on ? "fa-toggle-on" : "fa-toggle-off", on ? "Autoplay on" : "Autoplay off");
+        // A room's host: the room's queue goes on (or not) the same way (room.js)
+        if (together.onAutoplay) together.onAutoplay(on);
         if (on || !solo.active || !solo.ready) return tick();
         // Off: the Mix that Autoplay is playing stops with the video on now. It goes on as that
         // one video, from where it is (a playlist of your own still plays to its end).
@@ -1153,6 +1157,7 @@
         get videoId() { return solo.active ? expectedId() : null; },
         get autoplay() { return autoplay; },
         toggleAutoplay: () => setAutoplay(!autoplay),
+        renderAutoplay,
         canStep,
         stop: () => stop(true),
         pause: () => solo.active && soloControls.request({ paused: true }),
@@ -1174,5 +1179,5 @@
     together.step = n => together.solo.step(n);
     window.addEventListener("pagehide", () => solo.active && save());
 
-    window.CineYouTube = { parse, search, api, play, createResults, thumbOf };
+    window.CineYouTube = { parse, search, api, play, createResults, thumbOf, suggestedAfter };
 })();
