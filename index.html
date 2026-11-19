@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.4.2">
+  <meta name="version" content="1.4.5">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.4.2",
+      "softwareVersion": "1.4.5",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.4.2</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.4.5</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -411,6 +411,8 @@
 
   <!-- ============ PLAYER ============ -->
   <div class="player-page" hidden>
+  <!-- Ambient mode: the picture's colours glow softly around the player (script.js) -->
+  <canvas class="ambient" aria-hidden="true"></canvas>
   <div class="container show-controls">
 
     <!-- Top Title Bar (YouTube Style) -->
@@ -420,6 +422,8 @@
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
       </div>
+      <!-- A YouTube video watched on your own: when it ends, its YouTube Mix plays next (youtube.js) -->
+      <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-label">Autoplay</span><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
       <button class="share-help-btn" title="How to watch together"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
     </div>
 
@@ -706,7 +710,7 @@
 
           <!-- More: the picture's shape and a volume boost -->
           <div class="popup-menu-wrapper more-content">
-            <button class="more-btn" title="More: picture shape, volume boost" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <button class="more-btn" title="More: picture shape, ambient mode, volume boost" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             <div class="popup-menu more-options">
               <div class="menu-header"><span>Picture</span><span class="aspect-current">Fit</span></div>
               <ul class="option-chips aspect-options">
@@ -716,6 +720,11 @@
                 <li data-aspect="16:9" title="Show the picture as 16:9">16:9</li>
                 <li data-aspect="4:3" title="Show the picture as 4:3">4:3</li>
                 <li data-aspect="21:9" title="Show the picture as 21:9 (cinema)">21:9</li>
+              </ul>
+              <div class="menu-header"><span>Ambient mode</span><span class="ambient-current">On</span></div>
+              <ul class="option-chips ambient-options">
+                <li data-ambient="on" title="The picture's colours glow softly around the player">On</li>
+                <li data-ambient="off" title="A plain dark background around the player">Off</li>
               </ul>
               <div class="menu-header"><span>Volume boost</span><span class="boost-current">Off</span></div>
               <ul class="option-chips boost-options">
@@ -747,8 +756,11 @@
           <div class="sheet-head"><b>Settings</b><button type="button" class="sheet-close" title="Close" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button></div>
           <button type="button" class="sheet-row" data-open="speed"><i class="fa-solid fa-gauge-high"></i><span>Playback speed</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
           <button type="button" class="sheet-row" data-open="aspect"><i class="fa-solid fa-expand"></i><span>Picture</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
+          <button type="button" class="sheet-row" data-open="ambient"><i class="fa-solid fa-lightbulb"></i><span>Ambient mode</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
           <button type="button" class="sheet-row" data-open="boost"><i class="fa-solid fa-volume-high"></i><span>Volume boost</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
           <button type="button" class="sheet-row" data-act="subtitles"><i class="fa-regular fa-closed-captioning"></i><span>Subtitles</span><b class="sheet-value"></b></button>
+          <button type="button" class="sheet-row" data-act="autoplay"><i class="fa-solid fa-circle-play"></i><span>Autoplay</span><b class="sheet-value"></b></button>
+          <button type="button" class="sheet-row" data-open="background"><i class="fa-solid fa-headphones"></i><span>Background play</span><b class="sheet-value"></b><i class="fa-solid fa-chevron-right"></i></button>
           <button type="button" class="sheet-row" data-act="subtitle-file"><i class="fa-solid fa-file-lines"></i><span>Choose a subtitle file</span></button>
           <button type="button" class="sheet-row" data-act="open"><i class="fa-solid fa-folder-open"></i><span>Open another video</span></button>
         </div>

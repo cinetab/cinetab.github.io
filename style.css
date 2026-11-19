@@ -65,6 +65,38 @@ body.watching {
   border-radius: 0px;
 }
 
+/* Ambient mode: a tiny copy of the picture behind the player (script.js places it there),
+   spread and blurred into a soft glow of its colours, like YouTube's. Below everything else on
+   the player page, the room's panel included. */
+.ambient {
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.12);
+  filter: blur(56px) saturate(1.4);
+  transition: opacity 1.2s ease;
+}
+
+.ambient.on {
+  opacity: 0.6;
+}
+
+/* Phones: the player is narrower than its glow could be; a little stronger there */
+@media (pointer: coarse) {
+  .ambient {
+    transform: scale(1.06, 1.25);
+    filter: blur(40px) saturate(1.4);
+  }
+  .ambient.on {
+    opacity: 0.7;
+  }
+}
+
 /* Top Title Bar */
 .top-bar {
   position: absolute;
@@ -104,6 +136,80 @@ body.watching {
 .share-help-btn:hover {
   background: #3e97fd;
   border-color: #3e97fd;
+}
+
+/* Autoplay, a switch like YouTube's (a YouTube video watched on your own: youtube.js) */
+.yt-autoplay {
+  display: none;
+  pointer-events: auto;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 20px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.container.solo-yt .yt-autoplay {
+  display: flex;
+}
+
+.yt-autoplay:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.yt-autoplay:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+.yt-autoplay-track {
+  position: relative;
+  width: 36px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.3);
+  transition: background 0.2s ease;
+}
+
+.yt-autoplay-track i {
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 9px;
+  color: #0f0f11;
+  background: #cfcfd6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.yt-autoplay[aria-checked="true"] .yt-autoplay-track {
+  background: rgba(62, 151, 253, 0.6);
+}
+
+.yt-autoplay[aria-checked="true"] .yt-autoplay-track i {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+/* Small screens: just the switch */
+@media screen and (max-width: 600px), (pointer: coarse) and (max-height: 500px) {
+  .yt-autoplay-label {
+    display: none;
+  }
 }
 
 .container.show-controls .top-bar {
@@ -806,6 +912,7 @@ body.watching {
 }
 
 .aspect-current,
+.ambient-current,
 .boost-current {
   color: #3e97fd;
   text-transform: none;

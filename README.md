@@ -80,11 +80,13 @@ Don't use Picture-in-Picture while sharing: the video moves out of the tab and t
 ## Features
 
 - Plays video and audio files via drag & drop or the file picker, in almost any format (see below)
-- Subtitles: drop or pick an `.srt` / `.vtt` file, or use the text subtitles inside an MKV; toggle with `C`
+- Subtitles: drop or pick an `.srt` / `.vtt` file, or use the text subtitles inside an MKV; toggle with `C`. On or off is remembered, also for YouTube's own captions (off until you turn them on)
 - Remembers where you stopped for each file (stored only in your browser)
 - Lists your converted videos on the home page with the space each uses; play or delete them
 - Hover preview on the timeline, playback speed (presets or any speed from 0.25x to 4x), Picture-in-Picture, fullscreen
-- **More** menu (⋮): the picture's shape (Fit, Fill, Stretch, 16:9, 4:3, 21:9, remembered in this browser) and a volume boost up to 300% for quiet videos (with a limiter so it doesn't distort; it only changes what you hear, not what a room's guests hear)
+- **More** menu (⋮): the picture's shape (Fit, Fill, Stretch, 16:9, 4:3, 21:9, remembered in this browser), **Ambient mode** (the picture's colours glow softly around the player, like YouTube's; a YouTube video glows with its thumbnail) and a volume boost up to 300% for quiet videos (with a limiter so it doesn't distort; it only changes what you hear, not what a room's guests hear)
+- YouTube on your own: **Autoplay** (the switch at the top) plays the YouTube Mix of the video that ended next, as on YouTube, and *Next* skips to it; if the Mix can't be opened, YouTube's suggested videos play instead
+- Phones and tablets: **Background play** in Settings: *Picture in picture* (the video floats over other apps where the phone allows it, otherwise the sound keeps playing), *Sound only*, or *Off*. Play, pause and skip from the lock screen or the notification, where a YouTube video shows its picture
 - In a room's YouTube queue, *Previous* / *Next* buttons beside the play button (`Shift` + `P` / `N`)
 - Rename a video by clicking its title (remembered for that file); all shortcuts listed with the keyboard button or `?`
 - Private watch-together rooms with chat, streaming and synced playback (see above)

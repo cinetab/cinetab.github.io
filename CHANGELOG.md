@@ -4,6 +4,38 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.5] - 2026-11-19
+
+### Ambient mode
+- The picture's colours glow softly around the player, like YouTube's ambient mode, drifting
+  gently from scene to scene. A YouTube video glows with its thumbnail
+- On by default; turn it off in the More menu (⋮) or, on phones, in Settings. Remembered
+
+### Subtitles remembered
+- Subtitles on or off is remembered for every video: your own, a room's and YouTube's
+- Off means YouTube's own captions stay off too, even when the video or your YouTube account
+  would turn them on. YouTube's captions are off until you turn them on
+
+### YouTube Autoplay
+- A switch at the top of the player: when a YouTube video (or the last video of a playlist)
+  ends, its YouTube Mix plays next, the same Mix YouTube makes, and goes on from Mix to Mix.
+  Videos played lately aren't picked again
+- **Next** (beside play, Shift + N, the lock screen) skips to the Mix straight away
+- If YouTube won't open the Mix here, the videos YouTube suggests play instead
+- Turning it off stops after the video playing now. Remembered; also in Settings on phones
+
+### Background play on phones and tablets
+- Settings → **Background play**, for your own videos and songs and for YouTube:
+  - **Picture in picture**: the video floats over other apps when you leave the browser, where
+    the phone allows it (a YouTube video, which can't float from here, keeps its sound)
+  - **Sound only**: the sound keeps playing, also with the screen off, and nothing floats
+  - **Off**: it pauses when you leave
+- A pause the phone makes as you leave is undone; your own pauses (also from the lock screen or
+  headphones) never are. The Picture in picture button floats the video whatever this is
+- The lock screen and notification show a YouTube video's picture, with Previous / Next in a
+  playlist, Mix or Autoplay
+- In a room, the room's own rules apply, as before
+
 ## [1.4.2] - 2026-11-04
 
 ### YouTube search in rooms
@@ -328,6 +360,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.5
 [1.4.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.2
 [1.4.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.1
 [1.4.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.0

@@ -86,7 +86,9 @@ const together = {
     onTitle: null,    // called when the video's title is renamed
     step: null,       // the previous (-1) / next (1) video of a room's YouTube queue (or a playlist)
     shareYouTube: null, // in a room: plays a YouTube link for everyone (returns why it couldn't)
-    solo: null,       // youtube.js: a YouTube video watched on your own ({ active, stop, pause, handOff })
+    solo: null,       // youtube.js: a YouTube video watched on your own ({ active, stop, pause, handOff… })
+    roomYouTubeId: null, // room.js: the YouTube video the room is watching, if any
+    keepPlaying: () => false, // Background play: whether a pause by the phone, as the page left the screen, is undone
     active: () => false // in a room: going home keeps the video playing for everyone
 };
 
@@ -349,6 +351,42 @@ fileInput.addEventListener("change", e => {
 // Subtitles (.srt / .vtt)
 const isSubtitleFile = file => /\.(srt|vtt)$/i.test(file.name);
 
+// Subtitles on or off is remembered, for every kind of video: your own, a room's and YouTube's.
+// Until it's been chosen, subtitles you add show and YouTube's own captions don't.
+const SUBTITLES_KEY = "cinetab:subtitles";
+const subtitlePref = {
+    set: on => storage.set(SUBTITLES_KEY, on ? "on" : "off"),
+    // Whether subtitles that have just become available show; `youtube`: YouTube's own captions
+    wants: (youtube = false) => {
+        const saved = storage.get(SUBTITLES_KEY);
+        return saved ? saved === "on" : !youtube;
+    }
+};
+
+// YouTube's own captions on or off in one of its players (youtube.js, room.js). YouTube turns them
+// on by itself (the video's or the viewer's own preference) as each video loads, so this runs
+// then (onApiChange) and as each video starts playing.
+// Off is "no caption track": unloading YouTube's captions module leaves them on screen. On is a
+// track chosen outright (the one YouTube has, the viewer's language, or the first), since loading
+// the module alone doesn't bring them back once they've been turned off.
+const youTubeCaptions = (player, on, retry = true) => {
+    try {
+        if (!on) return player.setOption("captions", "track", {});
+        player.loadModule("captions");
+        const tracks = player.getOption("captions", "tracklist") || [];
+        // The list comes a moment after the module: try once more then
+        if (!tracks.length) {
+            if (retry) setTimeout(() => youTubeCaptions(player, subtitlePref.wants(true), false), 1200);
+            return;
+        }
+        const current = player.getOption("captions", "track") || {};
+        const language = (navigator.language || "en").slice(0, 2).toLowerCase();
+        const pick = tracks.find(item => item.languageCode && item.languageCode === current.languageCode) ||
+            tracks.find(item => String(item.languageCode || "").toLowerCase().startsWith(language)) || tracks[0];
+        if (pick && pick.languageCode) player.setOption("captions", "track", { languageCode: pick.languageCode });
+    } catch (e) {}
+};
+
 const srtToVtt = text => "WEBVTT\n\n" + text
     .replace(/\r+/g, "")
     .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
@@ -368,23 +406,27 @@ const removeSubtitles = () => {
     updateSubtitlesTitle();
 };
 
-const applySubtitles = (text, label) => {
+// `chosen`: a subtitle file the person picked just now (it shows, and subtitles are on from then
+// on); otherwise (a converted file's own, a room host's) as the remembered setting says
+const applySubtitles = (text, label, chosen = false) => {
     text = text.replace(/^\uFEFF/, "");
     if (!text.startsWith("WEBVTT")) text = srtToVtt(text);
     // Lift cues a few lines up so they don't sit under the control bar
     text = text.replace(/^(.*-->.*)$/gm, line => /line:/.test(line) ? line : `${line} line:-4`);
 
+    if (chosen) subtitlePref.set(true);
+    const show = chosen || subtitlePref.wants();
     removeSubtitles();
     const track = document.createElement("track");
     track.kind = "subtitles";
     track.label = label;
     track.src = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
-    track.default = true;
+    track.default = show;
     mainVideo.appendChild(track);
-    track.track.mode = "showing";
-    subtitlesBtn.classList.add("active");
+    track.track.mode = show ? "showing" : "hidden";
+    subtitlesBtn.classList.toggle("active", show);
     updateSubtitlesTitle();
-    showFeedback("fa-closed-captioning", "Subtitles On");
+    showFeedback("fa-closed-captioning", show ? "Subtitles On" : isTouch ? "Subtitles off" : "Subtitles off (C shows them)");
 };
 
 const loadSubtitleFile = async (file) => {
@@ -394,7 +436,7 @@ const loadSubtitleFile = async (file) => {
         showFeedback("fa-closed-captioning", "Open a video first");
         return;
     }
-    applySubtitles(await file.text(), file.name);
+    applySubtitles(await file.text(), file.name, true);
 };
 
 const toggleSubtitles = () => {
@@ -403,6 +445,7 @@ const toggleSubtitles = () => {
     if (!track) return subtitleInput.click();
     const show = track.mode !== "showing";
     track.mode = show ? "showing" : "hidden";
+    subtitlePref.set(show);
     subtitlesBtn.classList.toggle("active", show);
     updateSubtitlesTitle();
     showFeedback("fa-closed-captioning", show ? "Subtitles On" : "Subtitles Off");
@@ -1054,7 +1097,12 @@ const SHEET_LISTS = {
         active: chip => together.stream ? +chip.dataset.speed === together.stream.rate : chip.classList.contains("active"),
         pick: chip => together.stream ? together.stream.request({ rate: +chip.dataset.speed }) : chip.click() },
     aspect: { title: "Picture", chips: () => aspectChips, current: () => aspectCurrent.textContent },
-    boost: { title: "Volume boost", chips: () => boostChips, current: () => boostCurrent.textContent }
+    ambient: { title: "Ambient mode", chips: () => ambientChips, current: () => ambientCurrent.textContent,
+        note: () => "The picture's colours glow softly around the player. A YouTube video glows with its thumbnail." },
+    boost: { title: "Volume boost", chips: () => boostChips, current: () => boostCurrent.textContent,
+        note: () => "Louder than the phone's own maximum. Swiping up on the right side of the picture goes past 100% too." },
+    // Background play's options exist only here (computers keep playing in the background anyway)
+    background: { title: "Background play", chips: () => backgroundChips, current: () => backgroundLabel(), note: () => BACKGROUND_NOTE }
 };
 let sheetList = null;
 const rateLabel = rate => rate === 1 ? "Normal" : `${rate}x`;
@@ -1069,6 +1117,12 @@ function renderSheet() {
     Object.keys(SHEET_LISTS).forEach(name => sheetRow(name).querySelector(".sheet-value").textContent = SHEET_LISTS[name].current());
     const subtitlesOn = subtitlesBtn.classList.contains("active");
     sheetRow("subtitles").querySelector(".sheet-value").textContent = subtitlesOn ? "On" : youtube || together.stream || mainVideo.textTracks.length ? "Off" : "None";
+    // Autoplay is for a YouTube video watched on your own; in a room, the room decides what plays
+    // and whether it goes on while someone's phone is away
+    const soloYouTube = !!(together.solo && together.solo.active);
+    sheetRow("autoplay").hidden = !soloYouTube;
+    if (soloYouTube) sheetRow("autoplay").querySelector(".sheet-value").textContent = together.solo.autoplay ? "On" : "Off";
+    sheetRow("background").hidden = together.active();
     if (sheetList) showSheetList(sheetList);
 }
 
@@ -1076,8 +1130,9 @@ const showSheetList = name => {
     const list = SHEET_LISTS[name];
     sheetList = name;
     sheetTitle.textContent = list.title;
-    sheetNote.hidden = name !== "boost";
-    sheetNote.textContent = name === "boost" ? "Louder than the phone's own maximum. Swiping up on the right side of the picture goes past 100% too." : "";
+    const note = list.note ? list.note() : "";
+    sheetNote.hidden = !note;
+    sheetNote.textContent = note;
     const current = list.current();
     const chips = [...list.chips()].filter(chip => !chip.hidden);
     const isActive = chip => list.active ? list.active(chip) : chip.classList.contains("active");
@@ -1153,6 +1208,10 @@ sheetMain.addEventListener("click", e => {
         toggleSubtitles();
         return renderSheet();
     }
+    if (act === "autoplay") {
+        if (together.solo) together.solo.toggleAutoplay();
+        return renderSheet();
+    }
     // These open something else: the sheet steps aside
     closeSheet();
     if (act === "subtitle-file") subtitleInput.click();
@@ -1163,9 +1222,12 @@ sheetMain.addEventListener("click", e => {
 const playFeedback = icon => {
     if (!(isTouch && container.classList.contains("show-controls"))) showFeedback(icon, "");
 };
+// When the person last paused (Background play never undoes their own pause)
+let userPausedAt = 0;
 const togglePlay = () => {
     if (together.stream) {
         const play = together.stream.paused;
+        if (!play) userPausedAt = Date.now();
         if (together.stream.request({ paused: !play })) playFeedback(play ? "fa-play" : "fa-pause");
         return;
     }
@@ -1173,6 +1235,7 @@ const togglePlay = () => {
         mainVideo.play().catch(() => {});
         playFeedback("fa-play");
     } else {
+        userPausedAt = Date.now();
         mainVideo.pause();
         playFeedback("fa-pause");
     }
@@ -1216,15 +1279,45 @@ together.fromMediaKeys = () => Date.now() - mediaKeyAt < 1500;
 const mediaPaused = () => together.stream ? together.stream.paused : mainVideo.paused;
 const mediaTime = () => together.stream ? together.stream.currentTime() : mainVideo.currentTime;
 
+// The YouTube video in the player (on your own, or the room's), for its picture
+const youTubeIdShown = () => (together.solo && together.solo.active && together.solo.videoId) ||
+    (together.roomYouTubeId && together.roomYouTubeId()) || null;
+
+// Previous / next on the lock screen: a YouTube playlist, Mix or Autoplay watched on your own
+const trackActions = { previoustrack: null, nexttrack: null };
+const updateTrackActions = () => {
+    const solo = together.solo && together.solo.active && !together.active() ? together.solo : null;
+    [["previoustrack", -1], ["nexttrack", 1]].forEach(([action, n]) => {
+        const can = !!(solo && solo.canStep(n));
+        if (trackActions[action] === can) return;
+        trackActions[action] = can;
+        try {
+            navigator.mediaSession.setActionHandler(action, can ? () => {
+                mediaKeyAt = Date.now();
+                together.solo.step(n);
+            } : null);
+        } catch (e) {}
+    });
+};
+
+let mediaArtworkFor = null;
 const updateMediaSession = () => {
     const session = navigator.mediaSession;
-    if (!session || !(currentFile || together.active() || (together.solo && together.solo.active))) return;
+    if (!session) return;
+    updateTrackActions();
+    if (!(currentFile || together.active() || (together.solo && together.solo.active))) return;
     const title = videoTitle.textContent;
-    if (!session.metadata || session.metadata.title !== title) {
+    const ytId = container.classList.contains("youtube") ? youTubeIdShown() : null;
+    if (!session.metadata || session.metadata.title !== title || mediaArtworkFor !== ytId) {
+        mediaArtworkFor = ytId;
         session.metadata = new MediaMetadata({
             title,
             artist: together.active() ? "CineTab · watching together" : together.solo && together.solo.active ? "CineTab · YouTube" : "CineTab",
-            artwork: [
+            // A YouTube video shows its own picture on the lock screen
+            artwork: ytId ? [
+                { src: `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`, sizes: "320x180", type: "image/jpeg" },
+                { src: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`, sizes: "480x360", type: "image/jpeg" }
+            ] : [
                 { src: "icon-192.png", sizes: "192x192", type: "image/png" },
                 { src: "icon-512.png", sizes: "512x512", type: "image/png" }
             ]
@@ -1458,7 +1551,10 @@ const toggleCustomPiP = async () => {
     try {
         // The page's own fullscreen and a floating window don't mix: leave fullscreen first
         if (fullscreenElement()) await Promise.resolve(exitFullscreen()).catch(() => {});
-        if (document.pictureInPictureEnabled && !mainVideo.disablePictureInPicture) {
+        // Background play may have turned off the phone's own floating window on leaving; the
+        // button always floats it (see Background play)
+        mainVideo.disablePictureInPicture = false;
+        if (document.pictureInPictureEnabled) {
             await mainVideo.requestPictureInPicture();
         } else if (mainVideo.webkitSupportsPresentationMode && mainVideo.webkitSupportsPresentationMode("picture-in-picture")) {
             // Older iPhones and iPads
@@ -1504,6 +1600,197 @@ document.addEventListener("fullscreenchange", onFullscreenChange);
 document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 fullScreenBtn.parentNode.addEventListener("click", toggleFullscreen);
+
+// ---------- Ambient mode, like YouTube's: the picture's colours glow softly around the player.
+// A tiny copy of the picture is taken a few times a second and blended into the last one, so the
+// glow drifts from scene to scene; the page blurs and spreads it behind the player. YouTube's
+// player can't be read from this page, so a YouTube video glows with its thumbnail. Nothing is
+// drawn while there's nothing around the player to glow on (fullscreen, a phone held sideways).
+const AMBIENT_KEY = "cinetab:ambient";
+const ambientCanvas = document.querySelector(".ambient"),
+ambientChips = moreOptions.querySelectorAll("li[data-ambient]"),
+ambientCurrent = moreOptions.querySelector(".ambient-current");
+// `still`: how many times an unchanging picture has been drawn (enough, and it stops)
+const ambient = { on: true, ctx: null, shown: false, box: "", fresh: true, still: 0, thumbId: null, thumb: null };
+try {
+    ambient.ctx = ambientCanvas.getContext("2d");
+} catch (e) {}
+
+const ambientSource = () => {
+    if (container.classList.contains("youtube")) {
+        const id = youTubeIdShown();
+        if (!id) return null;
+        if (ambient.thumbId !== id) {
+            ambient.thumbId = id;
+            ambient.still = 0;
+            // Only drawn, never read back, so it needs no permission from YouTube's server
+            ambient.thumb = new Image();
+            ambient.thumb.referrerPolicy = "no-referrer";
+            ambient.thumb.src = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+        }
+        const image = ambient.thumb;
+        return image.complete && image.naturalWidth ? { image, moving: false } : null;
+    }
+    if (container.classList.contains("audio-mode") || mainVideo.readyState < 2 || !mainVideo.videoWidth) return null;
+    return { image: mainVideo, moving: !mainVideo.paused && !mainVideo.ended };
+};
+
+const ambientTick = () => {
+    if (!ambient.ctx) return;
+    let show = ambient.on && !playerPage.hidden && !document.hidden;
+    let rect = null, page = null, source = null;
+    if (show) {
+        rect = container.getBoundingClientRect();
+        page = playerPage.getBoundingClientRect();
+        show = rect.width > 0 && (rect.width < page.width - 8 || rect.height < page.height - 8);
+    }
+    if (show) source = ambientSource();
+    show = show && !!source;
+    if (ambient.shown !== show) {
+        ambient.shown = show;
+        ambientCanvas.classList.toggle("on", show);
+    }
+    if (!show) return;
+    // Exactly behind the player, wherever the layout put it (a room's panel beside it, a phone)
+    const box = [rect.left - page.left, rect.top - page.top, rect.width, rect.height].map(Math.round);
+    if (box.join() !== ambient.box) {
+        ambient.box = box.join();
+        const [left, top, width, height] = box;
+        Object.assign(ambientCanvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+        const rows = Math.max(4, Math.round(32 * height / width));
+        if (ambientCanvas.width !== 32 || ambientCanvas.height !== rows) {
+            ambientCanvas.width = 32;
+            ambientCanvas.height = rows;
+            ambient.fresh = true;
+        }
+        ambient.still = 0;
+    }
+    if (!source.moving && ambient.still > 24) return;
+    ambient.still = source.moving ? 0 : ambient.still + 1;
+    // A new picture blends into the last one, so the colours change gently
+    ambient.ctx.globalAlpha = ambient.fresh ? 1 : 0.2;
+    ambient.fresh = false;
+    try {
+        ambient.ctx.drawImage(source.image, 0, 0, ambientCanvas.width, ambientCanvas.height);
+    } catch (e) {}
+};
+setInterval(ambientTick, 150);
+// A paused picture that changed (a jump, another file) is drawn again
+["seeked", "loadeddata", "play"].forEach(type => mainVideo.addEventListener(type, () => ambient.still = 0));
+
+const setAmbient = (on, announce = false) => {
+    ambient.on = on;
+    ambient.still = 0;
+    ambientChips.forEach(chip => chip.classList.toggle("active", (chip.dataset.ambient === "on") === on));
+    ambientCurrent.textContent = on ? "On" : "Off";
+    if (announce) {
+        storage.set(AMBIENT_KEY, on ? "on" : "off");
+        showFeedback("fa-lightbulb", on ? "Ambient mode on" : "Ambient mode off");
+    }
+    ambientTick();
+    if (!playerSheet.hidden) renderSheet();
+};
+ambientChips.forEach(chip => chip.addEventListener("click", () => setAmbient(chip.dataset.ambient === "on", true)));
+setAmbient(storage.get(AMBIENT_KEY) !== "off");
+
+// ---------- Background play (phones and tablets): what happens to a video or song playing on your
+// own when the browser is left (home button, another app, the screen turned off).
+// - Picture in picture: the video floats over other apps where the phone allows it (Chrome does
+//   for a fullscreen video, and when it asks the page); otherwise, and for YouTube (another site's
+//   player can't float from here), the sound keeps playing
+// - Sound only: the sound keeps playing, and the video doesn't float
+// - Off: it pauses
+// Phones may pause a page's media as it leaves the screen; a pause like that, straight after
+// leaving, is undone (never one of the person's own, from the lock screen or headphones, or later
+// on, like a call or unplugged headphones). In a room, the room's own rules apply (room.js).
+const BACKGROUND_KEY = "cinetab:background";
+const BACKGROUND_NOTE = "When you leave the browser or turn the screen off. Picture in picture floats the video over other apps where your phone allows it, and otherwise keeps the sound playing (a YouTube video keeps its sound). Play, pause and skip from the lock screen or the notification.";
+const backgroundChips = [["pip", "Picture in picture"], ["audio", "Sound only"], ["off", "Off (pause)"]].map(([mode, label]) => {
+    const chip = el("li", null, label);
+    chip.dataset.background = mode;
+    chip.addEventListener("click", () => setBackground(mode, true));
+    return chip;
+});
+const background = { mode: "pip", hiddenAt: 0, wasPlaying: false, resumes: 0, autoPausedAt: 0, autoPip: false };
+const backgroundLabel = () => (backgroundChips.find(chip => chip.dataset.background === background.mode) || backgroundChips[0]).textContent;
+
+// What plays here on its own: "youtube", "file" or nothing (in a room: nothing)
+const soloMedia = () => {
+    if (together.active()) return null;
+    if (together.solo && together.solo.active) return "youtube";
+    return currentFile && !together.stream ? "file" : null;
+};
+const floating = () => !!document.pictureInPictureElement || mainVideo.webkitPresentationMode === "picture-in-picture" ||
+    !!(window.documentPictureInPicture && window.documentPictureInPicture.window);
+
+// Floats the video on the way out (without a tap, only where the browser allows it)
+const autoPip = () => {
+    if (soloMedia() !== "file" || container.classList.contains("audio-mode") || floating() || !document.pictureInPictureEnabled) return;
+    mainVideo.disablePictureInPicture = false;
+    mainVideo.requestPictureInPicture().then(() => background.autoPip = true, () => {});
+};
+
+const setBackground = (mode, announce = false) => {
+    if (!backgroundChips.some(chip => chip.dataset.background === mode)) mode = "pip";
+    background.mode = mode;
+    backgroundChips.forEach(chip => chip.classList.toggle("active", chip.dataset.background === mode));
+    if (isTouch) {
+        // The phone's own floating window on leaving (a fullscreen video in Chrome) only with
+        // Picture in picture; the PiP button floats it whatever this is
+        if (!floating()) mainVideo.disablePictureInPicture = mode !== "pip";
+        // Chrome asks the page for its floating window as the person leaves
+        try {
+            navigator.mediaSession.setActionHandler("enterpictureinpicture", mode === "pip" ? autoPip : null);
+        } catch (e) {}
+    }
+    if (announce) {
+        storage.set(BACKGROUND_KEY, mode);
+        showFeedback(mode === "off" ? "fa-pause" : mode === "audio" ? "fa-headphones" : "fa-clone", `Background play: ${backgroundLabel()}`);
+    }
+    if (!playerSheet.hidden) renderSheet();
+};
+setBackground(storage.get(BACKGROUND_KEY) || "pip");
+mainVideo.addEventListener("leavepictureinpicture", () => {
+    if (isTouch) mainVideo.disablePictureInPicture = background.mode !== "pip";
+});
+
+// Whether a pause that just happened is the phone's, as the page left the screen, and is undone
+// (`kind`: what paused, "file" or "youtube"); a few times at most, so it never fights the phone
+together.keepPlaying = kind => isTouch && background.mode !== "off" && document.hidden && background.wasPlaying &&
+    Date.now() - background.hiddenAt < 5000 && Date.now() - userPausedAt > 1500 && Date.now() - mediaKeyAt > 1500 &&
+    soloMedia() === kind && background.resumes++ < 3;
+
+mainVideo.addEventListener("pause", () => {
+    if (mainVideo.ended) return;
+    if (Date.now() - userPausedAt > 1500) background.autoPausedAt = Date.now();
+    if (together.keepPlaying("file")) mainVideo.play().catch(() => {});
+});
+
+document.addEventListener("visibilitychange", () => {
+    if (!isTouch) return;
+    if (!document.hidden) {
+        // Back: a floating window opened on the way out closes again
+        if (background.autoPip && document.pictureInPictureElement === mainVideo) document.exitPictureInPicture().catch(() => {});
+        background.autoPip = false;
+        return;
+    }
+    background.hiddenAt = Date.now();
+    background.resumes = 0;
+    const what = soloMedia();
+    // Some phones pause just before the page is hidden: that counts as playing
+    const playing = what === "youtube" ? !together.solo.paused
+        : what === "file" && !mainVideo.ended && (!mainVideo.paused || Date.now() - background.autoPausedAt < 1000);
+    background.wasPlaying = playing;
+    // Floating already (the PiP button): it goes on as it is
+    if (!playing || floating()) return;
+    if (background.mode === "off") {
+        if (what === "youtube") together.solo.pause();
+        else mainVideo.pause();
+        return;
+    }
+    if (what === "file" && mainVideo.paused && together.keepPlaying("file")) mainVideo.play().catch(() => {});
+    if (background.mode === "pip") autoPip();
+});
 
 // Touch: a tap shows or hides the controls (play / pause is the big button in the middle); a
 // double tap on the left or right third jumps back or forward 10 seconds, while a middle double

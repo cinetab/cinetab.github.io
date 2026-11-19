@@ -167,14 +167,18 @@
         return { items, next: data.nextpage ? { provider: base, token: data.nextpage } : null };
     };
 
+    // Piped servers, the one that answered last time first
+    const pipedBases = () => {
+        const remembered = storage.get(PIPED_KEY);
+        return remembered && PIPED_APIS.includes(remembered) ? [remembered, ...PIPED_APIS.filter(base => base !== remembered)] : PIPED_APIS;
+    };
+
     // { items, next } for `query`; `kind`: "video" or "playlist"; `page`: the `next` of the last answer
     const search = async (query, kind = "video", page = null) => {
         if (page) {
             return page.provider === "youtube" ? searchYouTube(query, kind, page.token) : searchPiped(page.provider, query, kind, page.token);
         }
-        const remembered = storage.get(PIPED_KEY);
-        const bases = remembered && PIPED_APIS.includes(remembered) ? [remembered, ...PIPED_APIS.filter(base => base !== remembered)] : PIPED_APIS;
-        const providers = [...(YOUTUBE_API_KEY ? ["youtube"] : []), ...bases];
+        const providers = [...(YOUTUBE_API_KEY ? ["youtube"] : []), ...pipedBases()];
         for (const provider of providers) {
             try {
                 if (provider === "youtube") return await searchYouTube(query, kind);
@@ -184,6 +188,38 @@
             } catch (e) {}
         }
         throw new Error("Search isn't available right now");
+    };
+
+    // A video to play after `id` that isn't in `skip` ({ id, title, channel }, or null): Autoplay's
+    // way on when a YouTube Mix can't be opened. First what YouTube suggests beside it (Piped's
+    // copy of it, from the server that answers searches; YouTube often refuses those servers this),
+    // then a search for its channel (the artist, for a song), or else its title.
+    // `about`: { title, channel } of the video `id`.
+    const suggestedAfter = async (id, skip = [], about = {}) => {
+        const usable = (next, item) => next && YT_ID.test(next) && next !== id && !skip.includes(next) && !item.live && !item.short;
+        try {
+            const data = await getJSON(`${pipedBases()[0]}/streams/${id}`, 5000);
+            for (const item of (data && data.relatedStreams) || []) {
+                let next = null;
+                try {
+                    next = new URL(item.url, "https://www.youtube.com").searchParams.get("v");
+                } catch (e) {}
+                // Videos only: no live streams, Shorts or playlists
+                if (item.type === "stream" && item.duration > 0 && usable(next, { short: item.isShort })) {
+                    return { id: next, title: text(item.title), channel: text(item.uploaderName, 100) };
+                }
+            }
+        } catch (e) {}
+        // YouTube Music's artist channels are called "Artist - Topic"
+        const channel = String(about.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
+        for (const query of [channel, about.title].filter(Boolean)) {
+            try {
+                const { items } = await search(query, "video");
+                const found = items.find(item => usable(item.id, item));
+                if (found) return { id: found.id, title: found.title, channel: found.channel };
+            } catch (e) {}
+        }
+        return null;
     };
 
     // ---------- Search results, on the home page and in a room
@@ -477,12 +513,22 @@
     const mount = el("div", "yt-mount yt-solo");
     frame.append(mount);
 
+    // `mix`: the video a YouTube Mix playing now was made from (Autoplay), `wantAfter`: a Mix being
+    // opened, to play on after that video; `played`: videos played lately (newest first), which
+    // Autoplay doesn't pick again; `captionsFor`: the video captions were last set for
     const solo = {
         player: null, ready: false, creating: null,
         active: false, ref: null, meta: {}, intent: false, started: 0, error: null,
         wantId: null, wantStart: 0, cueTimer: null, timer: null,
-        shownPlaying: null, savedAt: 0, captions: false, token: 0
+        shownPlaying: null, savedAt: 0, captions: false, captionsFor: null, token: 0,
+        mix: null, wantAfter: null, cuedAt: 0, mixBroken: false, finding: false, about: null, played: []
     };
+
+    // Autoplay: when a video ends (or the last of a playlist or Mix), the YouTube Mix made from it
+    // plays next, as on YouTube. On unless turned off; remembered.
+    const AUTOPLAY_KEY = "cinetab:yt-autoplay";
+    let autoplay = storage.get(AUTOPLAY_KEY) !== "off";
+    const autoplayBtn = container.querySelector(".yt-autoplay");
 
     const state = () => {
         if (!solo.ready) return null;
@@ -574,13 +620,12 @@
             tick();
             return true;
         },
+        // On or off is remembered, for the next videos too (see subtitlePref in script.js)
         toggleSubtitles: () => {
             if (!solo.ready) return;
             solo.captions = !solo.captions;
-            try {
-                if (solo.captions) solo.player.loadModule("captions");
-                else solo.player.unloadModule("captions");
-            } catch (e) {}
+            subtitlePref.set(solo.captions);
+            youTubeCaptions(solo.player, solo.captions);
             subtitlesBtn.classList.toggle("active", solo.captions);
             showFeedback("fa-closed-captioning", solo.captions ? "YouTube captions on" : "YouTube captions off");
         },
@@ -622,13 +667,30 @@
                     solo.player.seekTo(at, true);
                 } catch (err) {}
             }
+            const id = data.video_id;
+            if (id && YT_ID.test(id) && id === expectedId()) {
+                if (solo.played[0] !== id) solo.played = [id, ...solo.played.filter(other => other !== id)].slice(0, 200);
+                // Each new video: captions as the remembered setting says
+                if (solo.captionsFor !== id) {
+                    solo.captionsFor = id;
+                    youTubeCaptions(solo.player, solo.captions);
+                }
+            }
         }
         if (e.data === S.ENDED) {
             const ids = playlist();
             if (!ids || playlistIndex() >= ids.length - 1) {
-                solo.intent = false;
                 save(true);
+                // Autoplay: on with the YouTube Mix of the video that ended
+                if (!(autoplay && !solo.wantAfter && autoplayAfter(currentId()))) solo.intent = false;
             }
+        }
+        // Paused by the phone (or by YouTube) as the page left the screen: Background play
+        // carries on (script.js decides; never a pause of the person's own)
+        if (e.data === S.PAUSED && solo.intent && together.keepPlaying("youtube")) {
+            try {
+                solo.player.playVideo();
+            } catch (err) {}
         }
         tick();
     };
@@ -660,14 +722,19 @@
             width: "100%",
             height: "100%",
             // CineTab's controls drive it
-            playerVars: { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, autoplay: 1, origin: location.origin },
+            playerVars: {
+                controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, autoplay: 1, origin: location.origin,
+                ...(subtitlePref.wants(true) ? { cc_load_policy: 1 } : {})
+            },
             events: {
                 onReady: () => {
                     solo.ready = true;
                     resolve(solo.player);
                 },
                 onStateChange: onState,
-                onError
+                onError,
+                // YouTube loaded (or dropped) its captions by itself: as the setting says instead
+                onApiChange: () => solo.active && youTubeCaptions(solo.player, solo.captions)
             }
         });
     })).catch(error => {
@@ -688,7 +755,8 @@
         const time = isLive ? 0 : ended ? duration : soloControls.currentTime();
         const title = text(data.title) || solo.meta.title || "";
         const channel = text(data.author, 100) || solo.meta.channel || "";
-        if (solo.ref.list) {
+        // A Mix that Autoplay is playing is remembered video by video
+        if (solo.ref.list && !solo.mix) {
             const ids = playlist();
             CineHistory.put(`pl:${solo.ref.list}`, {
                 type: "playlist", list: solo.ref.list,
@@ -738,6 +806,8 @@
         if (title && videoTitle.textContent !== title && !videoTitle.querySelector("input")) {
             videoTitle.textContent = audioTitle.textContent = title;
             videoTitle.title = title;
+            // The lock screen and notification show the new video (and its picture) at once
+            updateMediaSession();
         }
         // A link to one video of a playlist: once YouTube knows the playlist, jump to that video
         if (solo.wantId) {
@@ -753,19 +823,46 @@
                 } catch (e) {}
             }
         }
-        // The previous / next video of a playlist, beside the play button
-        const ids = playlist();
-        const index = ids ? playlistIndex() : -1;
-        prevTrackBtn.hidden = nextTrackBtn.hidden = !ids || ids.length < 2;
-        if (ids) {
-            prevTrackBtn.disabled = index <= 0;
-            nextTrackBtn.disabled = index >= ids.length - 1;
+        // Autoplay opened a Mix: once it's ready, on with the first video after the one that
+        // ended (one not played lately). An empty list: YouTube didn't open it here (it may
+        // not, in an embedded player), so another video like it, and no more Mixes this time.
+        if (solo.wantAfter) {
+            let raw = null;
+            try {
+                raw = solo.player.getPlaylist();
+            } catch (e) {}
+            const ids = s === S.CUED ? playlist() : null;
+            const empty = Array.isArray(raw) && !raw.length && now() - solo.cuedAt > 1500;
+            if (ids || empty) {
+                const after = solo.wantAfter;
+                solo.wantAfter = null;
+                clearTimeout(solo.cueTimer);
+                let at = ids ? ids.findIndex(other => other !== after && !solo.played.includes(other)) : -1;
+                if (ids && at < 0) at = ids.findIndex(other => other !== after);
+                if (at >= 0) {
+                    try {
+                        solo.player.playVideoAt(at);
+                    } catch (e) {}
+                } else {
+                    if (empty) solo.mixBroken = true;
+                    solo.mix = null;
+                    solo.ref = { id: after, list: null, start: 0 };
+                    suggest(after, solo.token);
+                }
+            }
         }
+        // The previous / next video of a playlist, beside the play button (with Autoplay, Next
+        // also goes past the end, to the Mix)
+        const ids = playlist();
+        prevTrackBtn.hidden = nextTrackBtn.hidden = !autoplay && (!ids || ids.length < 2);
+        prevTrackBtn.disabled = !canStep(-1);
+        nextTrackBtn.disabled = !canStep(1);
         // Still loading, an error, or a browser that wants a tap on YouTube's player first. On a
         // phone the layer over the player steps aside (as during an ad), so it can be tapped.
         const blocked = solo.ready && solo.intent && !solo.error && (s === S.UNSTARTED || s === S.CUED) && now() - solo.started > 4000;
         container.classList.toggle("yt-ad", ad || blocked);
-        showNote(solo.error || (!solo.ready ? "Loading YouTube…" : blocked ? (isTouch ? "Tap the video to start it" : "Click the video to start it") : null));
+        showNote(solo.error || (!solo.ready ? "Loading YouTube…" : solo.finding ? "Autoplay: finding what's next…"
+            : blocked ? (isTouch ? "Tap the video to start it" : "Click the video to start it") : null));
         if (playing && !ad && now() - solo.savedAt > 5000) save();
     }
 
@@ -809,12 +906,16 @@
         solo.meta = { ...meta };
         solo.intent = true;
         solo.error = null;
-        solo.captions = false;
+        // YouTube's captions as the remembered setting says (off until turned on)
+        solo.captions = subtitlePref.wants(true);
+        solo.captionsFor = null;
         solo.wantId = solo.wantStart = null;
+        solo.mix = solo.wantAfter = null;
+        solo.finding = false;
         solo.started = now();
         solo.shownPlaying = null;
         solo.savedAt = now();
-        subtitlesBtn.classList.remove("active");
+        subtitlesBtn.classList.toggle("active", solo.captions);
         const title = meta.title || meta.videoTitle || meta.listTitle || "YouTube";
         videoTitle.textContent = audioTitle.textContent = title;
         videoTitle.title = title;
@@ -884,7 +985,8 @@
         solo.active = false;
         solo.token++;
         solo.intent = false;
-        solo.wantId = null;
+        solo.wantId = solo.mix = solo.wantAfter = null;
+        solo.finding = false;
         clearInterval(solo.timer);
         clearTimeout(solo.cueTimer);
         try {
@@ -905,14 +1007,135 @@
         uploadOverlay.classList.remove("hidden");
     }
 
-    // The previous / next video of a playlist (buttons beside play, and Shift + P / N)
-    const step = n => {
+    // ---------- Autoplay
+
+    // The video on now (not an ad), or the one being opened
+    const currentId = () => {
+        const data = solo.ready ? videoData() : {};
+        const id = data.video_id && YT_ID.test(data.video_id) && data.video_id === expectedId() ? data.video_id : expectedId();
+        return id || (solo.ref && solo.ref.id) || null;
+    };
+
+    // Plays a video like `after` (a Mix that couldn't be opened, or ran out). `about`: its
+    // { title, channel }, for finding one.
+    const suggest = async (after, token, about = solo.about) => {
+        solo.finding = true;
+        tick();
+        const next = await suggestedAfter(after, solo.played, about || {});
+        if (!solo.active || solo.token !== token) return;
+        solo.finding = false;
+        // Autoplay was turned off meanwhile
+        if (!autoplay) {
+            solo.intent = false;
+            return tick();
+        }
+        if (!next) {
+            solo.intent = false;
+            showFeedback("fa-circle-info", "Autoplay found nothing to play next");
+            return tick();
+        }
+        solo.mix = null;
+        solo.ref = { id: next.id, list: null, start: 0 };
+        solo.meta = { title: next.title, channel: next.channel };
+        solo.intent = true;
+        solo.started = now();
+        try {
+            solo.player.loadVideoById({ videoId: next.id, startSeconds: 0 });
+        } catch (e) {}
+        tick();
+    };
+
+    // On after `after` with Autoplay: the YouTube Mix made from that video (as on YouTube), from
+    // the first video in it not played lately. True if something's on its way.
+    const autoplayAfter = after => {
+        if (!solo.active || !solo.ready || !after || together.active()) return false;
+        const token = solo.token;
+        // What it was, while YouTube still says (for finding another like it)
+        const data = videoData();
+        solo.about = data.video_id === after ? { title: text(data.title), channel: text(data.author, 100) } : { title: solo.meta.title || "", channel: solo.meta.channel || "" };
+        solo.intent = true;
+        solo.error = null;
+        solo.wantId = null;
+        solo.wantStart = 0;
+        solo.started = now();
+        clearTimeout(solo.cueTimer);
+        showFeedback("fa-forward-step", "Autoplay: up next");
+        // A Mix that didn't open once won't now: straight to YouTube's suggestions
+        if (solo.mixBroken) {
+            suggest(after, token);
+            return true;
+        }
+        solo.ref = { id: after, list: `RD${after}`, start: 0 };
+        solo.mix = after;
+        solo.meta = {};
+        solo.wantAfter = after;
+        try {
+            solo.player.cuePlaylist({ list: `RD${after}`, listType: "playlist", index: 0 });
+        } catch (e) {}
+        // No Mix after a while (YouTube didn't open it here): another video like it instead
+        solo.cueTimer = setTimeout(() => {
+            if (!solo.active || solo.token !== token || solo.wantAfter !== after) return;
+            solo.wantAfter = null;
+            solo.mixBroken = true;
+            suggest(after, token);
+        }, 7000);
+        solo.cuedAt = now();
+        tick();
+        return true;
+    };
+
+    const renderAutoplay = () => {
+        if (!autoplayBtn) return;
+        autoplayBtn.setAttribute("aria-checked", String(autoplay));
+        autoplayBtn.title = autoplay ? "Autoplay is on: when this ends, its YouTube Mix plays next" : "Autoplay is off: playback stops at the end";
+        autoplayBtn.querySelector(".yt-autoplay-track i").className = `fa-solid ${autoplay ? "fa-play" : "fa-pause"}`;
+    };
+
+    const setAutoplay = on => {
+        autoplay = on;
+        storage.set(AUTOPLAY_KEY, on ? "on" : "off");
+        renderAutoplay();
+        showFeedback(on ? "fa-toggle-on" : "fa-toggle-off", on ? "Autoplay on" : "Autoplay off");
+        if (on || !solo.active || !solo.ready) return tick();
+        // Off: the Mix that Autoplay is playing stops with the video on now. It goes on as that
+        // one video, from where it is (a playlist of your own still plays to its end).
+        const waiting = solo.wantAfter;
+        if (solo.mix || waiting) {
+            const id = waiting || currentId();
+            const time = waiting ? 0 : soloControls.currentTime();
+            const paused = waiting || soloControls.paused;
+            clearTimeout(solo.cueTimer);
+            solo.mix = solo.wantAfter = null;
+            solo.ref = { id, list: null, start: 0 };
+            if (paused) solo.intent = false;
+            try {
+                if (paused) solo.player.cueVideoById({ videoId: id, startSeconds: time });
+                else solo.player.loadVideoById({ videoId: id, startSeconds: time });
+            } catch (e) {}
+        }
+        tick();
+    };
+    autoplayBtn.addEventListener("click", () => setAutoplay(!autoplay));
+    renderAutoplay();
+
+    // Whether there's a previous (-1) / next (1) video: in a playlist or Mix, and with Autoplay,
+    // next after the end too
+    const canStep = n => {
+        if (!solo.active) return false;
         const ids = playlist();
-        if (!ids) return false;
-        const index = playlistIndex() + n;
-        if (index < 0 || index >= ids.length) return false;
+        const index = ids ? playlistIndex() : -1;
+        if (n < 0) return !!ids && index > 0;
+        return (!!ids && index < ids.length - 1) || (autoplay && !solo.wantAfter && !solo.finding && !together.active());
+    };
+
+    // The previous / next video of a playlist (buttons beside play, Shift + P / N, the lock screen)
+    const step = n => {
+        if (!canStep(n)) return false;
+        const ids = playlist();
+        const index = ids ? playlistIndex() + n : -1;
         save();
         solo.intent = true;
+        if (!ids || index >= ids.length) return autoplayAfter(currentId());
         try {
             if (n > 0) solo.player.nextVideo();
             else solo.player.previousVideo();
@@ -925,6 +1148,12 @@
     // What script.js and room.js ask of it (see `together.solo` in script.js)
     together.solo = {
         get active() { return solo.active; },
+        get paused() { return soloControls.paused; },
+        // The video that should be on (its picture: ambient mode, the lock screen)
+        get videoId() { return solo.active ? expectedId() : null; },
+        get autoplay() { return autoplay; },
+        toggleAutoplay: () => setAutoplay(!autoplay),
+        canStep,
         stop: () => stop(true),
         pause: () => solo.active && soloControls.request({ paused: true }),
         // Shift + N / P (room.js passes them on outside a room)
@@ -936,7 +1165,8 @@
             if (!solo.active || !solo.ref) return null;
             const data = solo.ready ? videoData() : {};
             const id = data.video_id && YT_ID.test(data.video_id) && data.video_id === expectedId() ? data.video_id : solo.ref.id;
-            const ref = { id: id || null, list: solo.ref.list, start: Math.floor(soloControls.currentTime()) };
+            // A Mix from Autoplay is this browser's own: the room gets the video
+            const ref = { id: id || null, list: solo.mix ? null : solo.ref.list, start: Math.floor(soloControls.currentTime()) };
             stop(true);
             return ref.id || ref.list ? ref : null;
         }

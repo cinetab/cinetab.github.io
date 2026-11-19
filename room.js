@@ -1832,7 +1832,7 @@
             presenter: null, presentFile: null, presentCues: null,
             // A YouTube video or playlist; the host keeps its clock in `state`
             yt: null, ytToken: null,
-            state: null, offset: 0, remote: null, cues: null, cuesOn: true,
+            state: null, offset: 0, remote: null, cues: null, cuesOn: subtitlePref.wants(),
             peers: new Map(),
             knocks: new Map(),
             tickets: new Set(),
@@ -1992,6 +1992,7 @@
         toggleSubtitles: () => {
             if (!room.cues) return showFeedback("fa-closed-captioning", "No subtitles");
             room.cuesOn = !room.cuesOn;
+            subtitlePref.set(room.cuesOn);
             subtitlesBtn.classList.toggle("active", room.cuesOn);
             showFeedback("fa-closed-captioning", room.cuesOn ? "Subtitles On" : "Subtitles Off");
             streamTick();
@@ -2002,6 +2003,7 @@
             room.cues = cues;
             room.ownCues = true;
             room.cuesOn = true;
+            subtitlePref.set(true);
             subtitlesBtn.classList.add("active");
             showFeedback("fa-closed-captioning", "Subtitles On");
         }
@@ -2136,7 +2138,7 @@
 
     // This browser's YouTube player. `loaded`: the video it has; `selfUntil`: changes until then
     // are ours, not a click on YouTube's player
-    const yt = { player: null, ready: false, creating: null, loaded: null, cuedAt: 0, started: 0, lastSeek: 0, selfUntil: 0, error: null, captions: false };
+    const yt = { player: null, ready: false, creating: null, loaded: null, cuedAt: 0, started: 0, lastSeek: 0, selfUntil: 0, error: null, captions: false, captionsFor: null };
 
     const ytPlayer = () => yt.creating ||= ytApi().then(api => new Promise(resolve => {
         const mount = el("div");
@@ -2154,7 +2156,9 @@
                     resolve(yt.player);
                 },
                 onStateChange: onYouTubeState,
-                onError: onYouTubeError
+                onError: onYouTubeError,
+                // YouTube loaded (or dropped) its captions by itself: as the setting says instead
+                onApiChange: () => together.stream === ytControls && youTubeCaptions(yt.player, yt.captions)
             }
         });
     })).catch(error => {
@@ -2196,15 +2200,15 @@
             if (room.cues) return streamControls.toggleSubtitles();
             if (!yt.ready) return;
             yt.captions = !yt.captions;
-            try {
-                if (yt.captions) yt.player.loadModule("captions");
-                else yt.player.unloadModule("captions");
-            } catch (e) {}
+            subtitlePref.set(yt.captions);
+            youTubeCaptions(yt.player, yt.captions);
             subtitlesBtn.classList.toggle("active", yt.captions);
             showFeedback("fa-closed-captioning", yt.captions ? "YouTube captions on" : "YouTube captions off");
         },
         loadSubtitles: text => streamControls.loadSubtitles(text)
     };
+    // Its picture (ambient mode, the lock screen; script.js)
+    together.roomYouTubeId = () => together.stream === ytControls && room && room.file && room.file.yt ? room.file.yt.id || null : null;
 
     const enterYouTube = () => {
         const file = room.file;
@@ -2220,7 +2224,9 @@
             container.classList.add("remote", "youtube");
             room.shownPlaying = null;
             yt.error = null;
-            subtitlesBtn.classList.toggle("active", !!room.cues && room.cuesOn);
+            // Subtitles from a file, or YouTube's own captions as the remembered setting says
+            yt.captions = !room.cues && subtitlePref.wants(true);
+            subtitlesBtn.classList.toggle("active", room.cues ? room.cuesOn : yt.captions);
             clearInterval(room.streamTimer);
             room.streamTimer = setInterval(ytTick, 250);
         }
@@ -2243,7 +2249,10 @@
         if (yt.loaded !== id) {
             yt.loaded = id;
             yt.error = null;
-            yt.captions = false;
+            // YouTube's captions as the remembered setting says (not with a room's subtitle file)
+            yt.captions = !room.cues && subtitlePref.wants(true);
+            yt.captionsFor = null;
+            if (!room.cues) subtitlesBtn.classList.toggle("active", yt.captions);
             yt.started = yt.lastSeek = now();
             yt.cuedAt = target;
             ytMine();
@@ -2321,6 +2330,11 @@
     const onYouTubeState = e => {
         if (!room || together.stream !== ytControls) return;
         if (e.data === YT.PLAYING) yt.error = null;
+        // Each new video: captions as the remembered setting says
+        if (e.data === YT.PLAYING && yt.loaded && yt.captionsFor !== yt.loaded) {
+            yt.captionsFor = yt.loaded;
+            youTubeCaptions(yt.player, yt.captions);
+        }
         // The host's player reaching the end moves the room on
         if (room.role === "host" && e.data === YT.ENDED && room.yt && yt.loaded === room.yt.id && room.state && !room.state.paused) ytFinished();
         if (now() < yt.selfUntil || !room.state) return;
