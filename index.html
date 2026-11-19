@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.4.7">
+  <meta name="version" content="1.4.8">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.4.7",
+      "softwareVersion": "1.4.8",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.4.7</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.4.8</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -784,6 +784,9 @@
       <button class="room-icon-btn room-hide-btn" title="Hide the panel (you stay in the room)"><i class="fa-solid fa-xmark"></i></button>
     </header>
 
+    <!-- Cameras: everyone's whose camera is on, like a meeting (room.js) -->
+    <div class="room-cams" hidden aria-label="Cameras"></div>
+
     <nav class="room-tabs" role="tablist" aria-label="Room">
       <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
       <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
@@ -902,6 +905,7 @@
     <footer class="room-foot">
       <button class="room-me" title="Change your name or avatar"><span class="room-avatar"></span><span class="room-me-text"><b class="room-me-name"></b><small>Edit profile</small></span></button>
       <button class="room-mic-btn" type="button" title="Turn microphone on" aria-pressed="false"><i class="fa-solid fa-microphone-slash"></i><span>Mic off</span></button>
+      <button class="room-mic-btn room-cam-btn" type="button" title="Turn camera on" aria-pressed="false"><i class="fa-solid fa-video-slash"></i><span>Cam off</span></button>
       <button class="room-leave-btn"><i class="fa-solid fa-right-from-bracket"></i> <span>Leave</span></button>
     </footer>
 

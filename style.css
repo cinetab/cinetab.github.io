@@ -4330,6 +4330,65 @@ body > .room-toasts {
   backdrop-filter: blur(24px);
 }
 
+/* Cameras, like a meeting (room.js): a row of tiles at the top of the panel, two side by side;
+   with more, smaller ones that scroll sideways */
+.room-cams {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.room-cam {
+  position: relative;
+  flex: 0 0 calc(50% - 4px);
+  aspect-ratio: 4 / 3;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #0d0d10;
+}
+
+.room-cams.many .room-cam {
+  flex-basis: 118px;
+}
+
+.room-cam video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Your own camera as a mirror, as in every meeting app */
+.room-cam.me video {
+  transform: scaleX(-1);
+}
+
+.room-cam figcaption {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-cam-btn.active {
+  border-color: #3e97fd;
+  background: #3e97fd;
+}
+
 .room-head {
   display: flex;
   align-items: center;
@@ -5469,6 +5528,29 @@ body > .room-toasts {
   cursor: wait;
 }
 
+/* Mic and camera side by side: round buttons, as in a meeting (the icon and colour say on or off) */
+.room-foot .room-mic-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.room-foot .room-mic-btn span {
+  display: none;
+}
+
+.room-me {
+  overflow: hidden;
+}
+
+.room-me-text small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .room-leave-btn {
   flex-shrink: 0;
   display: flex;
@@ -6086,29 +6168,42 @@ body > .room-toasts {
 }
 
 /* Search results in the room panel: a compact list */
+/* In the room's panel the list of results scrolls between its header (Videos / Playlists, Clear)
+   and More results, so nothing ever slides under the header */
 .room-panel .yt-results {
   flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
   margin-top: 4px;
   max-height: min(52vh, 420px);
+  overflow: hidden;
+}
+
+.room-panel .yt-results > * {
+  flex-shrink: 0;
+}
+
+.room-panel .yt-results > .yt-result-list {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-/* The Videos / Playlists switch and Clear stay at the top while the results scroll */
+.room-panel .yt-results > .yt-more {
+  margin-top: 8px;
+}
+
+/* The Videos / Playlists switch and Clear above the results: frosted glass like the cards around
+   it (a light tint and a thin edge over the panel's own blurred glass) */
 .room-panel .yt-results-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
-  padding: 4px 0 6px;
-  background: #17171c;
-}
-
-/* Inside the "now playing" box, whose background is a little lighter */
-.room-now .yt-results-head {
-  background: #202025;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .room-panel .yt-results-close {

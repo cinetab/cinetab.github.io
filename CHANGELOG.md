@@ -4,6 +4,25 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.8] - 2026-11-19
+
+### Cameras in rooms, like a meeting
+- A camera button beside the mic (both are now round buttons, as in a meeting): your camera, for
+  everyone in the room. Everyone whose camera is on appears in a row of tiles at the top of the
+  room panel, yours mirrored, with each person's name
+- Everyone sees everyone: guests connect only to the host, so the host's browser passes each
+  guest's camera on to the others (up to three other guests' cameras for each guest, plus the
+  host's own)
+- Small and at a modest rate (about 320×240, 15 frames a second), so cameras don't get in the way
+  of the movie. They need a direct connection; someone connected through the room's relay can't
+  send or see them
+- Works with hosts and guests on the previous version: they just don't see cameras
+
+### Room panel
+- YouTube search results: the Videos / Playlists and Clear bar is frosted glass like the cards
+  around it, instead of a dark rectangle; the results scroll below it (never under it), with More
+  results kept at the bottom
+
 ## [1.4.7] - 2026-11-19
 
 ### YouTube fills the player on computers
@@ -398,6 +417,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.8
 [1.4.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.7
 [1.4.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.6
 [1.4.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.5

@@ -141,6 +141,8 @@
     leaveBtn = panel.querySelector(".room-leave-btn"),
     leaveLabel = leaveBtn.querySelector("span"),
     micBtn = panel.querySelector(".room-mic-btn"),
+    camBtn = panel.querySelector(".room-cam-btn"),
+    camStrip = panel.querySelector(".room-cams"),
     profileSheet = panel.querySelector(".room-sheet"),
     shareLabel = shareHelpBtn.querySelector("span"),
     badge = el("b", "room-badge");
@@ -1017,6 +1019,7 @@
         micBtn.classList.toggle("active", micEnabled);
         micBtn.setAttribute("aria-pressed", String(micEnabled));
         micBtn.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
+        micBtn.setAttribute("aria-label", micEnabled ? "Microphone on" : "Microphone off");
         micBtn.querySelector("i").className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
         micBtn.querySelector("span").textContent = micEnabled ? "Mic on" : "Mic off";
     };
@@ -1115,6 +1118,196 @@
 
     micBtn.addEventListener("click", () => micEnabled ? disableMicrophone() : enableMicrophone());
     renderMic();
+
+    // ---------- Cameras, like a meeting: everyone whose camera is on is seen by everyone, in a strip
+    // at the top of the panel. Guests are connected to the host only, so the host's browser passes
+    // each guest's camera on to the others (up to CAM_SLOTS other guests for each guest, besides
+    // the host's own). Each guest's connection has those video channels from the start (they cost
+    // nothing until used), after its own camera's and before the shared video's, so a host on an
+    // older CineTab still finds the shared video where it expects it. Cameras are small and at a
+    // modest rate, so they never get in the way of the movie. Through the relays (no direct
+    // connection), there's no video at all, cameras included.
+    const CAM_SLOTS = 3;
+    const CAM_BITRATE = 250000;
+    let camStream = null;
+    let camEnabled = false;
+    let camBusy = false;
+    // On screen, by who: { el, video, label, track }
+    const camTiles = new Map();
+    const camTrack = () => camEnabled && camStream ? camStream.getVideoTracks()[0] || null : null;
+
+    // VP8 for the camera channels, or null where a browser can't limit a channel's codecs
+    const cameraCodecList = () => {
+        try {
+            if (!("setCodecPreferences" in RTCRtpTransceiver.prototype)) return null;
+            const codecs = RTCRtpReceiver.getCapabilities("video").codecs.filter(codec => /^video\/(vp8|rtx)$/i.test(codec.mimeType));
+            return codecs.some(codec => /vp8/i.test(codec.mimeType)) ? codecs : null;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    // `track` (or nothing) on `sender`, at a camera's rate
+    const sendCamera = (sender, track) => {
+        if (!sender || sender.track === track) return;
+        sender.replaceTrack(track).then(() => {
+            if (!track) return;
+            const params = sender.getParameters();
+            if (!params.encodings || !params.encodings.length) return;
+            params.encodings.forEach(encoding => {
+                encoding.maxBitrate = CAM_BITRATE;
+                encoding.maxFramerate = 15;
+            });
+            return sender.setParameters(params);
+        }).catch(() => {});
+    };
+
+    // The strip: you, then everyone else whose camera is on
+    const renderCameras = () => {
+        const tiles = [];
+        const mine = room && camTrack();
+        if (mine) tiles.push({ key: "me", track: mine, name: "You", me: true });
+        if (room && room.role === "host") {
+            guests().forEach(peer => {
+                if (peer.camOn && peer.camTransceiver) tiles.push({ key: peer.id, track: peer.camTransceiver.receiver.track, name: peer.name });
+            });
+        } else if (room && room.peer && room.peer.camTransceiver && room.cams) {
+            const peer = room.peer;
+            if (room.cams.host) tiles.push({ key: "host", track: peer.camTransceiver.receiver.track, name: room.hostName || "Host" });
+            room.cams.slots.forEach(slot => {
+                const transceiver = peer.camSlots[slot.i];
+                if (transceiver) tiles.push({ key: slot.id, track: transceiver.receiver.track, name: slot.name });
+            });
+        }
+        const keep = new Set(tiles.map(tile => tile.key));
+        camTiles.forEach((tile, key) => {
+            if (keep.has(key)) return;
+            tile.video.srcObject = null;
+            tile.el.remove();
+            camTiles.delete(key);
+        });
+        tiles.forEach(({ key, track, name, me }) => {
+            let tile = camTiles.get(key);
+            if (!tile) {
+                const figure = el("figure", "room-cam");
+                const video = el("video");
+                video.muted = true;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.setAttribute("playsinline", "");
+                const label = el("figcaption");
+                figure.append(video, label);
+                tile = { el: figure, video, label, track: null };
+                camTiles.set(key, tile);
+            }
+            tile.el.classList.toggle("me", !!me);
+            if (tile.label.textContent !== name) tile.label.textContent = name;
+            tile.el.title = me ? "Your camera" : `${name}'s camera`;
+            if (tile.track !== track) {
+                tile.track = track;
+                tile.video.srcObject = new MediaStream([track]);
+                tile.video.play().catch(() => {});
+            }
+        });
+        // In order (moved only when it changed, so nothing playing is interrupted)
+        const order = tiles.map(tile => camTiles.get(tile.key).el);
+        if (order.some((item, i) => camStrip.children[i] !== item) || camStrip.children.length !== order.length) camStrip.replaceChildren(...order);
+        camStrip.hidden = !order.length;
+        camStrip.classList.toggle("many", order.length > 2);
+    };
+
+    // The host: its own camera to every guest, and each guest gets the others' cameras passed on
+    // (and is told whose is where)
+    const syncCameras = () => {
+        if (!room || room.role !== "host") return;
+        const own = camTrack();
+        const on = guests().filter(peer => peer.camOn && peer.camTransceiver);
+        guests().forEach(peer => {
+            if (!peer.camTransceiver) return;
+            sendCamera(peer.camTransceiver.sender, own);
+            const others = on.filter(other => other !== peer).slice(0, peer.camSlots.length);
+            peer.camSlots.forEach((slot, i) => sendCamera(slot.sender, others[i] ? others[i].camTransceiver.receiver.track : null));
+            const info = { t: "cams", host: !!own, slots: others.map((other, i) => ({ i, id: other.id, name: other.name })) };
+            const said = JSON.stringify(info);
+            if (peer.camSaid === said) return;
+            peer.camSaid = said;
+            send(peer, info);
+        });
+        renderCameras();
+    };
+
+    // A guest: their camera to the host, who's told whether it's on
+    const syncCameraGuest = () => {
+        const peer = room && room.peer;
+        if (!peer) return;
+        if (peer.camTransceiver) sendCamera(peer.camTransceiver.sender, camTrack());
+        const on = !!camTrack() && !!peer.camTransceiver;
+        if (peer.camSaid !== on) {
+            peer.camSaid = on;
+            send(peer, { t: "cam", on });
+        }
+        renderCameras();
+    };
+
+    const syncCamera = () => {
+        if (!room) return renderCameras();
+        if (room.role === "host") syncCameras();
+        else syncCameraGuest();
+    };
+
+    const renderCam = () => {
+        camBtn.classList.toggle("active", camEnabled);
+        camBtn.setAttribute("aria-pressed", String(camEnabled));
+        camBtn.title = camEnabled ? "Turn camera off" : "Turn camera on";
+        camBtn.setAttribute("aria-label", camEnabled ? "Camera on" : "Camera off");
+        camBtn.querySelector("i").className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
+        camBtn.querySelector("span").textContent = camEnabled ? "Cam on" : "Cam off";
+    };
+
+    const enableCamera = async () => {
+        if (camBusy || camEnabled || !room) return;
+        if (room.role === "guest" && room.peer && room.peer.channel && room.peer.channel.isTunnel) {
+            return toast("Cameras need a direct connection to the host; you're connected through the room's relay");
+        }
+        camBusy = true;
+        camBtn.disabled = true;
+        try {
+            camStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 24 }, facingMode: "user" }
+            });
+            camStream.getVideoTracks().forEach(track => {
+                // The browser or the phone took the camera away
+                track.addEventListener("ended", () => camStream && camStream.getVideoTracks()[0] === track && disableCamera());
+            });
+            if (!room) {
+                camStream.getTracks().forEach(track => track.stop());
+                camStream = null;
+                return;
+            }
+            camEnabled = true;
+            renderCam();
+            syncCamera();
+            toast("Camera on");
+        } catch (e) {
+            toast(e.name === "NotAllowedError" ? "Camera permission was denied" : "Couldn't access the camera");
+        } finally {
+            camBusy = false;
+            camBtn.disabled = false;
+        }
+    };
+
+    const disableCamera = (quiet = false) => {
+        if (!camEnabled) return;
+        camEnabled = false;
+        syncCamera();
+        camStream?.getTracks().forEach(track => track.stop());
+        camStream = null;
+        renderCam();
+        if (!quiet) toast("Camera off");
+    };
+
+    camBtn.addEventListener("click", () => camEnabled ? disableCamera() : enableCamera());
+    renderCam();
 
     const wirePeer = (peer, onMessage, onGone, allowParts) => {
         peer.channel.onmessage = e => receive(peer, e.data, onMessage, allowParts);
@@ -1306,6 +1499,8 @@
         broadcast({ t: "members", members });
         renderPeople(members);
         renderState();
+        // Who sees whose camera follows who's in the room (and their names)
+        syncCameras();
     };
 
     const renderRequests = () => {
@@ -1699,6 +1894,12 @@
             peer.wantsStream = !peer.channel.isTunnel && message.stream === true;
             updateStreams();
             shareMembers();
+        } else if (message.t === "cam") {
+            if (peer.status !== "admitted" || !allow(peer, "cam", 10, 10000)) return;
+            const on = message.on === true && !!peer.camTransceiver;
+            if (on === !!peer.camOn) return;
+            peer.camOn = on;
+            syncCameras();
         } else if (message.t === "profile") {
             if (!allow(peer, "profile", 5, 10000)) return;
             const old = peer.name;
@@ -1732,10 +1933,16 @@
             });
             await peer.pc.setRemoteDescription({ type: "offer", sdp });
             const transceivers = peer.pc.getTransceivers();
+            // Video: the shared video's is always the last; before it (a newer guest's), their
+            // camera and the cameras passed on to them
+            const videos = transceivers.filter(transceiver => transceiver.receiver.track.kind === "video");
+            peer.camSlots = [];
             for (const transceiver of transceivers) {
                 if (transceiver.receiver.track.kind === "video") {
                     transceiver.direction = "sendrecv";
-                    peer.senders.video = transceiver.sender;
+                    if (transceiver === videos[videos.length - 1]) peer.senders.video = transceiver.sender;
+                    else if (transceiver === videos[0]) peer.camTransceiver = transceiver;
+                    else if (peer.camSlots.length < CAM_SLOTS) peer.camSlots.push(transceiver);
                 } else if (!peer.senders.mediaAudio) {
                     transceiver.direction = "sendrecv";
                     peer.senders.mediaAudio = transceiver.sender;
@@ -1749,6 +1956,8 @@
             peer.mediaStream = new MediaStream();
             peer.pc.ontrack = event => {
                 if (event.transceiver === peer.voiceTransceiver) return attachRemoteVoice(peer, event.track);
+                // Cameras are shown in the strip, not as the video
+                if (event.transceiver === peer.camTransceiver || peer.camSlots.includes(event.transceiver)) return;
                 if (!peer.mediaStream.getTracks().includes(event.track)) peer.mediaStream.addTrack(event.track);
             };
             pendingTracks.forEach(event => peer.pc.ontrack(event));
@@ -3653,12 +3862,24 @@
                 }
                 renderQueue();
                 return refreshGuestView();
+            case "cams": {
+                const slots = Array.isArray(message.slots) ? message.slots : [];
+                guest.cams = {
+                    host: message.host === true,
+                    slots: slots.slice(0, CAM_SLOTS)
+                        .filter(slot => slot && Number.isInteger(slot.i) && slot.i >= 0 && slot.i < CAM_SLOTS && typeof slot.id === "string")
+                        .map(slot => ({ i: slot.i, id: `p:${slot.id.slice(0, 64)}`, name: clean(slot.name, 30) || "Guest" }))
+                };
+                return renderCameras();
+            }
             case "members": {
                 if (!Array.isArray(message.members)) return;
                 const members = message.members.slice(0, MAX_GUESTS + 1)
                     .filter(member => member && typeof member.id === "string")
                     .map(member => ({ id: member.id, name: clean(member.name, 30) || "Guest", avatar: validAvatar(member.avatar), host: member.host === true, stream: member.stream === true, sharing: member.sharing === true }));
                 guest.members = members;
+                // In the room: the host hears whether this camera is on
+                syncCameraGuest();
                 const host = members.find(member => member.host);
                 if (host && host.name !== guest.hostName) {
                     guest.hostName = host.name;
@@ -3894,7 +4115,20 @@
             onClose: () => leaveRoom(false)
         });
         const peer = guest.peer = { id: guest.hostId, ...newConnection(guest.relay) };
+        // Whose camera is where comes again from the host, for this connection
+        guest.cams = null;
         const { pc, channel } = peer;
+        // Cameras first: this guest's own (and the host's back), then the others the host passes on.
+        // VP8 only (every browser has it): with every codec listed, the connection details grow
+        // past what the host accepts and the relays carry. A browser that can't say so goes
+        // without cameras, so its video always connects.
+        const cameraCodecs = cameraCodecList();
+        peer.camSlots = [];
+        if (cameraCodecs) {
+            peer.camTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
+            for (let i = 0; i < CAM_SLOTS; i++) peer.camSlots.push(pc.addTransceiver("video", { direction: "recvonly" }));
+            [peer.camTransceiver, ...peer.camSlots].forEach(transceiver => transceiver.setCodecPreferences(cameraCodecs));
+        }
         peer.mediaVideoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
         peer.mediaVideoSender = peer.mediaVideoTransceiver.sender;
         peer.mediaAudioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
@@ -3906,14 +4140,16 @@
             attachRemoteVoice(peer, event.track);
         };
         syncMicrophonePeer(peer);
+        if (peer.camTransceiver) sendCamera(peer.camTransceiver.sender, camTrack());
         // A slightly bigger buffer: smoother playback matters more than a second of delay here
         pc.getReceivers().forEach(receiver => {
             try {
                 receiver.jitterBufferTarget = 400;
             } catch (e) {}
         });
+        const cameraReceivers = [peer.camTransceiver, ...peer.camSlots].filter(Boolean).map(transceiver => transceiver.receiver);
         guest.remote = new MediaStream(pc.getReceivers()
-            .filter(receiver => receiver !== peer.voiceTransceiver.receiver)
+            .filter(receiver => receiver !== peer.voiceTransceiver.receiver && !cameraReceivers.includes(receiver))
             .map(receiver => receiver.track));
         if (together.stream) showRemote(guest.remote);
         wirePeer(peer, message => room === guest && guestHandle(message), () => lost(peer), true);
@@ -4156,7 +4392,9 @@
         if (!old) return;
         leaveStream();
         disableMicrophone();
+        disableCamera(true);
         room = null;
+        renderCameras();
         clearInterval(old.knockTimer);
         clearInterval(old.offerTimer);
         clearInterval(old.streamTimer);
