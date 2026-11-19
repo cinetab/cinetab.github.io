@@ -4,6 +4,20 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.5] - 2026-11-20
+
+### Video call window
+- Folded up, it's easy to spot: a glowing blue pill with a slow pulse around it and a camera with
+  a live dot in front of its title (still, for people who asked for less motion)
+- Computers: drag the grip in its bottom right corner (shown when pointed at) to make it larger
+  or smaller, or use the arrow keys on it; the same limits and remembered size as pinching it on
+  a phone
+
+### YouTube
+- Seeking no longer shows YouTube's own title bar and buttons: while it catches up after a jump
+  (and a moment after it plays again), they're cut off, and a widescreen video stays exactly
+  where it was
+
 ## [1.5.4] - 2026-11-20
 
 ### Video details (phones held upright)

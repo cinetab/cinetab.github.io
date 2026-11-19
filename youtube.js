@@ -784,7 +784,10 @@
                 if (Number.isFinite(change.rate)) player.setPlaybackRate(Math.min(2, Math.max(0.25, change.rate)));
                 // Live: the timeline has no length, so only jumps (← →, double taps) count
                 const jump = Number.isFinite(change.time) && (!live() || Math.abs(change.time - soloControls.currentTime()) < 3600);
-                if (jump) player.seekTo(Math.max(0, change.time), true);
+                if (jump) {
+                    cropYouTube(false);
+                    player.seekTo(Math.max(0, change.time), true);
+                }
                 if (change.paused === true) player.pauseVideo();
                 else if (change.paused === false) {
                     // Play at the end of a video starts it again
@@ -831,6 +834,9 @@
 
     const onState = e => {
         if (!solo.active) return;
+        // YouTube's own bars, while it catches up and a moment after (script.js)
+        if (e.data === S.BUFFERING) cropYouTube(false);
+        else if (e.data === S.PLAYING) cropYouTube(true);
         if (e.data === S.PLAYING) {
             solo.error = null;
             // A video of a playlist opened at a moment (a link with a time, or from the dashboard)
@@ -1175,7 +1181,7 @@
         prevTrackBtn.hidden = nextTrackBtn.hidden = true;
         if (!reset || together.stream !== soloControls) return;
         together.stream = null;
-        container.classList.remove("remote", "youtube", "yt-ad", "yt-tap");
+        container.classList.remove("remote", "youtube", "yt-ad", "yt-tap", "yt-crop");
         showNote(null);
         videoTitle.textContent = audioTitle.textContent = "No Video Loaded";
         videoTitle.title = "No video loaded";

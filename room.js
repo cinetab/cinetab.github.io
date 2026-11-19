@@ -1574,16 +1574,26 @@
     };
     const callSizeBtn = callButton("room-call-size", "Larger");
     const callFoldBtn = callButton("room-call-fold", "Fold up");
-    callBar.append(el("i", "fa-solid fa-grip-vertical room-call-grip"), callTitle, callSizeBtn, callFoldBtn);
+    // Folded up: a camera with a live dot in front of the title, so the small pill stands out
+    const callLive = el("span", "room-call-live");
+    callLive.setAttribute("aria-hidden", "true");
+    callLive.append(el("i", "fa-solid fa-video"));
+    callBar.append(el("i", "fa-solid fa-grip-vertical room-call-grip"), callLive, callTitle, callSizeBtn, callFoldBtn);
     const callGrid = el("div", "room-call-grid");
-    callWin.append(callBar, callGrid);
+    // With a mouse: a grip in the bottom right corner, dragged to make it larger or smaller (arrow
+    // keys too, once it has focus); on a touch screen, two fingers do it (below)
+    const callResize = el("button", "room-call-resize");
+    callResize.type = "button";
+    callResize.title = "Drag to resize";
+    callResize.setAttribute("aria-label", "Resize (drag, or arrow keys)");
+    callWin.append(callBar, callGrid, callResize);
     playerPage.append(callWin);
 
     // Where it is: where it was left (as a share of the room it has to move in), or at first the
     // top right of the picture, below its title bar
     const placeCall = () => {
-        // (while it's pinched, it stays around its middle; placed again once it's let go)
-        if (callWin.hidden || call.pinch) return;
+        // (while it's pinched or resized, it stays where the gesture holds it; placed again after)
+        if (callWin.hidden || call.pinch || call.sizing) return;
         const page = playerPage.getBoundingClientRect();
         const width = callWin.offsetWidth;
         const height = callWin.offsetHeight;
@@ -1628,9 +1638,11 @@
         const [a, b] = [...call.touches.values()];
         return Math.hypot(a.x - b.x, a.y - b.y);
     };
-    const pinchTo = scale => {
+    // A tile's width (px), within what fits; `anchor`: the point of the window that stays put
+    // ("centre" for a pinch, "corner" (top left) for the grip)
+    const sizeCall = (tile, anchor) => {
         const centre = { x: call.x + callWin.offsetWidth / 2, y: call.y + callWin.offsetHeight / 2 };
-        call.tile = Math.round(Math.max(TILE_MIN, Math.min(call.pinch.tile * scale, tileMax())));
+        call.tile = Math.round(Math.max(TILE_MIN, Math.min(tile, tileMax())));
         // Large enough, it's the large window (names always shown, three across for many people)
         const big = call.tile >= 120;
         if (big !== call.big) {
@@ -1641,10 +1653,14 @@
         applyTile();
         const page = playerPage.getBoundingClientRect();
         const margin = 8;
-        call.x = Math.max(margin, Math.min(centre.x - callWin.offsetWidth / 2, page.width - callWin.offsetWidth - margin));
-        call.y = Math.max(margin, Math.min(centre.y - callWin.offsetHeight / 2, page.height - callWin.offsetHeight - margin));
+        const x = anchor === "centre" ? centre.x - callWin.offsetWidth / 2 : call.x;
+        const y = anchor === "centre" ? centre.y - callWin.offsetHeight / 2 : call.y;
+        call.x = Math.max(margin, Math.min(x, page.width - callWin.offsetWidth - margin));
+        call.y = Math.max(margin, Math.min(y, page.height - callWin.offsetHeight - margin));
         callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
     };
+    const pinchTo = scale => sizeCall(call.pinch.tile * scale, "centre");
+    const tileNow = () => callGrid.firstElementChild ? callGrid.firstElementChild.offsetWidth : 104;
     // Where it is, as a share of the room it has to move in
     const keepCallPlace = () => {
         const page = playerPage.getBoundingClientRect();
@@ -1653,6 +1669,43 @@
         call.pos = { x: roomX > 0 ? Math.min(1, Math.max(0, call.x / roomX)) : 0, y: roomY > 0 ? Math.min(1, Math.max(0, call.y / roomY)) : 0 };
         saveCall();
     };
+
+    // The grip: the tile grows by however far it's dragged, across or down (whichever is more),
+    // shared between the columns and rows; the top left corner stays put
+    callResize.addEventListener("pointerdown", e => {
+        if (e.button > 0 || call.collapsed) return;
+        e.preventDefault();
+        e.stopPropagation();
+        callResize.setPointerCapture(e.pointerId);
+        const count = Math.max(1, callGrid.children.length);
+        const cols = callCols(count);
+        call.sizing = { id: e.pointerId, x: e.clientX, y: e.clientY, tile: tileNow(), cols, rows: Math.ceil(count / cols) };
+        callWin.classList.add("resizing");
+        showCallNames();
+    });
+    callResize.addEventListener("pointermove", e => {
+        const sizing = call.sizing;
+        if (!sizing || sizing.id !== e.pointerId) return;
+        const across = (e.clientX - sizing.x) / sizing.cols;
+        const down = (e.clientY - sizing.y) / (sizing.rows * 0.75);
+        sizeCall(sizing.tile + (Math.abs(across) >= Math.abs(down) ? across : down), "corner");
+    });
+    const endResize = e => {
+        if (!call.sizing || call.sizing.id !== e.pointerId) return;
+        call.sizing = null;
+        callWin.classList.remove("resizing");
+        keepCallPlace();
+    };
+    callResize.addEventListener("pointerup", endResize);
+    callResize.addEventListener("pointercancel", endResize);
+    callResize.addEventListener("keydown", e => {
+        const step = { ArrowRight: 8, ArrowDown: 8, ArrowLeft: -8, ArrowUp: -8 }[e.key];
+        if (!step || call.collapsed) return;
+        e.preventDefault();
+        e.stopPropagation();
+        sizeCall(tileNow() + step * (e.shiftKey ? 3 : 1), "corner");
+        keepCallPlace();
+    });
 
     // Dragged by any part of it but its buttons, with a mouse or a finger
     callWin.addEventListener("pointerdown", e => {
@@ -3103,7 +3156,7 @@
         const wasYouTube = together.stream === ytControls;
         together.stream = null;
         if (room) clearInterval(room.streamTimer);
-        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad", "yt-tap", "yt-host");
+        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad", "yt-tap", "yt-crop", "yt-host");
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
         if (wasYouTube) ytStop();
@@ -3310,6 +3363,7 @@
                 // While an ad plays the jump does nothing, and it's tried again a little later.
                 yt.lastSeek = now();
                 ytMine();
+                cropYouTube(false);
                 player.seekTo(target, true);
             }
         } else if (current === YT.PLAYING || current === YT.BUFFERING) {
@@ -3318,6 +3372,7 @@
         } else if (current === YT.PAUSED && Math.abs(at - target) > 0.5 && now() - yt.lastSeek > 1000) {
             yt.lastSeek = now();
             ytMine();
+            cropYouTube(false);
             player.seekTo(target, true);
         } else if ((current === YT.CUED || current === YT.UNSTARTED) && Math.abs(yt.cuedAt - target) > 0.5) {
             yt.cuedAt = target;
@@ -3381,6 +3436,9 @@
 
     const onYouTubeState = e => {
         if (!room || together.stream !== ytControls) return;
+        // YouTube's own bars, while it catches up and a moment after (script.js)
+        if (e.data === YT.BUFFERING) cropYouTube(false);
+        else if (e.data === YT.PLAYING) cropYouTube(true);
         if (e.data === YT.PLAYING) yt.error = null;
         // Each new video: captions as the remembered setting says
         if (e.data === YT.PLAYING && yt.loaded && yt.captionsFor !== yt.loaded) {

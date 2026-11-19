@@ -4590,6 +4590,16 @@ body > .room-toasts {
   container-type: size;
 }
 
+/* After a jump, until a moment after it plays again (script.js): YouTube's frame runs past the
+   picture's box above and below, so the title bar and buttons YouTube shows meanwhile (at its top
+   and bottom) are cut off. A widescreen video sits centred in the taller frame, exactly where it
+   was; a square or upright one is a little larger for that moment. */
+.container.youtube.yt-crop .yt-mount iframe {
+  --yt-bleed: clamp(44px, 22cqh, 76px);
+  height: calc(100% + 2 * var(--yt-bleed));
+  margin-top: calc(-1 * var(--yt-bleed));
+}
+
 .container.youtube.aspect-fill .yt-mount {
   inset: auto;
   top: 50%;
@@ -4734,7 +4744,128 @@ body > .room-toasts {
 
 .room-call.collapsed {
   width: auto;
-  padding-bottom: 0;
+  padding: 0 5px 0 10px;
+}
+
+/* Folded up it's small, so it stands out: a glowing blue pill with a slow pulse around it and a
+   camera with a live dot in front of its title (no pulse for people who asked for less motion) */
+.room-call.collapsed {
+  border: 1.5px solid rgba(62, 151, 253, 0.85);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(36, 64, 120, 0.82), rgba(58, 40, 112, 0.82));
+  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.18), 0 0 22px rgba(62, 151, 253, 0.45), 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.room-call.collapsed::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: roomCallPulse 2.6s ease-out infinite;
+}
+
+@keyframes roomCallPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(62, 151, 253, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 12px rgba(62, 151, 253, 0);
+  }
+}
+
+.room-call-live {
+  display: none;
+}
+
+.room-call.collapsed .room-call-live {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 11px;
+  color: #fff;
+  background: #3e97fd;
+}
+
+/* The live dot */
+.room-call.collapsed .room-call-live::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #22305a;
+  border-radius: 50%;
+  background: #3ddc84;
+  animation: roomCallLive 1.6s ease-in-out infinite;
+}
+
+@keyframes roomCallLive {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.room-call.collapsed .room-call-grip {
+  display: none;
+}
+
+.room-call.collapsed .room-call-title {
+  font-weight: 600;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-call.collapsed::after,
+  .room-call.collapsed .room-call-live::after {
+    animation: none;
+  }
+}
+
+/* The grip for resizing with a mouse (room.js): its bottom right corner, shown while pointed at */
+.room-call-resize {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 0 0 12px 0;
+  background:
+    linear-gradient(135deg, transparent 52%, rgba(255, 255, 255, 0.75) 52% 58%, transparent 58% 68%, rgba(255, 255, 255, 0.75) 68% 74%, transparent 74%);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.room-call:hover .room-call-resize,
+.room-call.resizing .room-call-resize,
+.room-call-resize:focus-visible {
+  opacity: 1;
+}
+
+.room-call-resize:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: -2px;
+}
+
+/* Folded up, or on a touch screen (two fingers resize it there): no grip */
+.room-call.collapsed .room-call-resize {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .room-call-resize {
+    display: none;
+  }
 }
 
 .room-call-bar {

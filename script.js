@@ -1836,6 +1836,18 @@ const isTouch = matchMedia("(pointer: coarse)").matches;
 // player's ▶ starts it); also iPads that say they're a Mac
 const mustTapYouTube = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
+// YouTube's player shows its own title bar and buttons (top and bottom) while it catches up after
+// a jump, which no setting turns off. From the jump until a little after it plays again, its frame
+// runs past the picture's box above and below (.yt-crop, style.css): the video, centred in it,
+// stays where it was, and YouTube's bars fall outside, cut off. youtube.js and room.js call this:
+// `playing` false at a jump or while it loads, true once it plays.
+let ytCropTimer = null;
+const cropYouTube = playing => {
+    clearTimeout(ytCropTimer);
+    if (!playing) container.classList.add("yt-crop");
+    else if (container.classList.contains("yt-crop")) ytCropTimer = setTimeout(() => container.classList.remove("yt-crop"), 2500);
+};
+
 // The button where some kind of picture in picture works; phones and tablets always have it (it
 // floats the video from fullscreen where the browser has no picture in picture for pages)
 pipBtn.hidden = !(isTouch || "documentPictureInPicture" in window || document.pictureInPictureEnabled ||
