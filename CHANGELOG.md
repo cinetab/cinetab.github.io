@@ -4,6 +4,16 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.7] - 2026-11-19
+
+### YouTube fills the player on computers
+- A YouTube video now fills the player like your own videos, in the page and in fullscreen
+  (before, the title bar and controls sat above and below it, so it was smaller and had black
+  bars in fullscreen). The title and controls come and go over it; a click plays or pauses, a
+  double click is fullscreen, and Picture (Fit / Fill) works for it too
+- While an ad plays, the controls along the bottom step aside, so YouTube's Skip button can be
+  clicked (the keyboard still works)
+
 ## [1.4.6] - 2026-11-19
 
 ### Autoplay in rooms
@@ -388,6 +398,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.7
 [1.4.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.6
 [1.4.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.5
 [1.4.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.2

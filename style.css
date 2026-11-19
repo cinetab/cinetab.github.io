@@ -1789,36 +1789,10 @@ video::cue {
   }
 }
 
-/* YouTube on a touch screen: its player fills the picture, Fit (all of it) or Fill (cropped to
-   the screen, also by spreading two fingers). The layer over it takes taps and swipes; while an ad
-   plays it steps aside, so YouTube's Skip button can be tapped. */
+/* YouTube on a touch screen: its player fills the screen's width like any video */
 @media (pointer: coarse) {
   .container.youtube {
     max-width: none;
-  }
-  .container.youtube .yt-frame {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    container-type: size;
-  }
-  .container.youtube.aspect-fill .yt-mount {
-    inset: auto;
-    top: 50%;
-    left: 50%;
-    width: max(100cqw, 177.78cqh);
-    height: max(100cqh, 56.25cqw);
-    transform: translate(-50%, -50%);
-  }
-  .container.youtube .yt-shield {
-    display: block;
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    touch-action: none;
-  }
-  .container.youtube.yt-ad .yt-shield {
-    display: none;
   }
 }
 
@@ -4258,64 +4232,53 @@ body > .room-toasts {
   display: none;
 }
 
-/* On phones and tablets YouTube's player fills the picture like any video (see the touch section);
-   a transparent layer over it takes the taps, so the controls come and go as usual */
+/* YouTube's player fills the picture like any video, in the page and fullscreen: Fit (all of it)
+   or Fill (cropped to the screen; also by spreading two fingers). The title and controls come and
+   go over it as usual. */
+.container.youtube .yt-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+}
+
+.container.youtube.aspect-fill .yt-mount {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: max(100cqw, 177.78cqh);
+  height: max(100cqh, 56.25cqw);
+  transform: translate(-50%, -50%);
+}
+
+/* A transparent layer over YouTube's player takes the mouse, taps and swipes, so the controls come
+   and go and a click plays or pauses, as on a video (script.js) */
 .yt-shield {
   display: none;
 }
 
-/* Computers: YouTube's own player between the title bar and the controls, which stay on screen
-   and never cover it (YouTube's ads and their Skip button stay clickable) */
+.container.youtube .yt-shield {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  touch-action: none;
+}
+
+/* While an ad plays (or YouTube wants its own player clicked to start), the layer steps aside so
+   YouTube's player can be clicked or tapped, Skip included; on a computer the controls along the
+   bottom, over Skip, step aside too (the keyboard still works) */
+.container.youtube.yt-ad .yt-shield {
+  display: none;
+}
+
 @media not all and (pointer: coarse) {
-  .container.youtube {
-    flex-direction: column;
-    justify-content: flex-start;
-    aspect-ratio: auto;
-    max-width: calc((96vh - 150px) * 16 / 9);
+  .container.youtube.yt-ad .wrapper {
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
-
-  .container.youtube .yt-frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    flex: 0 0 auto;
-  }
-
-  .container.youtube.fullscreen {
-    max-width: 100%;
-  }
-
-  .container.youtube.fullscreen .yt-frame {
-    aspect-ratio: auto;
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  .container.youtube .top-bar,
-  .container.youtube .wrapper {
-    position: relative;
-    flex: 0 0 auto;
-    width: 100%;
-    opacity: 1;
-    transform: none;
-    pointer-events: auto !important;
-  }
-
-  .container.youtube .top-bar {
-    padding-top: 12px;
-    padding-bottom: 12px;
-    background: #000;
-  }
-
-  .container.youtube .wrapper {
-    padding-top: 12px;
-    background: #000;
-  }
-
-  .container.youtube .top-bar button,
-  .container.youtube .top-bar .video-title,
-  .container.youtube .wrapper * {
-    pointer-events: auto !important;
+  .container.youtube.yt-ad .wrapper * {
+    pointer-events: none !important;
   }
 }
 

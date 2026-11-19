@@ -1069,16 +1069,14 @@ mainVideo.addEventListener("volumechange", syncBoostVolume);
 // The menu reflects what applies right now: YouTube's own player keeps its shape and volume
 function renderMoreOptions() {
     const youtube = container.classList.contains("youtube");
-    // On a touch screen YouTube's player fills the picture, so it can be Fit or Fill (not the
-    // other shapes); on a computer it keeps its own shape between the title bar and the controls
-    const ytShapes = youtube && matchMedia("(pointer: coarse)").matches;
-    aspectChips.forEach(chip => chip.hidden = ytShapes && !["fit", "fill"].includes(chip.dataset.aspect));
-    moreOptions.querySelector(".aspect-options").classList.toggle("disabled", youtube && !ytShapes);
+    // YouTube's player fills the picture, so it can be Fit or Fill (not the other shapes)
+    aspectChips.forEach(chip => chip.hidden = youtube && !["fit", "fill"].includes(chip.dataset.aspect));
+    moreOptions.querySelector(".aspect-options").classList.remove("disabled");
     moreOptions.querySelector(".boost-options").classList.toggle("disabled", youtube);
     boostChips.forEach(chip => chip.classList.toggle("active", +chip.dataset.boost === boost.level));
     boostCurrent.textContent = youtube ? "—" : boost.level > 1 ? `${Math.round(boost.level * 100)}%` : "Off";
     moreNote.hidden = !youtube;
-    moreNote.textContent = !youtube ? "" : ytShapes ? "YouTube's player keeps its own volume (up to 100%)." : "YouTube's player keeps its own shape and volume (up to 100%).";
+    moreNote.textContent = youtube ? "YouTube's player keeps its own volume (up to 100%)." : "";
     if (!playerSheet.hidden) renderSheet();
 }
 renderMoreOptions();
@@ -1114,7 +1112,6 @@ function renderSheet() {
     const youtube = container.classList.contains("youtube");
     // The host's stream plays at the host's speed; YouTube keeps its own shape and volume
     sheetRow("boost").hidden = youtube;
-    sheetRow("aspect").hidden = youtube && !isTouch;
     Object.keys(SHEET_LISTS).forEach(name => sheetRow(name).querySelector(".sheet-value").textContent = SHEET_LISTS[name].current());
     const subtitlesOn = subtitlesBtn.classList.contains("active");
     sheetRow("subtitles").querySelector(".sheet-value").textContent = subtitlesOn ? "On" : youtube || together.stream || mainVideo.textTracks.length ? "Off" : "None";
@@ -2281,7 +2278,8 @@ onSurface("touchcancel", () => {
     pinchScale = 1;
 }, { passive: true });
 
-mainVideo.addEventListener("click", () => {
+// A click plays or pauses, a double click is fullscreen (on the video, and the layer over YouTube's)
+onSurface("click", () => {
     if (Date.now() - touchedAt < 700) return;
     if (clickTimeout) {
         clearTimeout(clickTimeout);

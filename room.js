@@ -2330,9 +2330,11 @@
             const data = yt.ready && yt.loaded && yt.player.getPlayerState() === YT.PLAYING && yt.player.getVideoData();
             ad = !!(data && data.video_id && data.video_id !== yt.loaded);
         } catch (e) {}
-        container.classList.toggle("yt-ad", ad);
         // Still loading, an error, or a browser that wants a click before playing sound
         const blocked = yt.ready && playing && !yt.error && yt.player.getPlayerState() === YT.UNSTARTED && now() - yt.started > 5000;
+        // The layer over YouTube's player steps aside, so its Skip button (or its player, to
+        // start) can be clicked
+        container.classList.toggle("yt-ad", ad || blocked);
         const note = yt.error || (!yt.ready ? "Loading YouTube…" : blocked ? "Click the video to start it" : null);
         streamWait.hidden = !note;
         if (note && streamWaitText.textContent !== note) streamWaitText.textContent = note;
