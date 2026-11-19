@@ -6667,9 +6667,62 @@ body > .room-toasts {
   font-size: 12px;
 }
 
-/* Computers: Now playing at the top of the panel, under the room's name */
-.room-now + .room-tabs {
-  margin-top: 8px;
+/* The panel starts with what's playing: the room's name is on the Room button at the top of the
+   player (and the top of the player on phones held upright). The tabs share a row with the close
+   button. */
+.room-head {
+  display: none;
+}
+
+.room-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px 0;
+}
+
+.room-tabbar > .room-tabs {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Hiding the panel: a round button on its left edge near the top, half outside it */
+.room-panel {
+  overflow: visible;
+}
+
+.room-panel > .room-hide-btn {
+  position: absolute;
+  top: 16px;
+  left: -15px;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  color: #d6d6e2;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #1f1f26;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.room-panel > .room-hide-btn:hover {
+  color: #fff;
+  border-color: #3e97fd;
+  background: #3e97fd;
+}
+
+/* Who shared it isn't shown in Now playing (the chat says so as it starts) */
+.room-now .room-now-meta {
+  display: none;
+}
+
+/* The Room button: the room's name, cut short if it's long */
+.share-help-btn span {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A playlist's previous / next are the player's own buttons, beside play: not in Now playing */
@@ -6726,8 +6779,13 @@ body > .room-toasts {
   display: none;
 }
 
-.player-page.now-below .room-tabs {
+.player-page.now-below .room-tabbar {
   margin-top: 8px;
+}
+
+/* (the Room button under the title opens and closes it there) */
+.player-page.now-below .room-hide-btn {
+  display: none;
 }
 
 .player-meta .room-now {
@@ -6745,8 +6803,7 @@ body > .room-toasts {
 }
 
 .player-meta .room-now-text {
-  order: -2;
-  flex-basis: 100%;
+  display: none;
 }
 
 .player-meta .room-now-text small {
@@ -6803,9 +6860,10 @@ body > .room-toasts {
 }
 
 .player-meta .room-toggle {
-  order: -1;
+  order: 1;
   position: relative;
   display: inline-flex;
+  margin-left: auto;
   font-weight: 500;
 }
 

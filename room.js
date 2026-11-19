@@ -731,7 +731,7 @@
     const renderPeople = members => {
         room.memberCount = members.length;
         peopleCount.textContent = members.length;
-        shareLabel.textContent = `Room · ${members.length}`;
+        renderRoomButton();
         // The button under the title: people and how many (its tooltip and label say "Room")
         roomToggleLabel.textContent = members.length;
         roomToggle.setAttribute("aria-label", `Room, ${members.length} ${members.length === 1 ? "person" : "people"}`);
@@ -769,6 +769,14 @@
         renderHomeBar();
     };
 
+    // The Room button at the top of the player: the room's name and how many are in it (the
+    // panel itself starts with what's playing)
+    const renderRoomButton = () => {
+        if (!room) return;
+        shareLabel.textContent = `${room.title || "Room"} · ${room.memberCount || 1}`;
+        shareHelpBtn.setAttribute("aria-label", `${room.title || "Room"}, ${room.memberCount || 1} in the room: show or hide the room panel (R)`);
+    };
+
     const renderState = () => {
         if (!room) return;
         const code = Signaling.formatCode(room.code);
@@ -784,6 +792,7 @@
         // The heading is just the room's name; the rest (code, who hosts, the connection) is in
         // Invite and People, and here when pointed at
         roomTitle.title = stateText.textContent;
+        renderRoomButton();
         topRoomName.textContent = room.title;
         topRoomName.hidden = false;
         placeNowBar();

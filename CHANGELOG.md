@@ -4,6 +4,16 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-11-20
+
+### Room panel
+- The room's name is on the Room button at the top right of the player (with how many are in
+  the room), so the panel starts straight with what's playing
+- Hiding the panel: a round › button on its left edge, near the top (R and the Room button show
+  and hide it too)
+- Now playing no longer says who shared the video (the chat says so as it starts)
+- Phones held upright: the Room button under the title is at the right end of its row
+
 ## [1.5.0] - 2026-11-20
 
 ### The room goes on without its host
@@ -512,6 +522,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.1
 [1.5.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.0
 [1.4.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.9
 [1.4.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.8
