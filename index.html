@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.4.8">
+  <meta name="version" content="1.4.9">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.4.8",
+      "softwareVersion": "1.4.9",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.4.8</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.4.9</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -421,10 +421,12 @@
         <button class="player-back" title="Back to home"><i class="fa-solid fa-arrow-left"></i></button>
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
+        <!-- Phones held upright, in a room: the room's name here, the video's title below it -->
+        <span class="top-room-name" hidden></span>
       </div>
       <!-- A YouTube video watched on your own: when it ends, its YouTube Mix plays next (youtube.js) -->
       <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-label">Autoplay</span><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
-      <button class="share-help-btn" title="How to watch together"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
+      <button class="share-help-btn" title="How to watch together (R)"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
     </div>
 
     <!-- Center Feedback Badge Animation -->
@@ -523,6 +525,7 @@
             <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
+            <dt><kbd>R</kbd></dt><dd>Room panel: show / hide (outside a room: Watch together)</dd>
             <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
             <dt><kbd>Esc</kbd></dt><dd>Close a dialog</dd>
@@ -773,6 +776,9 @@
     </div>
   </div>
 
+  <!-- Phones held upright: the video's title just below the picture, like the YouTube app (script.js) -->
+  <div class="player-meta"><h2 class="player-meta-title" title="Tap to rename"></h2></div>
+
   <!-- ============ ROOM: PANEL ============ -->
   <!-- Watch-together room: chat, people, invite and settings, one at a time (room.js) -->
   <aside class="room-panel" hidden aria-label="Watch-together room">
@@ -783,9 +789,6 @@
       </div>
       <button class="room-icon-btn room-hide-btn" title="Hide the panel (you stay in the room)"><i class="fa-solid fa-xmark"></i></button>
     </header>
-
-    <!-- Cameras: everyone's whose camera is on, like a meeting (room.js) -->
-    <div class="room-cams" hidden aria-label="Cameras"></div>
 
     <nav class="room-tabs" role="tablist" aria-label="Room">
       <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
@@ -799,7 +802,7 @@
     <div class="room-now">
       <span class="room-now-icon"><i class="fa-solid fa-film"></i></span>
       <span class="room-now-text"><b class="room-now-title">Nothing is playing</b><small class="room-now-meta"></small></span>
-      <button type="button" class="room-icon-btn room-now-yt" title="Play a YouTube video or playlist for everyone" aria-label="Play a YouTube video or playlist for everyone" aria-expanded="false"><i class="fa-brands fa-youtube"></i></button>
+      <button type="button" class="room-icon-btn room-now-yt" title="Search YouTube or paste a link, to play for everyone" aria-label="Search YouTube or paste a link, to play for everyone"><i class="fa-brands fa-youtube"></i></button>
       <button type="button" class="room-small-btn primary room-now-share"><i class="fa-solid fa-folder-open"></i> <span>Share a video</span></button>
       <button type="button" class="room-icon-btn danger room-now-stop" hidden><i class="fa-solid fa-xmark"></i></button>
       <!-- A YouTube playlist: the video before and after this one -->
@@ -838,14 +841,14 @@
           <input class="room-queue-input" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Search YouTube or paste a link" aria-label="Search YouTube, or a YouTube link to add">
           <button type="button" class="room-icon-btn room-queue-paste" title="Paste the link you copied" aria-label="Paste the link you copied"><i class="fa-regular fa-paste"></i></button>
         </div>
-        <div class="room-queue-row">
+        <div class="room-queue-row room-queue-actions">
           <button type="submit" class="room-small-btn primary" value="end"><i class="fa-solid fa-plus"></i> Add to queue</button>
           <button type="submit" class="room-small-btn" value="play"><i class="fa-solid fa-play"></i> Play now</button>
         </div>
-        <small class="room-queue-hint">Type words to search YouTube, or paste a video or playlist link. You can also drop a link on this list.</small>
+        <small class="room-queue-hint"></small>
         <div class="yt-results room-queue-results" hidden></div>
       </form>
-      <p class="room-section-title">Queue <span class="room-queue-count"></span></p>
+      <p class="room-section-title room-queue-title">Queue <span class="room-queue-count"></span></p>
       <ol class="room-queue"></ol>
     </section>
 

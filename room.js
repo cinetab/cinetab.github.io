@@ -88,6 +88,8 @@
     forgetAllBtn = document.querySelector(".room-forget-all"),
     rememberSwitch = panel.querySelector(".room-remember"),
     stateText = panel.querySelector(".room-state"),
+    // Phones held upright: the room's name at the top of the player (the video's title is below it)
+    topRoomName = document.querySelector(".top-room-name"),
     hidePanelBtn = panel.querySelector(".room-hide-btn"),
     tabButtons = panel.querySelectorAll(".room-tab-btn"),
     tabPanels = panel.querySelectorAll(".room-tab"),
@@ -119,6 +121,7 @@
     ytHint = ytForm.querySelector(".room-yt-hint"),
     ytMount = document.querySelector(".yt-mount"),
     queueTabBtn = panel.querySelector('.room-tab-btn[data-tab="queue"]'),
+    queueTitle = panel.querySelector(".room-queue-title"),
     queueTab = panel.querySelector(".room-tab-queue"),
     queueForm = queueTab.querySelector(".room-queue-form"),
     queueInput = queueTab.querySelector(".room-queue-input"),
@@ -142,7 +145,6 @@
     leaveLabel = leaveBtn.querySelector("span"),
     micBtn = panel.querySelector(".room-mic-btn"),
     camBtn = panel.querySelector(".room-cam-btn"),
-    camStrip = panel.querySelector(".room-cams"),
     profileSheet = panel.querySelector(".room-sheet"),
     shareLabel = shareHelpBtn.querySelector("span"),
     badge = el("b", "room-badge");
@@ -462,6 +464,10 @@
 
     const showTab = tab => {
         activeTab = tab;
+        // For the panel's layout (e.g. no Previous / Next beside the queue, which has them)
+        panel.dataset.tab = tab;
+        // The Queue tab, opened to search before anything plays on YouTube, goes when it's left
+        if (tab !== "queue" && room && !(room.file && room.file.yt)) queueTabBtn.hidden = true;
         tabButtons.forEach(button => {
             button.classList.toggle("active", button.dataset.tab === tab);
             button.setAttribute("aria-selected", button.dataset.tab === tab);
@@ -474,7 +480,7 @@
         updateBadges();
     };
 
-    const showPanel = show => {
+    const setPanel = show => {
         panel.hidden = !show;
         playerPage.classList.toggle("room-open", show);
         if (show && activeTab === "chat") {
@@ -483,6 +489,56 @@
         }
         if (!show) closeProfile();
         updateBadges();
+    };
+
+    // ---------- Opening and closing the panel, in motion: it slides in from the side (or up from
+    // below, on a phone held upright) as it fades in, and the player moves and resizes smoothly to
+    // make room; closing is the same backwards. Instant for people who asked for less motion.
+    const PANEL_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+    let panelClosing = null;
+    const calmer = () => matchMedia("(prefers-reduced-motion: reduce)").matches || typeof panel.animate !== "function";
+    // Where the panel comes from: below the player when they're stacked, beside it otherwise
+    const panelOffset = () => getComputedStyle(playerPage).flexDirection === "column" ? "translateY(28px)" : "translateX(28px)";
+    // The player glides from where it was (`before`) to where the new layout puts it
+    const glidePlayer = before => {
+        const after = container.getBoundingClientRect();
+        if (!before.width || !after.width) return;
+        const dx = before.left - after.left;
+        const dy = before.top - after.top;
+        const sx = before.width / after.width;
+        const sy = before.height / after.height;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.005 && Math.abs(sy - 1) < 0.005) return;
+        container.animate([
+            { transformOrigin: "0 0", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+            { transformOrigin: "0 0", transform: "none" }
+        ], { duration: 320, easing: PANEL_EASE });
+    };
+
+    const showPanel = show => {
+        const open = !panel.hidden && !panelClosing;
+        const move = show !== open && !playerPage.hidden && !calmer();
+        // Opened again while it was going: it stays
+        if (panelClosing) {
+            panelClosing.cancel();
+            panelClosing = null;
+        }
+        if (!move) return setPanel(show);
+        if (!show) {
+            const offset = panelOffset();
+            const going = panelClosing = panel.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: offset }], { duration: 200, easing: "cubic-bezier(0.4, 0, 1, 1)" });
+            going.onfinish = () => {
+                if (panelClosing !== going) return;
+                panelClosing = null;
+                const before = container.getBoundingClientRect();
+                setPanel(false);
+                glidePlayer(before);
+            };
+            return;
+        }
+        const before = container.getBoundingClientRect();
+        setPanel(true);
+        glidePlayer(before);
+        panel.animate([{ opacity: 0, transform: panelOffset() }, { opacity: 1, transform: "none" }], { duration: 320, easing: PANEL_EASE });
     };
 
     // One message: what it replies to, the text, its reactions, and React / Reply buttons
@@ -682,6 +738,11 @@
             const route = room.peer && ROUTE_LABEL[room.peer.route];
             stateText.textContent = `${code} · ` + (room.phase === "in" ? `hosted by ${room.hostName}${route ? ` · ${route}` : ""}` : "reconnecting…");
         }
+        // The heading is just the room's name; the rest (code, who hosts, the connection) is in
+        // Invite and People, and here when pointed at
+        roomTitle.title = stateText.textContent;
+        topRoomName.textContent = room.title;
+        topRoomName.hidden = false;
         renderHomeBar();
     };
 
@@ -749,7 +810,9 @@
         renderInvite();
         renderMe();
         together.following = room.role === "guest";
-        together.openPanel = () => showPanel(panel.hidden);
+        // (pressed again while it's closing: it opens again)
+        together.openPanel = () => showPanel(panel.hidden || !!panelClosing);
+        shareHelpBtn.title = "Show or hide the room panel (R)";
         together.beforeHome = askBeforeHome;
         together.onTitle = room.role === "host" ? shareFile : () => room && room.presenting && sendPresent();
         together.active = () => !!room;
@@ -766,6 +829,7 @@
         chatUnread = 0;
         updateBadges();
         shareLabel.textContent = "Watch together";
+        shareHelpBtn.title = "How to watch together (R)";
         chatList.replaceChildren();
         lastMessage = null;
         requestList.replaceChildren();
@@ -1034,6 +1098,20 @@
         if (!room) return;
         if (room.role === "host") room.peers.forEach(syncMicrophonePeer);
         else syncMicrophonePeer(room.peer);
+        reportMicrophone();
+    };
+
+    // Whether each mic is on, for everyone's call window: a guest tells the host, and the host
+    // tells everyone (with the people in the room)
+    const reportMicrophone = () => {
+        if (!room) return;
+        if (room.role === "host") return room.peers.size ? shareMembers() : renderCameras();
+        const peer = room.peer;
+        if (peer && peer.micSaid !== micEnabled && room.phase === "in") {
+            peer.micSaid = micEnabled;
+            send(peer, { t: "mic", on: micEnabled });
+        }
+        renderCameras();
     };
 
     // ---------- The mic while the page isn't on screen
@@ -1119,8 +1197,8 @@
     micBtn.addEventListener("click", () => micEnabled ? disableMicrophone() : enableMicrophone());
     renderMic();
 
-    // ---------- Cameras, like a meeting: everyone whose camera is on is seen by everyone, in a strip
-    // at the top of the panel. Guests are connected to the host only, so the host's browser passes
+    // ---------- Cameras, like a meeting: everyone whose camera is on is seen by everyone, in the
+    // call window (below). Guests are connected to the host only, so the host's browser passes
     // each guest's camera on to the others (up to CAM_SLOTS other guests for each guest, besides
     // the host's own). Each guest's connection has those video channels from the start (they cost
     // nothing until used), after its own camera's and before the shared video's, so a host on an
@@ -1132,6 +1210,13 @@
     let camStream = null;
     let camEnabled = false;
     let camBusy = false;
+    // Which camera: "user" (front) or "environment" (back, on a phone); and how many the device
+    // has, once the browser says (after the camera's permission)
+    let camFacing = "user";
+    let camCount = 0;
+    const cameraConstraints = facing => ({
+        video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 24 }, facingMode: facing }
+    });
     // On screen, by who: { el, video, label, track }
     const camTiles = new Map();
     const camTrack = () => camEnabled && camStream ? camStream.getVideoTracks()[0] || null : null;
@@ -1162,58 +1247,216 @@
         }).catch(() => {});
     };
 
-    // The strip: you, then everyone else whose camera is on
-    const renderCameras = () => {
-        const tiles = [];
-        const mine = room && camTrack();
-        if (mine) tiles.push({ key: "me", track: mine, name: "You", me: true });
-        if (room && room.role === "host") {
-            guests().forEach(peer => {
-                if (peer.camOn && peer.camTransceiver) tiles.push({ key: peer.id, track: peer.camTransceiver.receiver.track, name: peer.name });
-            });
-        } else if (room && room.peer && room.peer.camTransceiver && room.cams) {
-            const peer = room.peer;
-            if (room.cams.host) tiles.push({ key: "host", track: peer.camTransceiver.receiver.track, name: room.hostName || "Host" });
-            room.cams.slots.forEach(slot => {
-                const transceiver = peer.camSlots[slot.i];
-                if (transceiver) tiles.push({ key: slot.id, track: transceiver.receiver.track, name: slot.name });
-            });
+    // ---------- The call window: everyone in the room, like a video call, in a small window over
+    // the player that can be dragged anywhere (computer or phone; fullscreen too). Each person is
+    // their camera, or their avatar while it's off, with their name and whether their mic is on.
+    // It can fold up to its title bar, and be small or large; where it was left, folded and size
+    // are remembered (where as a share of the screen, so it fits a phone turned sideways too).
+    const CALL_KEY = "cinetab:call";
+    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map() };
+    try {
+        const saved = JSON.parse(storage.get(CALL_KEY) || "null");
+        if (saved && typeof saved === "object") {
+            if (finite(saved.x, 0, 1) && finite(saved.y, 0, 1)) call.pos = { x: saved.x, y: saved.y };
+            call.collapsed = saved.collapsed === true;
+            call.big = saved.big === true;
         }
-        const keep = new Set(tiles.map(tile => tile.key));
-        camTiles.forEach((tile, key) => {
+    } catch (e) {}
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big }));
+
+    const callWin = el("section", "room-call");
+    callWin.hidden = true;
+    callWin.setAttribute("aria-label", "People in the room");
+    const callBar = el("div", "room-call-bar");
+    const callTitle = el("span", "room-call-title");
+    const callButton = (className, label) => {
+        const button = el("button", `room-call-btn ${className}`);
+        button.type = "button";
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.append(el("i"));
+        return button;
+    };
+    const callSizeBtn = callButton("room-call-size", "Larger");
+    const callFoldBtn = callButton("room-call-fold", "Fold up");
+    callBar.append(el("i", "fa-solid fa-grip-vertical room-call-grip"), callTitle, callSizeBtn, callFoldBtn);
+    const callGrid = el("div", "room-call-grid");
+    callWin.append(callBar, callGrid);
+    playerPage.append(callWin);
+
+    // Where it is: where it was left (as a share of the room it has to move in), or at first the
+    // top right of the picture, below its title bar
+    const placeCall = () => {
+        if (callWin.hidden) return;
+        const page = playerPage.getBoundingClientRect();
+        const width = callWin.offsetWidth;
+        const height = callWin.offsetHeight;
+        const margin = 8;
+        let x, y;
+        if (call.pos) {
+            x = call.pos.x * (page.width - width);
+            y = call.pos.y * (page.height - height);
+        } else {
+            const picture = container.getBoundingClientRect();
+            x = picture.right - page.left - width - 12;
+            y = picture.top - page.top + 72;
+        }
+        call.x = Math.max(margin, Math.min(x, page.width - width - margin));
+        call.y = Math.max(margin, Math.min(y, page.height - height - margin));
+        callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
+    };
+    window.addEventListener("resize", placeCall);
+    if ("ResizeObserver" in window) new ResizeObserver(placeCall).observe(callWin);
+
+    // Dragged by any part of it but its buttons, with a mouse or a finger
+    callWin.addEventListener("pointerdown", e => {
+        if (e.button > 0 || e.target.closest("button")) return;
+        call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y };
+        callWin.setPointerCapture(e.pointerId);
+        callWin.classList.add("dragging");
+    });
+    callWin.addEventListener("pointermove", e => {
+        if (!call.drag || call.drag.id !== e.pointerId) return;
+        const page = playerPage.getBoundingClientRect();
+        const margin = 8;
+        call.x = Math.max(margin, Math.min(e.clientX - call.drag.dx, page.width - callWin.offsetWidth - margin));
+        call.y = Math.max(margin, Math.min(e.clientY - call.drag.dy, page.height - callWin.offsetHeight - margin));
+        callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
+    });
+    const endCallDrag = e => {
+        if (!call.drag || call.drag.id !== e.pointerId) return;
+        call.drag = null;
+        callWin.classList.remove("dragging");
+        const page = playerPage.getBoundingClientRect();
+        const roomX = page.width - callWin.offsetWidth;
+        const roomY = page.height - callWin.offsetHeight;
+        call.pos = { x: roomX > 0 ? Math.min(1, Math.max(0, call.x / roomX)) : 0, y: roomY > 0 ? Math.min(1, Math.max(0, call.y / roomY)) : 0 };
+        saveCall();
+    };
+    callWin.addEventListener("pointerup", endCallDrag);
+    callWin.addEventListener("pointercancel", endCallDrag);
+
+    const renderCallButtons = () => {
+        callWin.classList.toggle("collapsed", call.collapsed);
+        callWin.classList.toggle("big", call.big);
+        callFoldBtn.firstChild.className = `fa-solid ${call.collapsed ? "fa-chevron-down" : "fa-minus"}`;
+        callFoldBtn.title = call.collapsed ? "Show everyone" : "Fold up";
+        callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
+        callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
+        callSizeBtn.hidden = call.collapsed;
+        callSizeBtn.firstChild.className = `fa-solid ${call.big ? "fa-down-left-and-up-right-to-center" : "fa-up-right-and-down-left-from-center"}`;
+        callSizeBtn.title = call.big ? "Smaller" : "Larger";
+        callSizeBtn.setAttribute("aria-label", callSizeBtn.title);
+    };
+    callFoldBtn.addEventListener("click", () => {
+        call.collapsed = !call.collapsed;
+        renderCallButtons();
+        saveCall();
+        placeCall();
+    });
+    callSizeBtn.addEventListener("click", () => {
+        call.big = !call.big;
+        renderCallButtons();
+        saveCall();
+        placeCall();
+    });
+    renderCallButtons();
+
+    // Everyone in the room: { key, name, avatar, mic, track (their camera, or null), me }, the
+    // others first (the host first of them), then you
+    const callPeople = () => {
+        if (!room) return [];
+        const me = { key: "me", name: room.name || "You", avatar: room.avatar, mic: micEnabled, track: camTrack(), me: true, mirror: camFacing === "user" };
+        if (room.role === "host") {
+            const others = guests().map(peer => ({
+                key: peer.id, name: peer.name, avatar: peer.avatar, mic: !!peer.micOn,
+                track: peer.camOn && peer.camTransceiver ? peer.camTransceiver.receiver.track : null
+            }));
+            return others.length ? [...others, me] : [];
+        }
+        if (room.phase !== "in" || !Array.isArray(room.members)) return [];
+        const peer = room.peer;
+        const cams = room.cams;
+        const others = room.members.filter(member => member.id !== room.id).map(member => {
+            let track = null;
+            if (peer && peer.camTransceiver && cams) {
+                if (member.host && cams.host) track = peer.camTransceiver.receiver.track;
+                const slot = !member.host && cams.slots.find(item => item.id === member.id);
+                if (slot && peer.camSlots[slot.i]) track = peer.camSlots[slot.i].receiver.track;
+            }
+            return { key: member.id, name: member.name, avatar: member.avatar, mic: member.mic === true, track, host: member.host };
+        });
+        return others.length ? [...others, me] : [];
+    };
+
+    const renderCameras = () => {
+        const people = callPeople();
+        callWin.hidden = !people.length;
+        callTitle.textContent = `${people.length} in the room`;
+        const keep = new Set(people.map(person => person.key));
+        call.tiles.forEach((tile, key) => {
             if (keep.has(key)) return;
             tile.video.srcObject = null;
             tile.el.remove();
-            camTiles.delete(key);
+            call.tiles.delete(key);
         });
-        tiles.forEach(({ key, track, name, me }) => {
-            let tile = camTiles.get(key);
+        people.forEach(person => {
+            let tile = call.tiles.get(person.key);
             if (!tile) {
-                const figure = el("figure", "room-cam");
+                const figure = el("figure", "room-call-tile");
                 const video = el("video");
                 video.muted = true;
                 video.autoplay = true;
                 video.playsInline = true;
                 video.setAttribute("playsinline", "");
-                const label = el("figcaption");
-                figure.append(video, label);
-                tile = { el: figure, video, label, track: null };
-                camTiles.set(key, tile);
+                const face = el("span", "room-call-face");
+                const mic = el("span", "room-call-mic");
+                mic.append(el("i"));
+                const name = el("figcaption", "room-call-name");
+                figure.append(video, face, mic, name);
+                tile = { el: figure, video, face, mic, name, track: null, look: "" };
+                // Your own: switch between the phone's front and back cameras
+                if (person.me) {
+                    const flip = el("button", "room-call-flip");
+                    flip.type = "button";
+                    flip.title = "Switch camera (front / back)";
+                    flip.setAttribute("aria-label", "Switch between the front and back camera");
+                    flip.append(el("i", "fa-solid fa-camera-rotate"));
+                    flip.addEventListener("click", flipCamera);
+                    figure.append(flip);
+                    tile.flip = flip;
+                }
+                call.tiles.set(person.key, tile);
             }
-            tile.el.classList.toggle("me", !!me);
-            if (tile.label.textContent !== name) tile.label.textContent = name;
-            tile.el.title = me ? "Your camera" : `${name}'s camera`;
-            if (tile.track !== track) {
-                tile.track = track;
-                tile.video.srcObject = new MediaStream([track]);
-                tile.video.play().catch(() => {});
+            tile.el.classList.toggle("me", !!person.me);
+            tile.el.classList.toggle("mirror", !!person.mirror);
+            tile.el.classList.toggle("camera", !!person.track);
+            // On a phone or tablet with more than one camera (or one that doesn't say how many)
+            if (tile.flip) tile.flip.hidden = !(person.track && isTouch && camCount !== 1);
+            const label = person.me ? `${person.name} (you)` : person.host ? `${person.name} (host)` : person.name;
+            if (tile.name.textContent !== label) tile.name.textContent = label;
+            // Mic on or off, for each person
+            tile.mic.classList.toggle("off", !person.mic);
+            tile.mic.firstChild.className = `fa-solid ${person.mic ? "fa-microphone" : "fa-microphone-slash"}`;
+            tile.mic.title = person.mic ? "Mic on" : "Muted";
+            tile.el.title = `${label} · ${person.mic ? "mic on" : "muted"}${person.track ? "" : " · camera off"}`;
+            // Their avatar while their camera is off
+            const look = `${person.name}|${person.avatar || ""}`;
+            if (tile.look !== look) {
+                tile.look = look;
+                tile.face.replaceChildren(makeAvatar(person.name, person.avatar));
+            }
+            if (tile.track !== person.track) {
+                tile.track = person.track;
+                tile.video.srcObject = person.track ? new MediaStream([person.track]) : null;
+                if (person.track) tile.video.play().catch(() => {});
             }
         });
         // In order (moved only when it changed, so nothing playing is interrupted)
-        const order = tiles.map(tile => camTiles.get(tile.key).el);
-        if (order.some((item, i) => camStrip.children[i] !== item) || camStrip.children.length !== order.length) camStrip.replaceChildren(...order);
-        camStrip.hidden = !order.length;
-        camStrip.classList.toggle("many", order.length > 2);
+        const order = people.map(person => call.tiles.get(person.key).el);
+        if (order.length !== callGrid.children.length || order.some((item, i) => callGrid.children[i] !== item)) callGrid.replaceChildren(...order);
+        callWin.style.setProperty("--cols", people.length <= 1 ? 1 : people.length <= 4 || !call.big ? 2 : 3);
+        placeCall();
     };
 
     // The host: its own camera to every guest, and each guest gets the others' cameras passed on
@@ -1272,13 +1515,8 @@
         camBusy = true;
         camBtn.disabled = true;
         try {
-            camStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 24 }, facingMode: "user" }
-            });
-            camStream.getVideoTracks().forEach(track => {
-                // The browser or the phone took the camera away
-                track.addEventListener("ended", () => camStream && camStream.getVideoTracks()[0] === track && disableCamera());
-            });
+            camStream = await navigator.mediaDevices.getUserMedia(cameraConstraints(camFacing));
+            watchCamera();
             if (!room) {
                 camStream.getTracks().forEach(track => track.stop());
                 camStream = null;
@@ -1288,12 +1526,68 @@
             renderCam();
             syncCamera();
             toast("Camera on");
+            countCameras();
         } catch (e) {
             toast(e.name === "NotAllowedError" ? "Camera permission was denied" : "Couldn't access the camera");
         } finally {
             camBusy = false;
             camBtn.disabled = false;
         }
+    };
+
+    // The browser or the phone taking the camera away turns it off here too
+    const watchCamera = () => camStream.getVideoTracks().forEach(track => {
+        track.addEventListener("ended", () => camStream && camStream.getVideoTracks()[0] === track && disableCamera());
+    });
+
+    const countCameras = async () => {
+        try {
+            camCount = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === "videoinput").length;
+        } catch (e) {
+            camCount = 0;
+        }
+        renderCameras();
+    };
+
+    // Phones: the front camera or the back one. The one in use stops first (many phones can't
+    // open both at once); everyone gets the new one straight away. If the other can't be opened,
+    // the one before comes back.
+    const flipCamera = async () => {
+        if (!camEnabled || camBusy || !room) return;
+        camBusy = true;
+        const was = camFacing;
+        const facing = was === "user" ? "environment" : "user";
+        camStream?.getTracks().forEach(track => track.stop());
+        const open = async want => {
+            try {
+                return await navigator.mediaDevices.getUserMedia(cameraConstraints({ exact: want }));
+            } catch (e) {
+                return navigator.mediaDevices.getUserMedia(cameraConstraints(want));
+            }
+        };
+        try {
+            camStream = await open(facing);
+            camFacing = facing;
+            toast(facing === "environment" ? "Back camera" : "Front camera");
+        } catch (e) {
+            try {
+                camStream = await open(was);
+                toast("Couldn't switch to the other camera");
+            } catch (error) {
+                camStream = null;
+                camBusy = false;
+                disableCamera();
+                return;
+            }
+        }
+        if (!camEnabled || !room) {
+            camStream.getTracks().forEach(track => track.stop());
+            camStream = null;
+        } else {
+            watchCamera();
+            syncCamera();
+        }
+        camBusy = false;
     };
 
     const disableCamera = (quiet = false) => {
@@ -1493,8 +1787,8 @@
     const shareMembers = () => {
         const sharer = room.file ? room.file.from : null;
         const members = [
-            { id: room.id, name: room.name, avatar: room.avatar, host: true, sharing: sharer === room.id },
-            ...guests().map(peer => ({ id: peer.id, name: peer.name, avatar: peer.avatar, stream: peer.wantsStream, sharing: sharer === peer.id, route: peer.route }))
+            { id: room.id, name: room.name, avatar: room.avatar, host: true, sharing: sharer === room.id, mic: micEnabled },
+            ...guests().map(peer => ({ id: peer.id, name: peer.name, avatar: peer.avatar, stream: peer.wantsStream, sharing: sharer === peer.id, route: peer.route, mic: !!peer.micOn }))
         ];
         broadcast({ t: "members", members });
         renderPeople(members);
@@ -1893,6 +2187,12 @@
         } else if (message.t === "want") {
             peer.wantsStream = !peer.channel.isTunnel && message.stream === true;
             updateStreams();
+            shareMembers();
+        } else if (message.t === "mic") {
+            if (peer.status !== "admitted" || !allow(peer, "mic", 10, 10000)) return;
+            const on = message.on === true;
+            if (on === !!peer.micOn) return;
+            peer.micOn = on;
             shareMembers();
         } else if (message.t === "cam") {
             if (peer.status !== "admitted" || !allow(peer, "cam", 10, 10000)) return;
@@ -3333,14 +3633,15 @@
             nowNextBtn.disabled = nextTrackBtn.disabled = !control || list.index + 1 >= list.count;
         }
         // The YouTube queue gets its own tab while YouTube is on, and opens when it starts
-        queueTabBtn.hidden = !youtube;
+        // (and stays open while someone searches there before anything plays)
+        queueTabBtn.hidden = !youtube && activeTab !== "queue";
         if (youtube && !room.queueShown) {
             room.queueShown = true;
             if (document.activeElement !== chatInput) {
                 showPanel(true);
                 showTab("queue");
             }
-        } else if (!youtube) {
+        } else if (!youtube && room.queueShown) {
             room.queueShown = false;
             if (activeTab === "queue") showTab("chat");
         }
@@ -3363,12 +3664,14 @@
         ytHint.classList.toggle("error", error);
     };
 
+    // YouTube's button opens the Queue tab's search: one place to find, play and queue videos
     nowYtBtn.addEventListener("click", () => {
-        if (!ytForm.hidden) return closeYouTubeForm();
-        ytForm.hidden = false;
-        nowYtBtn.setAttribute("aria-expanded", "true");
-        showYouTubeHint();
-        ytInput.focus();
+        if (!canShareYouTube()) return;
+        closeYouTubeForm();
+        queueTabBtn.hidden = false;
+        showPanel(true);
+        showTab("queue");
+        queueInput.focus();
     });
     ytInput.addEventListener("keydown", e => {
         if (e.key !== "Escape") return;
@@ -3444,6 +3747,8 @@
         const edit = canShareYouTube();
         const items = queue.items;
         queueForm.hidden = !edit;
+        // No "Queue" heading over an empty queue (searching before anything plays)
+        queueTitle.hidden = !items.length;
         queueCount.textContent = items.length ? `${Math.min(queue.index + 1, items.length)} of ${items.length}` : "";
         const scrolledTo = queueList.dataset.current;
         queueList.replaceChildren(...items.map((item, i) => {
@@ -3546,6 +3851,14 @@
         actions: [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }],
         onPick: (ref, where) => addRefToQueue(ref, where)
     });
+    // While results show, they take the whole tab and are all that scrolls (the buttons, hint and
+    // queue step aside until the search is cleared), so a phone's short panel has room for them
+    const queueResultsBox = queueForm.querySelector(".yt-results");
+    if (queueResultsBox) {
+        const searching = () => queueTab.classList.toggle("searching", !queueResultsBox.hidden);
+        new MutationObserver(searching).observe(queueResultsBox, { attributes: true, attributeFilter: ["hidden"] });
+        searching();
+    }
 
     queueForm.addEventListener("submit", e => {
         e.preventDefault();
@@ -3868,7 +4181,7 @@
                     host: message.host === true,
                     slots: slots.slice(0, CAM_SLOTS)
                         .filter(slot => slot && Number.isInteger(slot.i) && slot.i >= 0 && slot.i < CAM_SLOTS && typeof slot.id === "string")
-                        .map(slot => ({ i: slot.i, id: `p:${slot.id.slice(0, 64)}`, name: clean(slot.name, 30) || "Guest" }))
+                        .map(slot => ({ i: slot.i, id: slot.id.slice(0, 64), name: clean(slot.name, 30) || "Guest" }))
                 };
                 return renderCameras();
             }
@@ -3876,9 +4189,10 @@
                 if (!Array.isArray(message.members)) return;
                 const members = message.members.slice(0, MAX_GUESTS + 1)
                     .filter(member => member && typeof member.id === "string")
-                    .map(member => ({ id: member.id, name: clean(member.name, 30) || "Guest", avatar: validAvatar(member.avatar), host: member.host === true, stream: member.stream === true, sharing: member.sharing === true }));
+                    .map(member => ({ id: member.id, name: clean(member.name, 30) || "Guest", avatar: validAvatar(member.avatar), host: member.host === true, stream: member.stream === true, sharing: member.sharing === true, mic: member.mic === true }));
                 guest.members = members;
-                // In the room: the host hears whether this camera is on
+                // In the room: the host hears whether this mic and camera are on
+                reportMicrophone();
                 syncCameraGuest();
                 const host = members.find(member => member.host);
                 if (host && host.name !== guest.hostName) {
@@ -4395,6 +4709,7 @@
         disableCamera(true);
         room = null;
         renderCameras();
+        topRoomName.hidden = true;
         clearInterval(old.knockTimer);
         clearInterval(old.offerTimer);
         clearInterval(old.streamTimer);

@@ -235,8 +235,9 @@ chooseVideoBtns.forEach(btn => btn.addEventListener("click", pickVideo));
 const titleKey = (name, size) => `title:${name}:${size}`;
 const savedTitle = (name, size) => storage.get(titleKey(name, size)) || name.replace(/\.[^/.]+$/, "");
 
-const renameTitle = () => {
-    if (!currentSource || together.stream || videoTitle.querySelector("input")) return;
+// `where`: the title being tapped, at the top or below the picture (phones held upright)
+const renameTitle = (where = videoTitle) => {
+    if (!currentSource || together.stream || where.querySelector("input")) return;
     const { name, size } = currentSource;
     const previous = videoTitle.textContent;
     const input = document.createElement("input");
@@ -244,7 +245,7 @@ const renameTitle = () => {
     input.value = previous;
     input.maxLength = 120;
     input.setAttribute("aria-label", "Video title");
-    videoTitle.replaceChildren(input);
+    where.replaceChildren(input);
     input.focus();
     input.select();
     let done = false;
@@ -255,6 +256,7 @@ const renameTitle = () => {
         const original = name.replace(/\.[^/.]+$/, "");
         const title = !save ? previous : typed || original;
         videoTitle.textContent = audioTitle.textContent = title;
+        if (where !== videoTitle) where.textContent = title;
         if (!save || title === previous) return;
         if (title === original) storage.remove(titleKey(name, size));
         else storage.set(titleKey(name, size), title);
@@ -268,7 +270,32 @@ const renameTitle = () => {
     });
     input.addEventListener("blur", () => finish(true));
 };
-videoTitle.addEventListener("click", renameTitle);
+videoTitle.addEventListener("click", () => renameTitle());
+
+// ---------- Phones held upright: the video's title just below the picture, like the YouTube
+// app, and (in a room) the room's name at the top in its place. Not in fullscreen (unless a
+// room's panel is open below the picture) or sideways, where the title stays at the top.
+const metaTitle = document.querySelector(".player-meta-title");
+const syncMetaTitle = () => {
+    if (metaTitle.querySelector("input")) return;
+    const title = videoTitle.querySelector("input") ? metaTitle.textContent : videoTitle.textContent;
+    const none = title === "No Video Loaded";
+    metaTitle.parentNode.classList.toggle("empty", none);
+    const text = none ? "" : title;
+    if (metaTitle.textContent !== text) metaTitle.textContent = text;
+};
+new MutationObserver(syncMetaTitle).observe(videoTitle, { childList: true, characterData: true, subtree: true });
+syncMetaTitle();
+metaTitle.addEventListener("click", () => renameTitle(metaTitle));
+const uprightPhone = matchMedia("(pointer: coarse) and (orientation: portrait)");
+const placeTitle = () => playerPage.classList.toggle("title-below", uprightPhone.matches &&
+    (!(document.fullscreenElement || document.webkitFullscreenElement) || playerPage.classList.contains("room-open")));
+placeTitle();
+uprightPhone.addEventListener?.("change", placeTitle);
+document.addEventListener("fullscreenchange", placeTitle);
+document.addEventListener("webkitfullscreenchange", placeTitle);
+// The room's panel opening or closing (room.js)
+new MutationObserver(placeTitle).observe(playerPage, { attributes: true, attributeFilter: ["class"] });
 
 // Load Video File
 const setSource = (source, mode, autoplay = true) => {
@@ -898,27 +925,63 @@ const timelineRatio = e => {
     const rect = videoTimeline.getBoundingClientRect();
     return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
 };
-const scrub = e => {
+// Your own video, prompt to jump: a tap (or click) jumps exactly there at once. While dragging,
+// the picture follows as fast as the video can be decoded: each jump waits for the one before,
+// and only the newest place counts (browsers that can jump to the nearest keyframe do, which is
+// quicker), so jumps never pile up; letting go lands exactly there. YouTube and a room's stream
+// jump once, where the finger or mouse let go.
+let scrubFrom = 0;
+let scrubMoved = false;
+let scrubNext = null;
+const seekWhileDragging = time => {
+    scrubNext = time;
+    if (mainVideo.seeking) return;
+    scrubNext = null;
+    if (typeof mainVideo.fastSeek === "function") mainVideo.fastSeek(time);
+    else mainVideo.currentTime = time;
+};
+mainVideo.addEventListener("seeked", () => scrubbing && scrubNext !== null && seekWhileDragging(scrubNext));
+
+const scrub = (e, dragging = false) => {
     const ratio = timelineRatio(e);
     progressBar.style.width = `${ratio * 100}%`;
     currentVidTime.innerText = formatTime(ratio * mediaDuration());
-    if (!together.stream) mainVideo.currentTime = ratio * mainVideo.duration;
-    if (e.pointerType === "touch") showPreview(e);
+    if (!together.stream) {
+        const time = ratio * mainVideo.duration;
+        if (dragging) seekWhileDragging(time);
+        else mainVideo.currentTime = time;
+    }
+    // The scene preview while dragging (not for a tap: the jump itself comes first)
+    if (dragging && e.pointerType === "touch") showPreview(e);
 };
 videoTimeline.addEventListener("pointerdown", e => {
     if (!mediaDuration() || e.button > 0) return;
     scrubbing = true;
+    scrubMoved = false;
+    scrubNext = null;
+    scrubFrom = e.clientX;
     videoTimeline.setPointerCapture(e.pointerId);
     videoTimeline.classList.add("scrubbing");
     scrub(e);
 });
-videoTimeline.addEventListener("pointermove", e => scrubbing && scrub(e));
+videoTimeline.addEventListener("pointermove", e => {
+    if (!scrubbing) return;
+    // A finger's small wobble during a tap isn't a drag
+    if (!scrubMoved && Math.abs(e.clientX - scrubFrom) < 6) return;
+    scrubMoved = true;
+    scrub(e, true);
+});
 const endScrub = e => {
     if (!scrubbing) return;
     scrubbing = false;
     videoTimeline.classList.remove("scrubbing");
-    // The host's stream jumps once, where the mouse or finger let go
-    if (together.stream && e.type === "pointerup") together.stream.request({ time: timelineRatio(e) * mediaDuration() });
+    if (e.type !== "pointerup") return;
+    const time = timelineRatio(e) * mediaDuration();
+    // The host's stream (or YouTube) jumps once, where the mouse or finger let go
+    if (together.stream) return together.stream.request({ time });
+    // Dragged: lands exactly where it let go
+    scrubNext = null;
+    if (scrubMoved && Math.abs(mainVideo.currentTime - time) > 0.05) mainVideo.currentTime = time;
 };
 videoTimeline.addEventListener("pointerup", endScrub);
 videoTimeline.addEventListener("pointercancel", endScrub);
@@ -2368,6 +2431,12 @@ document.addEventListener("keydown", e => {
 
         case "KeyC":
             toggleSubtitles();
+            break;
+
+        // The room's panel: show or hide it (outside a room: the Watch together options)
+        case "KeyR":
+            if (e.shiftKey) break;
+            shareHelpBtn.click();
             break;
 
         case "Period":

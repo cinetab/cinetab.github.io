@@ -118,6 +118,57 @@ body.watching {
   }
 }
 
+/* Phones held upright (script.js sets .title-below): the video's title just below the picture,
+   like the YouTube app, and in a room the room's name at the top in its place. Elsewhere (sideways,
+   fullscreen, computers) the title stays at the top. */
+.player-meta,
+.top-room-name {
+  display: none;
+}
+
+.player-page.title-below {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+.player-page.title-below > .player-meta:not(.empty) {
+  display: block;
+  flex-shrink: 0;
+  padding: 10px 16px;
+}
+
+.player-meta-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+}
+
+.player-meta-title .title-input {
+  width: 100%;
+}
+
+.player-page.title-below .container .video-title {
+  display: none;
+}
+
+.player-page.title-below .top-room-name:not([hidden]) {
+  display: block;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
 /* Top Title Bar */
 .top-bar {
   position: absolute;
@@ -4330,58 +4381,228 @@ body > .room-toasts {
   backdrop-filter: blur(24px);
 }
 
-/* Cameras, like a meeting (room.js): a row of tiles at the top of the panel, two side by side;
-   with more, smaller ones that scroll sideways */
-.room-cams {
-  flex-shrink: 0;
+/* The call window (room.js): everyone in the room, like a video call, over the player wherever it
+   was dragged to (also in fullscreen). Each tile is a camera, or an avatar while it's off, with the
+   person's name and their mic: on, or muted (red). */
+.room-call {
+  --tile: 104px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  width: calc(var(--cols, 2) * var(--tile) + (var(--cols, 2) - 1) * 6px + 16px);
+  max-width: calc(100% - 16px);
+  padding: 0 8px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  color: #fff;
+  background: rgba(22, 22, 28, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  transition: box-shadow 0.2s ease;
+}
+
+.room-call.big {
+  --tile: 168px;
+}
+
+.room-call.dragging {
+  cursor: grabbing;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+}
+
+.room-call.collapsed {
+  width: auto;
+  padding-bottom: 0;
+}
+
+.room-call-bar {
   display: flex;
-  gap: 8px;
-  padding: 0 12px 10px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  font-size: 12px;
+  color: #d6d6e2;
+}
+
+.room-call-grip {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.room-call-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-call-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.room-call-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.room-call-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  gap: 6px;
+  max-height: min(60vh, 520px);
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 
-.room-cam {
+.room-call.collapsed .room-call-grid {
+  display: none;
+}
+
+.room-call-tile {
   position: relative;
-  flex: 0 0 calc(50% - 4px);
   aspect-ratio: 4 / 3;
   margin: 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  background: #0d0d10;
+  background: #101015;
 }
 
-.room-cams.many .room-cam {
-  flex-basis: 118px;
-}
-
-.room-cam video {
-  display: block;
+.room-call-tile video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: none;
 }
 
-/* Your own camera as a mirror, as in every meeting app */
-.room-cam.me video {
+.room-call-tile.camera video {
+  display: block;
+}
+
+/* Your own front camera as a mirror, as in every video call (the back camera as it is) */
+.room-call-tile.mirror video {
   transform: scaleX(-1);
 }
 
-.room-cam figcaption {
+/* Your own tile, on a phone: switch between the front and back cameras */
+.room-call-flip {
   position: absolute;
-  left: 6px;
-  bottom: 6px;
-  max-width: calc(100% - 12px);
-  padding: 2px 8px;
+  top: 5px;
+  left: 5px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+.room-call-flip:active {
+  background: rgba(62, 151, 253, 0.85);
+}
+
+.room-call.big .room-call-flip {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+/* Camera off: their avatar in the middle, above the name */
+.room-call-face {
+  position: absolute;
+  inset: 0 0 22px;
+  display: grid;
+  place-items: center;
+}
+
+.room-call-tile.camera .room-call-face {
+  display: none;
+}
+
+.room-call-face .room-avatar {
+  width: 38%;
+  height: auto;
+  aspect-ratio: 1;
+  font-size: calc(var(--tile) * 0.18);
+}
+
+.room-call-name {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  max-width: calc(100% - 10px);
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10.5px;
+  line-height: 1.6;
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.room-call.big .room-call-name {
+  font-size: 12px;
+}
+
+/* The mic: on (plain), or muted (red, crossed out) */
+.room-call-mic {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 10px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.room-call-mic.off {
+  background: #e5484d;
+}
+
+.room-call.big .room-call-mic {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+/* Phones: a little smaller, so it covers less of the picture */
+@media (pointer: coarse) and (max-width: 600px) {
+  .room-call {
+    --tile: min(84px, 21vw);
+  }
+  .room-call.big {
+    --tile: min(150px, 40vw);
+  }
 }
 
 .room-cam-btn.active {
@@ -4393,7 +4614,7 @@ body > .room-toasts {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 12px 12px 18px;
+  padding: 10px 8px 8px 16px;
 }
 
 .room-head-text {
@@ -4421,7 +4642,10 @@ body > .room-toasts {
   color: #8f8f9e;
 }
 
+/* Just the room's name at the top: its code, who hosts and the connection are in Invite and
+   People (and in the name's tooltip) */
 .room-state {
+  display: none;
   margin-top: 2px;
   font-size: 12px;
   color: #8f8f9e;
@@ -4470,10 +4694,10 @@ body > .room-toasts {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 7px 4px 6px;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
   border: none;
   border-radius: 9px;
   font-size: 11px;
@@ -4485,7 +4709,25 @@ body > .room-toasts {
 }
 
 .room-tab-btn i {
-  font-size: 15px;
+  font-size: 14px;
+}
+
+/* One row of icons; the open tab also says what it is */
+.room-tab-btn span {
+  display: none;
+}
+
+.room-tab-btn.active {
+  flex: 2;
+}
+
+.room-tab-btn.active span {
+  display: inline;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .room-tab-btn:hover {
@@ -4503,8 +4745,8 @@ body > .room-toasts {
 
 .room-tab-badge {
   position: absolute;
-  top: 3px;
-  left: calc(50% + 6px);
+  top: 1px;
+  left: calc(50% + 4px);
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -4522,7 +4764,7 @@ body > .room-toasts {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 18px;
+  padding: 12px 14px;
   scrollbar-width: thin;
 }
 
@@ -4739,6 +4981,10 @@ body > .room-toasts {
   border-color: #3e97fd;
 }
 
+.room-queue-hint:empty {
+  display: none;
+}
+
 .room-queue-hint {
   font-size: 11px;
   line-height: 1.4;
@@ -4747,6 +4993,36 @@ body > .room-toasts {
 
 .room-queue-hint.error {
   color: #ff8a8a;
+}
+
+/* Previous / Next stay out of Now playing beside the queue, which shows the same and has Play */
+.room-panel[data-tab="queue"] .room-now-list {
+  display: none !important;
+}
+
+/* Searching: the results take the whole tab and are all that scrolls (one scroll, so going back
+   up always works); the buttons, hint and queue step aside until the search is cleared */
+.room-tab-queue.searching {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 6px;
+}
+
+.room-tab-queue.searching .room-queue-form {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.room-tab-queue.searching :is(.room-queue-actions, .room-queue-hint, .room-queue-title, .room-queue) {
+  display: none;
+}
+
+.room-panel .room-tab-queue.searching .room-queue-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .room-tab-queue.drop-link .room-queue {
@@ -6300,6 +6576,47 @@ body > .room-toasts {
   margin-top: 10px;
   padding: 6px 14px;
   font-size: 12px;
+}
+
+/* Phones, the room open beside or below a full-screen video: the player and the panel as two
+   rounded cards like on a computer, only 6px apart (and clear of a camera cutout or the home
+   indicator), so hardly any space goes */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .player-page.room-open {
+    gap: 6px;
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+  .player-page.room-open .container,
+  .player-page.room-open .container.fullscreen {
+    border-radius: 12px;
+  }
+  .player-page.room-open .room-panel {
+    width: min(300px, 42vw);
+    padding-right: 0;
+    padding-bottom: 0;
+    border-width: 1px;
+    border-radius: 14px;
+  }
+}
+
+@media screen and (max-width: 900px) and (orientation: portrait) {
+  .player-page.room-open:is(:fullscreen, :-webkit-full-screen) {
+    gap: 6px;
+    padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom));
+  }
+  .player-page.room-open:is(:fullscreen, :-webkit-full-screen) .container,
+  .player-page.room-open:is(:fullscreen, :-webkit-full-screen) .container.fullscreen {
+    border-radius: 12px;
+  }
+  .player-page.room-open:is(:fullscreen, :-webkit-full-screen) .room-panel {
+    padding-bottom: 0;
+    border-width: 1px;
+    border-radius: 14px;
+  }
+  /* The title between them, close to the picture */
+  .player-page.room-open:is(:fullscreen, :-webkit-full-screen) > .player-meta:not(.empty) {
+    padding: 2px 8px;
+  }
 }
 
 /* =================== /WATCH TOGETHER ROOMS =================== */

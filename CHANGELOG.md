@@ -4,6 +4,56 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.9] - 2026-11-20
+
+### The call window
+- Everyone in a room appears in a small window over the player, like a video call, on computers
+  and phones, also in fullscreen: their camera, or their avatar while it's off, with their name
+- Each person's mic shows on their tile: on, or muted (red, crossed out), for everyone. Guests'
+  mics are now known to the room (on the previous version they show as muted)
+- Drag it anywhere with the mouse or a finger; it stays on screen and remembers where you left it
+  (also when a phone turns sideways). Fold it up to its title bar, or make it larger
+- It takes the place of the row of cameras at the top of the room panel
+- Phones: the camera button on your own tile switches between the front and back cameras (the
+  front one shows to you as a mirror, the back one as it is); everyone sees the new one at once
+
+### A tidier room panel, with room for YouTube results on phones
+- The top of the panel is just the room's name (its code, password and link are in Invite; who
+  hosts and the connection in People)
+- The tabs are one row of icons; the open tab also shows its name
+- One place for YouTube: the YouTube button in Now playing opens the Queue tab's search (it can
+  be opened before anything plays). While results show they fill the tab, and the buttons, hint
+  and queue step aside until the search is cleared; Previous / Next leave Now playing beside the
+  queue, which has the same
+- Scrolling search results: only the results scroll, so swiping back up always works (before, the
+  list scrolled inside the tab, and reaching its top stopped the scroll)
+
+### A quicker timeline
+- A tap on the timeline jumps your own video there at once (the scene preview no longer competes
+  with the jump), and keeps playing
+- Dragging: the picture follows as fast as the video can be decoded, without jumps piling up
+  (each waits for the one before, and only the newest place counts; where the browser can, it
+  jumps to the nearest keyframe on the way), then lands exactly where the finger or mouse let go.
+  A finger's small wobble during a tap isn't taken for a drag
+
+### The room panel opens and closes in motion
+- It slides in from the side (on a phone held upright, up from below) as it fades in, and the
+  player moves and resizes smoothly to make room; closing is the same backwards. Instant for
+  people whose device asks for less motion
+- **R** shows or hides it (outside a room, R opens the Watch together options); it's in the
+  keyboard shortcuts list too
+
+### Phones: the player and the room panel as rounded cards
+- With the room open beside a video on a phone held sideways, or below it in fullscreen on a phone
+  held upright, the player and the panel are two rounded cards like on a computer, only 6px apart
+  (and clear of a camera cutout or the home indicator)
+
+### Phones held upright: the title below the video
+- The video's title is just below the picture, like the YouTube app (up to two lines; tap it to
+  rename your own file), with the room panel or without it
+- In a room, the top of the player shows the room's name instead
+- Sideways, in fullscreen and on computers, the title stays at the top as before
+
 ## [1.4.8] - 2026-11-19
 
 ### Cameras in rooms, like a meeting
@@ -417,6 +467,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.4.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.9
 [1.4.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.8
 [1.4.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.7
 [1.4.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.6
