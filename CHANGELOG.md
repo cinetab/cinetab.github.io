@@ -4,6 +4,16 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.2] - 2026-11-20
+
+### YouTube Autoplay & Recommendations
+- Autoplay suggestions now provide true YouTube recommendations and design mixes, strictly avoiding picking songs from the same channel or artist so playback remains fresh and diverse
+- In a room, Autoplay only commits a suggested song to the queue when the current video finishes and there is no next song waiting, and silently pre-fetches without prematurely occupying the queue slot
+
+### Mobile layout & video details
+- On phones held upright, the area below the video features channel information, an expandable full description, a one-tap button to copy the YouTube video link, and quick buttons to create or join a room when watching solo
+- Rounded top corners on the below-the-video title bar for a seamless, modern look
+
 ## [1.5.1] - 2026-11-20
 
 ### Room panel
@@ -522,6 +532,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.2
 [1.5.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.1
 [1.5.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.0
 [1.4.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.9

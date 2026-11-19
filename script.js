@@ -302,6 +302,44 @@ new MutationObserver(placeTitle).observe(playerPage, { attributes: true, attribu
 // your own file's length, size and format.
 const detailsBox = document.querySelector(".player-details");
 let detailsKey = "";
+let detailsDescExpanded = false;
+
+// Copies the YouTube link for the current video and briefly shows "Copied" on the button
+const copyYouTubeLink = (id, btn) => {
+    const url = `https://www.youtube.com/watch?v=${id}`;
+    navigator.clipboard.writeText(url).then(() => {
+        btn.classList.add("copied");
+        const icon = btn.querySelector("i");
+        const label = btn.querySelector("span");
+        const prevIcon = icon.className;
+        const prevLabel = label.textContent;
+        icon.className = "fa-solid fa-check";
+        label.textContent = "Copied!";
+        setTimeout(() => {
+            btn.classList.remove("copied");
+            icon.className = prevIcon;
+            label.textContent = prevLabel;
+        }, 1800);
+    }).catch(() => {});
+};
+
+// Builds and renders the "Watch together" CTA below the video details when not in a room
+const detailsRoomCta = () => {
+    const div = el("div", "details-room-cta");
+    const p = el("p", null, "Watch this together with friends");
+    const btns = el("div", "details-room-btns");
+    const create = el("button", "details-room-btn primary room-create-open");
+    create.type = "button";
+    create.title = "Start a private room and invite friends";
+    create.append(el("i", "fa-solid fa-plus"), el("span", null, "Create a room"));
+    const join = el("button", "details-room-btn secondary room-join-open");
+    join.type = "button";
+    join.title = "Join a friend's room with its code and password";
+    join.append(el("i", "fa-solid fa-right-to-bracket"), el("span", null, "Join a room"));
+    btns.append(create, join);
+    div.append(p, btns);
+    return div;
+};
 
 const youTubeDetails = (id, info) => {
     const channel = el("div", "details-channel");
@@ -320,14 +358,48 @@ const youTubeDetails = (id, info) => {
     open.append(el("i", "fa-brands fa-youtube"), el("span", null, "YouTube"));
     channel.append(el("span", "details-avatar", name.charAt(0).toUpperCase()), who, open);
     const parts = [channel];
+
+    // Actions row: copy link button
+    const actions = el("div", "details-actions");
+    const copyBtn = el("button", "details-copy-btn");
+    copyBtn.type = "button";
+    copyBtn.title = "Copy the YouTube link for this video";
+    copyBtn.append(el("i", "fa-regular fa-copy"), el("span", null, "Copy link"));
+    copyBtn.addEventListener("click", () => copyYouTubeLink(id, copyBtn));
+    actions.append(copyBtn);
+
     if (info) {
         const facts = [];
         if (info.views) facts.push(CineYouTube.views(info.views));
         if (info.uploaded) facts.push(new Date(info.uploaded).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }));
         if (info.ago) facts.push(info.ago);
         if (facts.length) parts.push(el("p", "details-stats", facts.join(" · ")));
-        if (info.description) parts.push(el("p", "details-text", info.description));
+        if (info.description) {
+            const descEl = el("p", detailsDescExpanded ? "details-text expanded" : "details-text", info.description);
+            const toggleBtn = el("button", "details-desc-toggle");
+            toggleBtn.type = "button";
+            toggleBtn.append(
+                el("i", detailsDescExpanded ? "fa-solid fa-chevron-up" : "fa-solid fa-chevron-down"),
+                el("span", null, detailsDescExpanded ? "Show less" : "More")
+            );
+            toggleBtn.addEventListener("click", () => {
+                detailsDescExpanded = !detailsDescExpanded;
+                descEl.classList.toggle("expanded", detailsDescExpanded);
+                toggleBtn.querySelector("i").className = detailsDescExpanded ? "fa-solid fa-chevron-up" : "fa-solid fa-chevron-down";
+                toggleBtn.querySelector("span").textContent = detailsDescExpanded ? "Show less" : "More";
+            });
+            actions.append(toggleBtn);
+            parts.push(descEl);
+        }
     }
+    parts.push(actions);
+
+    // "Watch together" CTA when not currently in a room
+    if (!together.active()) {
+        const hr = el("hr", "details-room-divider");
+        parts.push(hr, detailsRoomCta());
+    }
+
     detailsBox.replaceChildren(...parts);
 };
 
@@ -337,7 +409,12 @@ const fileDetails = source => {
     head.firstChild.append(el("i", `fa-solid ${container.classList.contains("audio-mode") ? "fa-music" : "fa-film"}`));
     const format = (source.name.match(/\.([^.]+)$/) || [, ""])[1].toUpperCase();
     const facts = [Number.isFinite(mainVideo.duration) && mainVideo.duration > 0 ? formatTime(mainVideo.duration) : "", formatBytes(source.size), format].filter(Boolean);
-    detailsBox.replaceChildren(head, el("p", "details-stats", facts.join(" · ")));
+    const parts = [head, el("p", "details-stats", facts.join(" · "))];
+    if (!together.active()) {
+        const hr = el("hr", "details-room-divider");
+        parts.push(hr, detailsRoomCta());
+    }
+    detailsBox.replaceChildren(...parts);
 };
 
 const renderDetails = () => {
@@ -345,7 +422,8 @@ const renderDetails = () => {
     const id = youtube && typeof youTubeIdShown === "function" ? youTubeIdShown() : null;
     const source = !youtube && currentFile && currentSource ? currentSource : null;
     const wanted = playerPage.classList.contains("title-below") && !playerPage.classList.contains("room-open");
-    const key = !wanted ? "" : id ? `yt:${id}` : source ? `file:${source.name}:${source.size}:${Math.round(mainVideo.duration || 0)}` : "";
+    const inRoom = together.active();
+    const key = !wanted ? "" : id ? `yt:${id}:${inRoom}` : source ? `file:${source.name}:${source.size}:${Math.round(mainVideo.duration || 0)}:${inRoom}` : "";
     detailsBox.hidden = !key;
     if (key === detailsKey) return;
     detailsKey = key;

@@ -23,7 +23,15 @@
         "https://pipedapi.ducks.party",
         "https://pipedapi.kavin.rocks",
         "https://pipedapi.adminforge.de",
-        "https://pipedapi.r4fo.com"
+        "https://pipedapi.r4fo.com",
+        "https://api.piped.projectsegfau.lt",
+        "https://pipedapi.drgns.space"
+    ];
+    const INVIDIOUS_APIS = [
+        "https://inv.nadeko.net",
+        "https://invidious.nerdvpn.de",
+        "https://vid.priv.au",
+        "https://invidious.drgns.space"
     ];
     const PIPED_KEY = "cinetab:piped";
     const YT_ID = /^[A-Za-z0-9_-]{11}$/;
@@ -192,35 +200,145 @@
         throw new Error("Search isn't available right now");
     };
 
-    // A video to play after `id` that isn't in `skip` ({ id, title, channel }, or null): Autoplay's
-    // way on when a YouTube Mix can't be opened. First what YouTube suggests beside it (Piped's
-    // copy of it, from the server that answers searches; YouTube often refuses those servers this),
-    // then a search for its channel (the artist, for a song), or else its title.
-    // `about`: { title, channel } of the video `id`.
+    const cleanChannelName = name => String(name || "")
+        .toLowerCase()
+        .replace(/\s*-\s*topic$/i, "")
+        .replace(/\s*(vevo|official|music|channel)$/i, "")
+        .replace(/[^a-z0-9]/g, "");
+
+    const cleanTitleText = raw => String(raw || "")
+        .replace(/\s*[\(\[](official\s*(music\s*)?video|official\s*audio|official|audio|lyrics?(\s*video)?|visualizer|hd|4k|mv|remastered)[\)\]]/gi, "")
+        .trim();
+
+    // A video to play after `id` that isn't in `skip` ({ id, title, channel }, or null).
+    // Autoplay suggests videos like YouTube recommend or design mix, strictly avoiding
+    // videos from the same channel/artist so recommendations are fresh and diverse.
+    // Tries in order:
+    // 1. YouTube Related Streams (Up Next / Recommendations) via Piped & Invidious instances
+    // 2. YouTube Mix Playlist (RD<id>) via Piped
+    // 3. Smart "Design Mix" search (e.g. "<title> <artist> mix", "<title> mix", "<artist> radio")
     const suggestedAfter = async (id, skip = [], about = {}) => {
-        const usable = (next, item) => next && YT_ID.test(next) && next !== id && !skip.includes(next) && !item.live && !item.short;
-        try {
-            const data = await getJSON(`${pipedBases()[0]}/streams/${id}`, 5000);
-            for (const item of (data && data.relatedStreams) || []) {
-                let next = null;
-                try {
-                    next = new URL(item.url, "https://www.youtube.com").searchParams.get("v");
-                } catch (e) {}
-                // Videos only: no live streams, Shorts or playlists
-                if (item.type === "stream" && item.duration > 0 && usable(next, { short: item.isShort })) {
-                    return { id: next, title: text(item.title), channel: text(item.uploaderName, 100) };
-                }
+        let artist = String(about.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
+        let rawTitle = String(about.title || "").trim();
+        const cleanT = cleanTitleText(rawTitle);
+
+        // If title is in "Artist - Track" format, parse both
+        const dashMatch = cleanT.match(/^([^-–—]+)\s*[-–—]\s*(.+)$/);
+        let trackName = cleanT;
+        if (dashMatch) {
+            if (!artist || artist === "YouTube" || /topic$/i.test(about.channel || "")) {
+                artist = dashMatch[1].trim();
             }
-        } catch (e) {}
-        // YouTube Music's artist channels are called "Artist - Topic"
-        const channel = String(about.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
-        for (const query of [channel, about.title].filter(Boolean)) {
+            trackName = dashMatch[2].trim();
+        }
+
+        const curCh = cleanChannelName(about.channel);
+        const curArt = cleanChannelName(artist);
+
+        const isSameChannelOrArtist = (candCh, candTitle) => {
+            const cand = cleanChannelName(candCh);
+            if (cand) {
+                if (curCh && (cand === curCh || cand.includes(curCh) || curCh.includes(cand))) return true;
+                if (curArt && (cand === curArt || cand.includes(curArt) || curArt.includes(cand))) return true;
+            }
+            if (curArt && curArt.length >= 3 && candTitle) {
+                const candTitleClean = cleanChannelName(candTitle);
+                if (candTitleClean.startsWith(curArt)) return true;
+            }
+            return false;
+        };
+
+        const isUsable = (nextId, item, allowSame = false) => {
+            if (!nextId || !YT_ID.test(nextId) || nextId === id) return false;
+            if (skip && skip.includes(nextId)) return false;
+            if (item && (item.live || item.short)) return false;
+            const candChannel = (item && (item.channel || item.uploaderName || item.author)) || "";
+            const candTitle = (item && (item.title || item.name)) || "";
+            if (!allowSame && isSameChannelOrArtist(candChannel, candTitle)) return false;
+            return true;
+        };
+
+        // 1. YouTube Related Streams (Up Next / Recommended) via Piped APIs
+        for (const base of pipedBases()) {
+            try {
+                const data = await getJSON(`${base}/streams/${id}`, 3500);
+                const related = (data && data.relatedStreams) || [];
+                for (const item of related) {
+                    let next = null;
+                    try {
+                        next = new URL(item.url, "https://www.youtube.com").searchParams.get("v");
+                    } catch (e) {}
+                    if (item.type === "stream" && item.duration > 0 && isUsable(next, { ...item, channel: item.uploaderName }, false)) {
+                        storage.set(PIPED_KEY, base);
+                        return { id: next, title: text(item.title), channel: text(item.uploaderName, 100) };
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 2. YouTube Mix Playlist (RD<id>) via Piped APIs
+        for (const base of pipedBases().slice(0, 3)) {
+            try {
+                const data = await getJSON(`${base}/playlists/RD${id}`, 3500);
+                const items = (data && (data.relatedStreams || data.items)) || [];
+                for (const item of items) {
+                    let next = item.id;
+                    if (!next && item.url) {
+                        try { next = new URL(item.url, "https://www.youtube.com").searchParams.get("v"); } catch (e) {}
+                    }
+                    const candChannel = item.uploaderName || item.channel;
+                    if (isUsable(next, { ...item, channel: candChannel }, false)) {
+                        return { id: next, title: text(item.title || item.name), channel: text(candChannel, 100) };
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 3. Invidious Recommended Videos
+        for (const base of INVIDIOUS_APIS) {
+            try {
+                const data = await getJSON(`${base}/api/v1/videos/${id}`, 3500);
+                const recs = (data && data.recommendedVideos) || [];
+                for (const item of recs) {
+                    if (isUsable(item.videoId, { ...item, channel: item.author }, false)) {
+                        return { id: item.videoId, title: text(item.title), channel: text(item.author, 100) };
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 4. Smart "Design Mix" searches (simulates YouTube Mix / radio, different channel)
+        const queries = [];
+        if (trackName && artist && artist !== "YouTube") {
+            queries.push(`${trackName} ${artist} mix`);
+            queries.push(`${trackName} mix`);
+            queries.push(`${artist} mix`);
+            queries.push(`${artist} radio`);
+        } else if (trackName) {
+            queries.push(`${trackName} mix`);
+            queries.push(`${trackName} song`);
+        } else if (artist) {
+            queries.push(`${artist} mix`);
+            queries.push(`${artist} radio`);
+        }
+
+        for (const query of queries) {
             try {
                 const { items } = await search(query, "video");
-                const found = items.find(item => usable(item.id, item));
+                const found = items.find(item => isUsable(item.id, item, false));
                 if (found) return { id: found.id, title: found.title, channel: found.channel };
             } catch (e) {}
         }
+
+        // 5. Fallback only if no video from a different channel was found anywhere
+        for (const query of queries) {
+            try {
+                const { items } = await search(query, "video");
+                const found = items.find(item => isUsable(item.id, item, true));
+                if (found) return { id: found.id, title: found.title, channel: found.channel };
+            } catch (e) {}
+        }
+
         return null;
     };
 
@@ -1064,8 +1182,8 @@
         tick();
     };
 
-    // On after `after` with Autoplay: the YouTube Mix made from that video (as on YouTube), from
-    // the first video in it not played lately. True if something's on its way.
+    // On after `after` with Autoplay: a recommended video or design mix (as on YouTube),
+    // strictly avoiding videos from the same channel. True if something's on its way.
     const autoplayAfter = after => {
         if (!solo.active || !solo.ready || !after || together.active()) return false;
         const token = solo.token;
@@ -1079,27 +1197,8 @@
         solo.started = now();
         clearTimeout(solo.cueTimer);
         showFeedback("fa-forward-step", "Autoplay: up next");
-        // A Mix that didn't open once won't now: straight to YouTube's suggestions
-        if (solo.mixBroken) {
-            suggest(after, token);
-            return true;
-        }
-        solo.ref = { id: after, list: `RD${after}`, start: 0 };
-        solo.mix = after;
-        solo.meta = {};
-        solo.wantAfter = after;
-        try {
-            solo.player.cuePlaylist({ list: `RD${after}`, listType: "playlist", index: 0 });
-        } catch (e) {}
-        // No Mix after a while (YouTube didn't open it here): another video like it instead
-        solo.cueTimer = setTimeout(() => {
-            if (!solo.active || solo.token !== token || solo.wantAfter !== after) return;
-            solo.wantAfter = null;
-            solo.mixBroken = true;
-            suggest(after, token);
-        }, 7000);
-        solo.cuedAt = now();
-        tick();
+        solo.mix = solo.wantAfter = null;
+        suggest(after, token);
         return true;
     };
 

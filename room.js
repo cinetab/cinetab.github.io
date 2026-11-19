@@ -3179,7 +3179,11 @@
                 .then(response => response.ok ? response.json() : null)
                 .then(data => {
                     const title = data && clean(data.title, 200);
-                    if (title && room === host && !item.title) titleKnown(item, title);
+                    const channel = data && clean(data.author_name, 100);
+                    if (data && room === host) {
+                        if (channel && !item.channel) item.channel = channel;
+                        if (title && !item.title) titleKnown(item, title, channel);
+                    }
                 })
                 .catch(() => {})
                 .finally(() => {
@@ -3189,11 +3193,13 @@
         }
     };
 
-    const titleKnown = (item, title) => {
+    const titleKnown = (item, title, channel = "") => {
         item.title = title;
+        if (channel && !item.channel) item.channel = channel;
         const y = room.yt;
         if (y && y.queue[y.index] === item) {
             y.title = title;
+            if (channel && !y.channel) y.channel = channel;
             shareFile();
             if (together.stream === ytControls) videoTitle.textContent = audioTitle.textContent = title;
         }
@@ -3210,6 +3216,9 @@
         y.title = item.title;
         y.by = item.by;
         y.duration = 0;
+        // Clear any pre-fetched autoplay suggestion — it was for the previous video
+        y.autoFor = null;
+        y.autoSuggestion = null;
         room.state = { paused: false, time: start, rate: room.state ? room.state.rate : 1, at: now() };
         shareFile();
         broadcast(stateMessage());
@@ -3257,6 +3266,9 @@
         const items = ids.slice(0, space).map(id => queueItem(id, sharer));
         const at = where === "end" ? y.queue.length : y.index + 1;
         y.queue.splice(at, 0, ...items);
+        // A song was added after the current one: discard any pre-fetched autoplay suggestion
+        // so it doesn't get committed to the queue when the current video ends
+        if (at > y.index) { y.autoSuggestion = null; y.autoFor = null; }
         if (where === "play") playQueued(at, items.length === 1 ? ref.start : 0);
         else {
             notice(items.length > 1 ? `${sharer.name} added ${items.length} videos to the queue` : `${sharer.name} added a video to the queue`);
@@ -3374,20 +3386,42 @@
     const AUTOPLAY_BY = { id: "autoplay", name: "Autoplay" };
     const autoplayOn = () => !!(together.solo && together.solo.autoplay);
 
-    // Adds the next video after the last one; true if one was added. `again`: try even if it was
-    // tried for this video already (at its end)
+    // Pre-fetches the next suggested video for Autoplay while the current video plays, without
+    // adding it to the queue yet. The result is cached in y.autoSuggestion so that when the video
+    // ends there is no extra delay. Only fetches when the current video is the last in the queue.
+    const autoplayPrefetch = async () => {
+        const host = room;
+        const y = host && host.role === "host" && host.yt;
+        if (!y || !autoplayOn() || !window.CineYouTube || y.index < y.queue.length - 1 || y.queue.length >= QUEUE_MAX) return;
+        const item = y.queue[y.index];
+        if (y.autoFor === item.k) return; // already fetched for this video
+        y.autoFor = item.k;
+        y.autoSuggestion = null; // clear any old suggestion while fetching
+        const next = await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || item.channel || "" });
+        // Cache the result only if we're still on the same video and it's still the last one
+        if (!next || room !== host || host.yt !== y || y.queue[y.queue.length - 1] !== item || !autoplayOn()) return;
+        y.autoSuggestion = { next, item };
+    };
+
+    // Adds the next video after the last one when the current video ends; true if one was added.
+    // Uses the pre-fetched suggestion if available, otherwise fetches fresh. `again`: try even if
+    // it was tried for this video already (at its end).
     const autoplayNext = async (again = false) => {
         const host = room;
         const y = host && host.role === "host" && host.yt;
+        // Only fire when there is truly no next song in the queue
         if (!y || !autoplayOn() || !window.CineYouTube || y.index < y.queue.length - 1 || y.queue.length >= QUEUE_MAX) return false;
         const item = y.queue[y.index];
-        if (y.autoFor === item.k && !again) return false;
-        y.autoFor = item.k;
-        const next = await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || "" });
+        // Use the cached suggestion if it is for the current (last) video
+        const cached = y.autoSuggestion && y.autoSuggestion.item === item ? y.autoSuggestion.next : null;
+        if (!again && !cached && y.autoFor === item.k) return false; // fetch already attempted, nothing found
+        const next = cached || await CineYouTube.suggestedAfter(item.id, y.queue.map(entry => entry.id), { title: item.title, channel: y.channel || item.channel || "" });
+        y.autoSuggestion = null; // consume the cached suggestion
         // Still the last video, and still wanted
         if (!next || room !== host || host.yt !== y || y.queue[y.queue.length - 1] !== item || !autoplayOn()) return false;
         const added = queueItem(next.id, AUTOPLAY_BY);
         added.title = next.title;
+        added.channel = next.channel;
         added.auto = true;
         y.queue.push(added);
         shareFile();
@@ -3439,8 +3473,9 @@
                     }
                     // Its channel, for Autoplay to find another like it
                     y.channel = clean(data.author || "", 100);
-                    // The last video in the queue is playing: Autoplay finds what's next
-                    if (y.title && yt.player.getPlayerState() === YT.PLAYING) autoplayNext();
+                    // The last video in the queue is playing: Autoplay pre-fetches what's next
+                    // (but does NOT add it to the queue yet — that only happens when the video ends)
+                    if (y.title && yt.player.getPlayerState() === YT.PLAYING) autoplayPrefetch();
                     // Only while the video itself plays, not an ad
                     const length = yt.player.getDuration();
                     if (yt.player.getPlayerState() === YT.PLAYING && yt.player.getCurrentTime() > 1 && length > 1 && Math.abs(length - y.duration) > 1) {
@@ -5389,6 +5424,11 @@
 
     document.querySelectorAll(".room-create-open").forEach(button => button.addEventListener("click", () => openCreate()));
     document.querySelectorAll(".room-join-open").forEach(button => button.addEventListener("click", () => openJoin()));
+    // Also handle dynamically created buttons (e.g. in the mobile video details panel) via delegation
+    document.addEventListener("click", e => {
+        if (e.target.closest(".room-create-open") && !e.target.closest("[data-room-listener]")) openCreate();
+        if (e.target.closest(".room-join-open") && !e.target.closest("[data-room-listener]")) openJoin();
+    }, true);
     overlay.querySelectorAll(".room-cancel").forEach(button => button.addEventListener("click", closeDialog));
     createForm.querySelector(".room-new-password").addEventListener("click", () => field(createForm, "password").value = Signaling.newPassword());
 
