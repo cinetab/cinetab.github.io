@@ -150,7 +150,9 @@
                     kind: "video", id, list: null,
                     title: text(item.title), channel: text(item.uploaderName, 100), thumb: thumbOf(id),
                     duration: item.duration > 0 ? item.duration : null, live: item.duration === -1,
-                    views: item.views > 0 ? item.views : null, ago: text(item.uploadedDate, 40), short: !!item.isShort
+                    views: item.views > 0 ? item.views : null, ago: text(item.uploadedDate, 40), short: !!item.isShort,
+                    uploaded: item.uploaded > 0 ? item.uploaded : null, verified: item.uploaderVerified === true,
+                    description: text(item.shortDescription, 300)
                 };
             }
             if (item.type === "playlist" && list && YT_LIST.test(list)) {
@@ -220,6 +222,23 @@
             } catch (e) {}
         }
         return null;
+    };
+
+    // A video's details for the space below the player on phones (script.js): { title, channel,
+    // verified, views, ago, uploaded, description }, or null. YouTube's own player only says the
+    // title and channel, so the rest comes from a search for the video itself; kept per video.
+    const detailsCache = new Map();
+    const details = id => {
+        if (!YT_ID.test(id || "")) return Promise.resolve(null);
+        if (!detailsCache.has(id)) {
+            detailsCache.set(id, search(id, "video")
+                .then(result => result.items.find(item => item.id === id) || null)
+                .catch(() => {
+                    detailsCache.delete(id);
+                    return null;
+                }));
+        }
+        return detailsCache.get(id);
     };
 
     // ---------- Search results, on the home page and in a room
@@ -1179,5 +1198,5 @@
     together.step = n => together.solo.step(n);
     window.addEventListener("pagehide", () => solo.active && save());
 
-    window.CineYouTube = { parse, search, api, play, createResults, thumbOf, suggestedAfter };
+    window.CineYouTube = { parse, search, api, play, createResults, thumbOf, suggestedAfter, details, views };
 })();

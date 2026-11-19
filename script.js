@@ -297,6 +297,66 @@ document.addEventListener("webkitfullscreenchange", placeTitle);
 // The room's panel opening or closing (room.js)
 new MutationObserver(placeTitle).observe(playerPage, { attributes: true, attributeFilter: ["class"] });
 
+// Below the title, while the room's panel is closed (or outside a room): about the video. A
+// YouTube video's channel, views, upload date and description (youtube.js asks for them), or
+// your own file's length, size and format.
+const detailsBox = document.querySelector(".player-details");
+let detailsKey = "";
+
+const youTubeDetails = (id, info) => {
+    const channel = el("div", "details-channel");
+    const name = (info && info.channel) || "YouTube";
+    const who = el("b", null, name);
+    if (info && info.verified) {
+        const check = el("i", "fa-solid fa-circle-check");
+        check.title = "Verified channel";
+        who.append(" ", check);
+    }
+    const open = el("a", "details-open");
+    open.href = `https://www.youtube.com/watch?v=${id}`;
+    open.target = "_blank";
+    open.rel = "noopener";
+    open.title = "Open this video on YouTube (a new tab)";
+    open.append(el("i", "fa-brands fa-youtube"), el("span", null, "YouTube"));
+    channel.append(el("span", "details-avatar", name.charAt(0).toUpperCase()), who, open);
+    const parts = [channel];
+    if (info) {
+        const facts = [];
+        if (info.views) facts.push(CineYouTube.views(info.views));
+        if (info.uploaded) facts.push(new Date(info.uploaded).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }));
+        if (info.ago) facts.push(info.ago);
+        if (facts.length) parts.push(el("p", "details-stats", facts.join(" · ")));
+        if (info.description) parts.push(el("p", "details-text", info.description));
+    }
+    detailsBox.replaceChildren(...parts);
+};
+
+const fileDetails = source => {
+    const head = el("div", "details-channel");
+    head.append(el("span", "details-avatar", ""), el("b", null, source.name));
+    head.firstChild.append(el("i", `fa-solid ${container.classList.contains("audio-mode") ? "fa-music" : "fa-film"}`));
+    const format = (source.name.match(/\.([^.]+)$/) || [, ""])[1].toUpperCase();
+    const facts = [Number.isFinite(mainVideo.duration) && mainVideo.duration > 0 ? formatTime(mainVideo.duration) : "", formatBytes(source.size), format].filter(Boolean);
+    detailsBox.replaceChildren(head, el("p", "details-stats", facts.join(" · ")));
+};
+
+const renderDetails = () => {
+    const youtube = container.classList.contains("youtube");
+    const id = youtube && typeof youTubeIdShown === "function" ? youTubeIdShown() : null;
+    const source = !youtube && currentFile && currentSource ? currentSource : null;
+    const wanted = playerPage.classList.contains("title-below") && !playerPage.classList.contains("room-open");
+    const key = !wanted ? "" : id ? `yt:${id}` : source ? `file:${source.name}:${source.size}:${Math.round(mainVideo.duration || 0)}` : "";
+    detailsBox.hidden = !key;
+    if (key === detailsKey) return;
+    detailsKey = key;
+    if (!key) return detailsBox.replaceChildren();
+    if (source) return fileDetails(source);
+    youTubeDetails(id, null);
+    if (window.CineYouTube && CineYouTube.details) CineYouTube.details(id).then(info => info && detailsKey === key && youTubeDetails(id, info));
+};
+setInterval(renderDetails, 1000);
+new MutationObserver(renderDetails).observe(playerPage, { attributes: true, attributeFilter: ["class"] });
+
 // Load Video File
 const setSource = (source, mode, autoplay = true) => {
     const oldURL = currentURL;

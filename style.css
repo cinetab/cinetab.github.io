@@ -132,10 +132,103 @@ body.watching {
   align-items: stretch;
 }
 
-.player-page.title-below > .player-meta:not(.empty) {
+.player-page.title-below > .player-meta:not(.empty),
+.player-page.now-below > .player-meta {
   display: block;
   flex-shrink: 0;
   padding: 10px 16px;
+}
+
+/* About the video (phones held upright, the room's panel closed; script.js): a rounded card under
+   the title, with a YouTube video's channel, views, date and description, or a file's details */
+.player-details {
+  display: none;
+}
+
+.player-page.title-below > .player-details:not([hidden]) {
+  display: block;
+  flex-shrink: 0;
+  margin: 2px 12px 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.details-channel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.details-avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 600;
+  color: #d6e8ff;
+  background: rgba(62, 151, 253, 0.28);
+}
+
+.details-channel b {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.details-channel b .fa-circle-check {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.details-open {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.details-open .fa-youtube {
+  color: #ff4e45;
+}
+
+.details-stats {
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.details-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* Nothing playing yet (a room's buttons below it still show) */
+.player-meta.empty .player-meta-title {
+  display: none;
 }
 
 .player-meta-title {
@@ -4551,6 +4644,7 @@ body > .room-toasts {
 }
 
 .room-call-name {
+  transition: opacity 0.35s ease;
   position: absolute;
   left: 5px;
   bottom: 5px;
@@ -4993,11 +5087,6 @@ body > .room-toasts {
 
 .room-queue-hint.error {
   color: #ff8a8a;
-}
-
-/* Previous / Next stay out of Now playing beside the queue, which shows the same and has Play */
-.room-panel[data-tab="queue"] .room-now-list {
-  display: none !important;
 }
 
 /* Searching: the results take the whole tab and are all that scrolls (one scroll, so going back
@@ -6576,6 +6665,171 @@ body > .room-toasts {
   margin-top: 10px;
   padding: 6px 14px;
   font-size: 12px;
+}
+
+/* Computers: Now playing at the top of the panel, under the room's name */
+.room-now + .room-tabs {
+  margin-top: 8px;
+}
+
+/* A playlist's previous / next are the player's own buttons, beside play: not in Now playing */
+.room-now .room-now-list {
+  display: none !important;
+}
+
+/* Phones held upright (.now-below): the panel's top corners rounded; the call bar (you, mic,
+   camera, leave) on its own at the bottom of the screen, below the panel or the video's details */
+.player-page.now-below .room-panel {
+  padding-bottom: 0;
+  border-width: 1px 1px 0;
+  border-radius: 18px 18px 0 0;
+}
+
+.player-page.now-below > .room-foot {
+  flex-shrink: 0;
+  width: 100%;
+  margin-top: auto;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8e8ee;
+  background: rgba(23, 23, 28, 0.94);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+
+/* Fullscreen with the panel open: the call bar is a rounded card too */
+.player-page.now-below.room-open:is(:fullscreen, :-webkit-full-screen) > .room-foot {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+/* The small call window: names fade a few seconds after they show (room.js); mics stay */
+.room-call.quiet:not(.big) .room-call-name {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .room-call:hover .room-call-name {
+    opacity: 1;
+  }
+}
+
+/* Phones held upright (.now-below, room.js): Now playing sits under the video's title as a line
+   of who shared it and a row of round-ended buttons, the first opening and closing the room; the
+   panel starts straight with its tabs (the room's name is at the top of the player) */
+/* (in the panel, everywhere but below the title, it isn't needed) */
+.room-panel .room-toggle {
+  display: none;
+}
+
+.player-page.now-below .room-head {
+  display: none;
+}
+
+.player-page.now-below .room-tabs {
+  margin-top: 8px;
+}
+
+.player-meta .room-now {
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.player-meta .room-now-icon,
+.player-meta .room-now-title {
+  display: none;
+}
+
+.player-meta .room-now-text {
+  order: -2;
+  flex-basis: 100%;
+}
+
+.player-meta .room-now-text small {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.player-meta .room-now .room-small-btn,
+.player-meta .room-now .room-icon-btn {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.player-meta .room-now .room-icon-btn {
+  width: 34px;
+  padding: 0;
+}
+
+.player-meta .room-now .room-small-btn.primary {
+  border-color: #3e97fd;
+  background: #3e97fd;
+}
+
+.player-meta .room-now .room-now-yt {
+  color: #ff4e45;
+}
+
+/* Previous / next: just their icons (where it is in the list is in the Queue tab) */
+.player-meta .room-now-list {
+  flex-basis: auto;
+  gap: 6px;
+}
+
+.player-meta .room-now-count {
+  display: none;
+}
+
+.player-meta .room-now .room-now-prev,
+.player-meta .room-now .room-now-next {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+  font-size: 0;
+}
+
+.player-meta .room-now .room-now-prev i,
+.player-meta .room-now .room-now-next i {
+  font-size: 12px;
+}
+
+.player-meta .room-toggle {
+  order: -1;
+  position: relative;
+  display: inline-flex;
+  font-weight: 500;
+}
+
+.room-toggle-arrow {
+  font-size: 10px;
+  transition: transform 0.25s ease;
+}
+
+.room-toggle[aria-expanded="true"] .room-toggle-arrow {
+  transform: rotate(180deg);
+}
+
+/* Unread chat (and people at the door) while the room is closed */
+.room-toggle-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fff;
+  background: #ff4d6d;
 }
 
 /* Phones, the room open beside or below a full-screen video: the player and the panel as two

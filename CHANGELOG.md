@@ -4,6 +4,51 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-11-20
+
+### The room goes on without its host
+- If the host leaves, closes the tab or loses the connection, the room carries on: the next
+  person in line (whoever joined first) hosts it straight away, and everyone else reconnects to
+  them. The chat stays, the room keeps its name and settings, everyone is let straight back in,
+  and a YouTube video or queue goes on from where it was. A video streaming from the old host's
+  own computer stops with it; anyone can share another. If the next in line is gone too, the one
+  after them takes over a few seconds later
+- The person who created the room is its owner: they can come back any time (also from the home
+  page's remembered rooms) and are let straight in as a participant. Only the owner can end the
+  room for everyone: Leave asks them whether to leave (the room goes on) or end it, which also
+  removes it from everyone's remembered rooms. Everyone else just leaves
+- Two browsers hosting the same room (one's connection came back, or the owner opened it again
+  while it was going on) settle it themselves within seconds: the older one gives way and joins
+  as a participant
+- Nobody's secrets are passed around: the owner's browser keeps a key that the others only know
+  the fingerprint of, and the next host recognises people by the fingerprints of their tickets
+- With a CineTab from before this version in the room, a host leaving still ends it as before
+
+### Phones held upright: what's playing, under its title
+- In a room, Now playing sits just below the video's title: who shared it, then one row of
+  buttons: the room (people icon and how many; opens and closes the panel, with a badge for
+  unread chat), YouTube, share / change and remove
+- The panel then starts straight with its tabs: the room's name is at the top of the player, so
+  the panel has no heading of its own, and more room for the chat, the queue and search results
+- The call window first opens on the picture, not over the title below it
+
+### Computers: Now playing at the top of the room panel
+- The Now playing bar is at the top of the panel, under the room's name
+- A playlist's previous / next aren't in Now playing any more (on computers and phones): they're
+  the player's own buttons, beside play
+
+### Phones held upright: the video's details, the call bar, rounded corners
+- With the room's panel closed (or outside a room), the space below the title shows about the
+  video in a rounded card: a YouTube video's channel (verified or not), views, upload date and
+  description, with a button to open it on YouTube; your own file's name, length, size and format
+- The call bar (you, mic, camera, leave) stays at the bottom of the screen, with the panel open
+  or closed
+- The room's panel has rounded top corners
+
+### The call window
+- Small, it shows names for a few seconds (when it appears, someone joins or leaves, or it's
+  touched or pointed at), then just the pictures and mics; large, it always shows them
+
 ## [1.4.9] - 2026-11-20
 
 ### The call window
@@ -467,6 +512,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.0
 [1.4.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.9
 [1.4.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.8
 [1.4.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.4.7

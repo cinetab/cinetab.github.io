@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.4.9">
+  <meta name="version" content="1.5.0">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.4.9",
+      "softwareVersion": "1.5.0",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.4.9</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.5.0</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -778,6 +778,8 @@
 
   <!-- Phones held upright: the video's title just below the picture, like the YouTube app (script.js) -->
   <div class="player-meta"><h2 class="player-meta-title" title="Tap to rename"></h2></div>
+  <!-- Phones held upright, with the room's panel closed: about the video (script.js) -->
+  <section class="player-details" hidden aria-label="About this video"></section>
 
   <!-- ============ ROOM: PANEL ============ -->
   <!-- Watch-together room: chat, people, invite and settings, one at a time (room.js) -->
@@ -789,14 +791,6 @@
       </div>
       <button class="room-icon-btn room-hide-btn" title="Hide the panel (you stay in the room)"><i class="fa-solid fa-xmark"></i></button>
     </header>
-
-    <nav class="room-tabs" role="tablist" aria-label="Room">
-      <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
-      <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
-      <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
-      <button class="room-tab-btn" role="tab" data-tab="invite" title="Invite people with a link, QR code, or code and password"><i class="fa-solid fa-user-plus"></i><span>Invite</span></button>
-      <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
-    </nav>
 
     <!-- What everyone is watching, who shared it, and the way to share another or remove it -->
     <div class="room-now">
@@ -818,6 +812,14 @@
         <div class="yt-results room-yt-results" hidden></div>
       </form>
     </div>
+
+    <nav class="room-tabs" role="tablist" aria-label="Room">
+      <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
+      <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
+      <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
+      <button class="room-tab-btn" role="tab" data-tab="invite" title="Invite people with a link, QR code, or code and password"><i class="fa-solid fa-user-plus"></i><span>Invite</span></button>
+      <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
+    </nav>
 
     <ul class="room-requests"></ul>
 

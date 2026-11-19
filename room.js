@@ -195,6 +195,11 @@
     // ---------- Small helpers
 
     const now = () => performance.now();
+    // A fingerprint of a secret (a ticket, the owner's key): shows it's the same one without
+    // giving it away, so whoever hosts next can recognise people without knowing their tickets
+    const fingerprint = async text => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`cinetab:${text}`))),
+        byte => byte.toString(16).padStart(2, "0")).join("");
+    const FINGERPRINT = /^[0-9a-f]{64}$/;
     const finite = (value, min, max) => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
     // Names and messages: one line of plain text without control or direction-changing characters
     const clean = (text, max) => String(text ?? "")
@@ -457,6 +462,8 @@
         const total = panel.hidden ? chatUnread + waiting : 0;
         badge.hidden = !total;
         badge.textContent = total > 9 ? "9+" : total;
+        roomToggleBadge.hidden = !total;
+        roomToggleBadge.textContent = badge.textContent;
         renderHomeBar();
     };
 
@@ -483,6 +490,8 @@
     const setPanel = show => {
         panel.hidden = !show;
         playerPage.classList.toggle("room-open", show);
+        roomToggle.setAttribute("aria-expanded", String(show));
+        roomToggle.title = show ? "Hide the room (R)" : "Show the room: chat, queue, people (R)";
         if (show && activeTab === "chat") {
             chatUnread = 0;
             scrollChat();
@@ -490,6 +499,37 @@
         if (!show) closeProfile();
         updateBadges();
     };
+
+    // ---------- Phones held upright: what's playing, under its title. The video's title is below
+    // the picture there and the room's name at the top of the player (script.js), so the Now
+    // playing bar (who shared it, YouTube, share / change, previous / next, remove) moves just
+    // below the title, with a Room button in front that opens and closes the panel; the panel
+    // then starts straight with its tabs. Elsewhere the bar stays at the top of the panel.
+    const roomToggle = el("button", "room-small-btn room-toggle");
+    roomToggle.type = "button";
+    roomToggle.setAttribute("aria-expanded", "false");
+    const roomToggleLabel = el("span", "room-toggle-label");
+    const roomToggleBadge = el("b", "room-toggle-badge");
+    roomToggleBadge.hidden = true;
+    roomToggle.append(el("i", "fa-solid fa-users"), roomToggleLabel, roomToggleBadge, el("i", "fa-solid fa-chevron-up room-toggle-arrow"));
+    roomToggle.addEventListener("click", () => together.openPanel && together.openPanel());
+    nowBar.prepend(roomToggle);
+
+    const metaBox = document.querySelector(".player-meta");
+    const nowHome = nowBar.nextElementSibling;
+    // The call bar (you, mic, camera, leave) stays at the bottom of the screen there, with the
+    // panel open or closed
+    const roomFoot = panel.querySelector(".room-foot");
+    const footHome = roomFoot.nextElementSibling;
+    const placeNowBar = () => {
+        const below = !!room && !!metaBox && playerPage.classList.contains("title-below");
+        if (below && nowBar.parentNode !== metaBox) metaBox.append(nowBar);
+        else if (!below && nowBar.parentNode !== panel) panel.insertBefore(nowBar, nowHome);
+        if (below && roomFoot.parentNode !== playerPage) playerPage.append(roomFoot);
+        else if (!below && roomFoot.parentNode !== panel) panel.insertBefore(roomFoot, footHome);
+        playerPage.classList.toggle("now-below", below);
+    };
+    new MutationObserver(placeNowBar).observe(playerPage, { attributes: true, attributeFilter: ["class"] });
 
     // ---------- Opening and closing the panel, in motion: it slides in from the side (or up from
     // below, on a phone held upright) as it fades in, and the player moves and resizes smoothly to
@@ -692,6 +732,9 @@
         room.memberCount = members.length;
         peopleCount.textContent = members.length;
         shareLabel.textContent = `Room · ${members.length}`;
+        // The button under the title: people and how many (its tooltip and label say "Room")
+        roomToggleLabel.textContent = members.length;
+        roomToggle.setAttribute("aria-label", `Room, ${members.length} ${members.length === 1 ? "person" : "people"}`);
         const file = room.file;
         peopleList.replaceChildren(...members.map(member => {
             const item = el("li", "room-person");
@@ -743,6 +786,7 @@
         roomTitle.title = stateText.textContent;
         topRoomName.textContent = room.title;
         topRoomName.hidden = false;
+        placeNowBar();
         renderHomeBar();
     };
 
@@ -792,15 +836,19 @@
         renderQr(inviteLink());
     };
 
-    const enterRoomUI = () => {
+    // `keepChat`: the same room carrying on (another host took it over, or this browser did)
+    const enterRoomUI = (keepChat = false) => {
         roomNameInput.value = room.title;
         hostSettings.hidden = room.role !== "host";
         guestSettings.hidden = room.role === "host";
-        leaveLabel.textContent = room.role === "host" ? "End room" : "Leave";
-        leaveBtn.title = room.role === "host" ? "End the room for everyone" : "Leave the room";
+        // Leaving doesn't end the room: it goes on with everyone else. Its owner can end it.
+        leaveLabel.textContent = "Leave";
+        leaveBtn.title = room.ownerSecret ? "Leave the room, or end it for everyone" : "Leave the room (it goes on with everyone else)";
         chatInput.disabled = false;
-        chatList.replaceChildren();
-        chatItems.clear();
+        if (!keepChat) {
+            chatList.replaceChildren();
+            chatItems.clear();
+        }
         cancelReply();
         lastMessage = null;
         chatUnread = 0;
@@ -1297,9 +1345,11 @@
             x = call.pos.x * (page.width - width);
             y = call.pos.y * (page.height - height);
         } else {
+            // At first: the top right of the picture, below its title bar, and within the picture
+            // (on a phone held upright, not over the title below it)
             const picture = container.getBoundingClientRect();
             x = picture.right - page.left - width - 12;
-            y = picture.top - page.top + 72;
+            y = Math.max(picture.top - page.top + 8, Math.min(picture.top - page.top + 72, picture.bottom - page.top - height - 8));
         }
         call.x = Math.max(margin, Math.min(x, page.width - width - margin));
         call.y = Math.max(margin, Math.min(y, page.height - height - margin));
@@ -1348,6 +1398,17 @@
         callSizeBtn.title = call.big ? "Smaller" : "Larger";
         callSizeBtn.setAttribute("aria-label", callSizeBtn.title);
     };
+    // The small window shows names for a few seconds (when it appears, someone joins or leaves, or
+    // it's touched or pointed at), then just the pictures and mics; the large one always shows them
+    let callNamesTimer = null;
+    const showCallNames = () => {
+        callWin.classList.remove("quiet");
+        clearTimeout(callNamesTimer);
+        callNamesTimer = setTimeout(() => callWin.classList.add("quiet"), 4000);
+    };
+    callWin.addEventListener("pointerenter", showCallNames);
+    callWin.addEventListener("pointerdown", showCallNames);
+
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -1391,7 +1452,12 @@
 
     const renderCameras = () => {
         const people = callPeople();
+        const wasHidden = callWin.hidden;
         callWin.hidden = !people.length;
+        // Someone came or went: everyone's name again for a moment
+        const who = people.map(person => person.key).join();
+        if (people.length && (wasHidden || who !== call.who)) showCallNames();
+        call.who = who;
         callTitle.textContent = `${people.length} in the room`;
         const keep = new Set(people.map(person => person.key));
         call.tiles.forEach((tile, key) => {
@@ -1791,6 +1857,7 @@
             ...guests().map(peer => ({ id: peer.id, name: peer.name, avatar: peer.avatar, stream: peer.wantsStream, sharing: sharer === peer.id, route: peer.route, mic: !!peer.micOn }))
         ];
         broadcast({ t: "members", members });
+        shareSuccession();
         renderPeople(members);
         renderState();
         // Who sees whose camera follows who's in the room (and their names)
@@ -2011,6 +2078,7 @@
         if (!key || !room || room.role !== "host") return;
         room.settings[key] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
         qualityField.hidden = !room.settings.streaming;
+        shareSuccession();
         if (key === "streaming" || key === "quality") updateStreams();
         if (key === "control" || key === "streaming" || key === "media") {
             broadcast({ t: "settings", ...publicSettings() });
@@ -2068,6 +2136,7 @@
         peer.status = "admitted";
         peer.ticket ||= Signaling.newId();
         room.tickets.add(peer.ticket);
+        trackTicket(peer.ticket);
         if (!room.approved.includes(peer.ticket)) {
             room.approved.push(peer.ticket);
             saveApprovedTickets(room.code, room.approved);
@@ -2104,6 +2173,12 @@
         const peer = room.peers.get(button.dataset.remove);
         if (!peer || peer.status !== "admitted" || !confirm(`Remove ${peer.name} from the room?`)) return;
         room.tickets.delete(peer.ticket);
+        room.hashes.delete(peer.ticket);
+        if (peer.ticket) fingerprint(peer.ticket).then(hash => {
+            if (!room || room.role !== "host") return;
+            room.inherited.delete(hash);
+            shareSuccession();
+        });
         refuse(peer, "removed");
         notice(`${peer.name} was removed from the room`);
     });
@@ -2120,6 +2195,29 @@
         else if (message.paused === false) mainVideo.play().catch(() => {});
     };
 
+    // Someone saying hello: straight in with a ticket from this host or one before it, or the
+    // owner's key; otherwise the room's rules (locked, full, the lobby)
+    const greet = async (peer, message) => {
+        const host = room;
+        const ticket = typeof message.ticket === "string" ? message.ticket.slice(0, 64) : null;
+        let known = !!ticket && (host.tickets.has(ticket) || host.approved.includes(ticket));
+        if (!known && ticket && host.inherited.size) known = host.inherited.has(await fingerprint(ticket));
+        const owner = typeof message.owner === "string" && !!host.ownerTag && await fingerprint(message.owner.slice(0, 128)) === host.ownerTag;
+        if (room !== host || peer.status !== "connecting") return;
+        if (owner) peer.owner = true;
+        if (known || owner) {
+            if (ticket) peer.ticket = ticket;
+            return admit(peer, true);
+        }
+        if (host.settings.locked) return refuse(peer, "locked");
+        if (guests().length >= MAX_GUESTS) return refuse(peer, "full");
+        if (!host.settings.lobby) return admit(peer);
+        peer.status = "waiting";
+        send(peer, { t: "waiting" });
+        renderRequests();
+        announceKnock(peer);
+    };
+
     const hostHandle = (peer, message) => {
         if (message.t === "ping") {
             if (finite(message.c, -1e13, 1e13)) send(peer, { t: "pong", c: message.c, h: now() });
@@ -2132,18 +2230,7 @@
             peer.avatar = validAvatar(message.avatar);
             // Video can't go through the relays, only messages
             peer.wantsStream = !peer.channel.isTunnel && message.stream !== false;
-            if (typeof message.ticket === "string" && (room.tickets.has(message.ticket) || room.approved.includes(message.ticket))) {
-                peer.ticket = message.ticket;
-                return admit(peer, true);
-            }
-            if (room.settings.locked) return refuse(peer, "locked");
-            if (guests().length >= MAX_GUESTS) return refuse(peer, "full");
-            if (!room.settings.lobby) return admit(peer);
-            peer.status = "waiting";
-            send(peer, { t: "waiting" });
-            renderRequests();
-            announceKnock(peer);
-            return;
+            return greet(peer, message);
         }
         if (peer.status !== "admitted") return;
         if (message.t === "chat") {
@@ -2188,6 +2275,14 @@
             peer.wantsStream = !peer.channel.isTunnel && message.stream === true;
             updateStreams();
             shareMembers();
+        } else if (message.t === "end") {
+            // The room's owner, as a participant, ends it for everyone
+            if (typeof message.owner !== "string" || !room.ownerTag || !allow(peer, "end", 3, 10000)) return;
+            const host = room;
+            fingerprint(message.owner.slice(0, 128)).then(hash => {
+                if (room !== host || hash !== host.ownerTag) return;
+                endedByOwner(peer.name);
+            });
         } else if (message.t === "mic") {
             if (peer.status !== "admitted" || !allow(peer, "mic", 10, 10000)) return;
             const on = message.on === true;
@@ -2310,6 +2405,17 @@
             if (host.peers.size < MAX_GUESTS + 6) acceptTunnel(from, pub);
             return;
         }
+        // Another browser hosting this room: the newest claim wins (more hosts before it; between
+        // equals, the smaller id); the other one hears straight away that it should give way
+        if (t === "host") {
+            if (!finite(message.epoch, 0, 1e6) || host.yielding) return;
+            if (message.epoch > host.epoch || (message.epoch === host.epoch && from < host.id)) return yieldTo();
+            if (now() - (host.claimedAt || 0) > 1000) {
+                host.claimedAt = now();
+                host.signal.send({ t: "host", from: host.id, epoch: host.epoch });
+            }
+            return;
+        }
         if (t === "knock") {
             if (typeof message.pub !== "string" || message.pub.length > 200) return;
             const reason = host.settings.locked && !message.rejoin ? "locked" : guests().length >= MAX_GUESTS ? "full" : null;
@@ -2326,15 +2432,28 @@
         }
     };
 
-    const startHost = async ({ name, avatar, password, relay, title, code, remember }) => {
+    // `owner`: this browser's key to the room it created (its owner can always end it, and is let
+    // straight in); `ownerTag`: the key's fingerprint, known to everyone; `ticket`: this browser's
+    // ticket in the room, if it was let in before. `takeover`: a guest carrying the room on after
+    // its host left (see takeOver): what it knew of the room.
+    const startHost = async ({ name, avatar, password, relay, title, code, remember, owner = null, ownerTag = null, ticket = null, takeover = null }) => {
         const hostCode = code || Signaling.newCode();
+        const ownerSecret = takeover ? takeover.ownerSecret : owner || (ownerTag ? null : Signaling.newId() + Signaling.newId());
         const host = room = {
             role: "host",
             code: hostCode,
             title: title || `${name}'s room`,
             password, name, avatar, relay, remember,
             id: Signaling.newId(),
-            settings: { lobby: true, control: true, streaming: canStream, media: true, quality: "standard", locked: false },
+            // Who hosts the room after whom: each host that carries it on counts one more
+            epoch: takeover ? takeover.epoch : 0,
+            ownerSecret,
+            ownerTag: (takeover ? takeover.ownerTag : ownerTag) || null,
+            myTicket: takeover ? takeover.ticket : ticket,
+            // Fingerprints of the tickets of people let in by the hosts before (see succession)
+            inherited: new Set(takeover ? takeover.tickets : []),
+            hashes: new Map(),
+            settings: { lobby: true, control: true, streaming: canStream, media: true, quality: "standard", locked: false, ...(takeover ? takeover.settings : {}) },
             approved: approvedTickets(hostCode),
             // The room's video (see currentMedia) and, while a guest shares one, their playback
             file: null, mediaKey: null, announced: null,
@@ -2349,8 +2468,9 @@
             attribution: null,
             timers: []
         };
-        showStatus({ icon: "fa-door-open", title: "Creating your room…", busy: true, onClose: () => leaveRoom(false) });
+        if (!takeover) showStatus({ icon: "fa-door-open", title: "Creating your room…", busy: true, onClose: () => leaveRoom(false) });
         try {
+            if (!host.ownerTag && ownerSecret) host.ownerTag = await fingerprint(ownerSecret);
             await loadTurn();
             host.pair = await Signaling.newPairKey();
             host.signal = await Signaling.join({
@@ -2367,6 +2487,12 @@
             });
         }
         if (room !== host) return host.signal.close();
+        // Saying it hosts the room, now and then: another browser hosting it too (its connection
+        // came back, or it's the owner opening it again) gives way to the newest (see hostSignal)
+        const announce = () => room === host && host.signal.send({ t: "host", from: host.id, epoch: host.epoch });
+        host.timers.push(setInterval(announce, 4000));
+        announce();
+        host.approved.forEach(trackTicket);
         // Regular updates keep guests' timelines and sync accurate
         host.timers.push(setInterval(() => broadcast(stateMessage()), 3000));
         host.timers.push(setInterval(() => room === host && hostYouTubeTick(), 1000));
@@ -2376,13 +2502,80 @@
         // A video that's already open becomes the room's video
         host.file = currentMedia();
         host.mediaKey = host.announced = mediaKey(host.file);
-        enterRoomUI();
+        // Carrying the room on: its chat stays on screen
+        enterRoomUI(!!takeover);
         rememberRoom();
         renderPeople([{ id: host.id, name: host.name, avatar: host.avatar, host: true }]);
         hideOverlay();
+        if (takeover) {
+            addMessage({ system: true, text: `${takeover.from} left, so you're hosting the room now. Everyone carries on with you.` });
+            if (takeover.yt) continueYouTube(takeover.yt);
+            else if (!currentFile) uploadOverlay.classList.remove("hidden");
+            return;
+        }
         addMessage({ system: true, text: "Room created. Invite people with the link, the QR code, or the room code and password. Messages aren't saved anywhere." });
         if (fromSolo) setYouTube({ id: host.id, name: host.name }, fromSolo, "now");
         else if (!currentFile) uploadOverlay.classList.remove("hidden");
+    };
+
+    // The YouTube video (and queue) the room was watching goes on from where it was
+    const continueYouTube = kit => {
+        const items = kit.items.map(item => ({ k: item.k, id: item.id, title: item.title, by: { id: "", name: item.by } }));
+        if (!items.length) return;
+        const index = Math.min(kit.index, items.length - 1);
+        room.yt = { queue: items, index, id: null, title: "", by: items[index].by, duration: 0 };
+        room.state = room.cues = null;
+        playQueued(index, kit.time);
+        if (kit.paused) {
+            room.state = { ...room.state, paused: true, time: kit.time, at: now() };
+            broadcast(stateMessage());
+        }
+        enterYouTube();
+        updateStreams();
+        shareMembers();
+        fetchTitles();
+    };
+
+    // ---------- Who carries the room on: everyone hears, with the people in the room, what
+    // the next host needs to let them straight back in: the fingerprints of their tickets and of
+    // the owner's key, the room's settings, and how many hosts it has had (the "epoch")
+    const trackTicket = ticket => {
+        const host = room;
+        if (!host || host.role !== "host" || !ticket || host.hashes.has(ticket)) return;
+        host.hashes.set(ticket, null);
+        fingerprint(ticket).then(hash => {
+            if (room !== host || !host.hashes.has(ticket)) return;
+            host.hashes.set(ticket, hash);
+            shareSuccession();
+        });
+    };
+
+    const shareSuccession = () => {
+        if (!room || room.role !== "host") return;
+        const tickets = [...new Set([...room.inherited, ...[...room.hashes.values()].filter(Boolean)])].slice(-200);
+        const message = { t: "succession", epoch: room.epoch, owner: room.ownerTag, tickets, lobby: room.settings.lobby, locked: room.settings.locked, quality: room.settings.quality };
+        const said = JSON.stringify(message);
+        guests().forEach(peer => {
+            if (peer.successionSaid === said) return;
+            peer.successionSaid = said;
+            send(peer, message);
+        });
+    };
+
+    // Another browser hosts this room with a newer claim (see hostSignal): those connected here
+    // go over to it, and this browser joins it as a participant
+    const yieldTo = () => {
+        const host = room;
+        if (!host || host.role !== "host" || host.yielding) return;
+        host.yielding = true;
+        host.peers.forEach(peer => send(peer, { t: "moved" }));
+        const again = { code: host.code, password: host.password, name: host.name, avatar: host.avatar, relay: host.relay, remember: host.remember,
+            ticket: host.myTicket, owner: host.ownerSecret, ownerTag: host.ownerTag, rejoining: true };
+        setTimeout(() => {
+            if (room !== host) return;
+            teardown();
+            startGuest(again);
+        }, 600);
     };
 
     // =================== GUEST ===================
@@ -4076,7 +4269,19 @@
                     full: ["This room is full", `A room can have up to ${MAX_GUESTS} guests.`]
                 }[message.reason] || ["Not let in", "The host didn't let you into the room."]);
             case "bye":
-                return ended(["The room has ended", `${guest.hostName || "The host"} ended the room.`]);
+                // The host left: the room goes on (see lost). Or it ended, for good.
+                if (message.next && guest.phase === "in" && guest.peer) {
+                    addMessage({ system: true, text: `${guest.hostName || "The host"} left the room.` });
+                    guest.hostLeft = true;
+                    return lost(guest.peer);
+                }
+                forgetRoom(guest.code, false);
+                return ended(["The room has ended", message.by ? `${clean(message.by, 30)} ended the room.` : `${guest.hostName || "The host"} ended the room.`]);
+            case "moved":
+                // Another browser hosts the room now: over to it (nobody here takes over)
+                if (guest.phase !== "in" || !guest.peer) return;
+                guest.noTakeover = true;
+                return lost(guest.peer);
             case "welcome": {
                 if (guest.phase === "in") return;
                 guest.phase = "in";
@@ -4098,8 +4303,16 @@
                     addMessage({ system: true, text: `You joined ${guest.hostName}'s room. Messages aren't saved anywhere.` });
                     if (tunneled()) addMessage({ system: true, text: `Your network and ${guest.hostName}'s don't allow a direct connection, so you're connected through the room's relay (still encrypted). Chat, sync, YouTube and playing your own copy all work; ${guest.hostName}'s video can't stream to you this way. A phone hotspot on either side usually gives a direct connection.` });
                 } else {
-                    addMessage({ system: true, text: "Reconnected." });
+                    // A host that gave way to another: a participant's view of the same room
+                    if (guest.rejoining) {
+                        guest.rejoining = false;
+                        enterRoomUI(true);
+                    }
+                    addMessage({ system: true, text: guest.hostName !== guest.hostBefore ? `Reconnected. ${guest.hostName} is hosting the room now.` : "Reconnected." });
+                    // Nobody's ending the room: it goes on with this host
+                    guest.hostLeft = false;
                 }
+                guest.hostBefore = guest.hostName;
                 renderState();
                 rememberRoom();
                 // Back after a dropped connection while sharing: share again, unless someone else
@@ -4116,6 +4329,20 @@
         }
         if (guest.phase !== "in") return;
         switch (message.t) {
+            case "succession": {
+                // What's needed to carry the room on if its host goes (see takeOver)
+                if (!finite(message.epoch, 0, 1e6)) return;
+                guest.succession = {
+                    epoch: message.epoch,
+                    owner: typeof message.owner === "string" && FINGERPRINT.test(message.owner) ? message.owner : null,
+                    tickets: Array.isArray(message.tickets) ? message.tickets.filter(hash => typeof hash === "string" && FINGERPRINT.test(hash)).slice(-200) : [],
+                    lobby: message.lobby !== false,
+                    locked: message.locked === true,
+                    quality: ["saver", "standard", "high"].includes(message.quality) ? message.quality : "standard"
+                };
+                guest.ownerTag = guest.succession.owner;
+                return rememberRoom();
+            }
             case "state":
                 return applyState(message);
             case "file": {
@@ -4253,18 +4480,81 @@
         clearTimeout(guest.connectTimer);
         clearInterval(guest.offerTimer);
         if (guest.phase === "in" && guest.ticket && guest.retries < 3) {
-            // Try again quietly; the host recognises this guest and lets them straight back in
+            // The room carries on without its host: the first in line hosts it straight away, the
+            // others look for them (the next in line takes over if nobody's hosting after a while).
+            // Or just the connection dropped: try again quietly; the host lets them straight back in.
+            const rank = guest.noTakeover ? -1 : successionRank(guest);
+            guest.noTakeover = false;
+            if (rank === 0) return takeOver();
             guest.retries++;
             guest.phase = "reconnecting";
             guest.id = Signaling.newId();
             renderState();
-            addMessage({ system: true, text: `Lost the connection to ${guest.hostName}. Reconnecting…` });
+            if (!guest.hostLeft) addMessage({ system: true, text: `Lost the connection to ${guest.hostName}. Reconnecting…` });
+            guest.knockLimit = 9 + Math.max(0, rank) * 5;
+            clearTimeout(guest.takeoverTimer);
+            if (rank > 0) guest.takeoverTimer = setTimeout(() => room === guest && !guest.hostId && takeOver(), rank * 12000);
             knock();
         } else if (guest.joinedOnce) {
             ended(["Connection lost", `The connection to ${guest.hostName} dropped. They may have closed CineTab or lost their internet connection.`]);
         } else {
             cantConnect();
         }
+    };
+
+    // Where this guest is in line to host the room: 0 is next; -1: not in line (no word from the
+    // host about it: an older CineTab)
+    const successionRank = guest => {
+        if (!guest.succession || !Array.isArray(guest.members)) return -1;
+        return guest.members.filter(member => !member.host).findIndex(member => member.id === guest.id);
+    };
+
+    // This guest carries the room on as its host: the same code and password, its settings, the
+    // people in it (let straight back in), and the YouTube video or queue from where it was
+    const takeOver = async () => {
+        const guest = room;
+        if (!guest || guest.role !== "guest" || guest.takingOver || !guest.succession) return;
+        guest.takingOver = true;
+        const youtube = guest.file && guest.file.yt && guest.queue && guest.queue.items.length;
+        const kit = {
+            from: guest.hostName || "The host",
+            epoch: guest.succession.epoch + 1,
+            ownerTag: guest.succession.owner,
+            ownerSecret: guest.ownerSecret || null,
+            tickets: guest.succession.tickets,
+            ticket: guest.ticket,
+            settings: { ...guest.settings, lobby: guest.succession.lobby, locked: guest.succession.locked, quality: guest.succession.quality },
+            yt: youtube ? { items: guest.queue.items, index: guest.queue.index, time: expectedTime(), paused: !guest.state || guest.state.paused } : null
+        };
+        [guest.knockTimer, guest.offerTimer].forEach(clearInterval);
+        [guest.takeoverTimer, guest.pingTimer, guest.connectTimer, guest.pstateTimer].forEach(clearTimeout);
+        guest.timers.forEach(clearInterval);
+        closePeer(guest.peer);
+        // The old host's video stream is gone with it. A YouTube video goes on: the same player,
+        // which the new host takes up again (see continueYouTube)
+        clearInterval(guest.streamTimer);
+        if (youtube) together.stream = null;
+        else if (together.stream) leaveStream();
+        room = null;
+        if (guest.signal) guest.signal.close();
+        await startHost({ name: guest.name, avatar: guest.avatar, password: guest.password, relay: guest.relay, title: guest.title, code: guest.code, remember: guest.remember, takeover: kit });
+    };
+
+    // A room this browser hosted before, opened again, that nobody's hosting now: it hosts it
+    const hostAgain = () => {
+        const guest = room;
+        const again = { name: guest.name, avatar: guest.avatar, password: guest.password, relay: guest.relay, title: guest.hostIfAlone.title, code: guest.code,
+            remember: guest.remember, owner: guest.ownerSecret, ownerTag: guest.ownerTag, ticket: guest.ticket };
+        teardown();
+        startHost(again);
+    };
+
+    // The owner ends the room for everyone (as its host, or from a participant's seat through it)
+    const endedByOwner = name => {
+        if (!room || room.role !== "host") return;
+        room.peers.forEach(peer => send(peer, { t: "bye", by: name }));
+        forgetRoom(room.code, false);
+        ended(["The room has ended", `${name} ended the room.`]);
     };
 
     // ---------- Same Wi-Fi
@@ -4501,6 +4791,7 @@
         if (message.t === "hi" && !guest.hostId && typeof message.pub === "string") {
             guest.hostId = message.from;
             clearInterval(guest.knockTimer);
+            clearTimeout(guest.takeoverTimer);
             try {
                 guest.pairKey = await Signaling.pairSecret(guest.pair, message.pub, guest.signal.salt);
                 await offer();
@@ -4533,7 +4824,7 @@
         const guest = room;
         // Video can't come through the relays, so a guest connected that way plays their own copy
         const stream = !peer.channel.isTunnel && guest.watching === "stream";
-        send(peer, { t: "hello", name: guest.name, avatar: guest.avatar, ticket: guest.ticket, stream });
+        send(peer, { t: "hello", name: guest.name, avatar: guest.avatar, ticket: guest.ticket, stream, owner: guest.ownerSecret || undefined });
         startPings();
     };
 
@@ -4586,22 +4877,28 @@
         clearInterval(guest.knockTimer);
         const send = () => {
             if (room !== guest || guest.hostId) return clearInterval(guest.knockTimer);
-            if (++tries > 9) {
+            if (++tries > (guest.hostIfAlone ? 3 : guest.knockLimit || 9)) {
                 clearInterval(guest.knockTimer);
+                if (guest.hostIfAlone) return hostAgain();
                 return notFound();
             }
-            guest.signal.send({ t: "knock", from: guest.id, pub: guest.pair.pub, rejoin: guest.ticket ? true : undefined });
+            guest.signal.send({ t: "knock", from: guest.id, pub: guest.pair.pub, rejoin: guest.ticket || guest.ownerSecret ? true : undefined });
         };
         guest.knockTimer = setInterval(send, 3000);
         send();
     };
 
-    const startGuest = async ({ code, password, name, avatar, relay, remember, ticket = null }) => {
+    // `owner` / `ownerTag`: this browser's key to the room (it created it) and its fingerprint;
+    // `rejoining`: the same room carrying on (no "looking for the room", the chat stays);
+    // `hostIfAlone`: a room this browser hosted before: if nobody's hosting it now, it does
+    const startGuest = async ({ code, password, name, avatar, relay, remember, ticket = null, owner = null, ownerTag = null, rejoining = false, hostIfAlone = null }) => {
         const guest = room = {
             role: "guest", code, password, name, avatar, relay, remember,
             title: "",
             id: Signaling.newId(),
             ticket,
+            ownerSecret: owner, ownerTag, hostIfAlone,
+            joinedOnce: rejoining, rejoining,
             phase: "finding",
             settings: { control: true, streaming: false, media: false },
             state: null, file: null, cues: null, cuesOn: true, ownCues: false,
@@ -4612,8 +4909,8 @@
             retries: 0, timers: []
         };
         if (together.solo) together.solo.stop();
-        showStatus({
-            title: "Looking for the room…",
+        if (!rejoining) showStatus({
+            title: hostIfAlone ? "Opening your room…" : "Looking for the room…",
             text: `Room ${Signaling.formatCode(code)}`,
             busy: true,
             actions: [{ label: "Cancel", secondary: true, onClick: () => leaveRoom(false) }],
@@ -4694,9 +4991,11 @@
 
     // ---------- Leaving
 
-    const sayBye = () => {
+    // A host leaving passes the room on (`next`; older CineTabs end it); `ending`: the owner ends
+    // it for everyone
+    const sayBye = (ending = false) => {
         if (!room) return;
-        if (room.role === "host") room.peers.forEach(peer => send(peer, { t: "bye" }));
+        if (room.role === "host") room.peers.forEach(peer => send(peer, ending ? { t: "bye", by: room.name } : { t: "bye", next: true }));
         else send(room.peer, { t: "bye" });
     };
 
@@ -4710,6 +5009,7 @@
         room = null;
         renderCameras();
         topRoomName.hidden = true;
+        placeNowBar();
         clearInterval(old.knockTimer);
         clearInterval(old.offerTimer);
         clearInterval(old.streamTimer);
@@ -4717,6 +5017,7 @@
         clearTimeout(old.pstateTimer);
         clearTimeout(old.queueTimer);
         clearTimeout(old.connectTimer);
+        clearTimeout(old.takeoverTimer);
         old.timers.forEach(clearInterval);
         [...knockToasts.keys()].forEach(clearKnock);
         // A goodbye going through the relays (see newTunnel) needs a moment to go out
@@ -4756,16 +5057,33 @@
         });
     };
 
-    const leaveRoom = (ask, home = false) => {
+    // `ask`: the owner chooses between leaving (the room goes on) and ending it for everyone
+    const leaveRoom = (ask, home = false, end = false) => {
+        if (room && ask && room.ownerSecret && (room.role === "guest" || guests().length)) return askLeave(home);
         if (room) {
-            if (ask && room.role === "host" && guests().length && !confirm("End the room for everyone?")) return;
-            sayBye();
+            if (end && room.role === "guest") send(room.peer, { t: "end", owner: room.ownerSecret });
+            if (end) forgetRoom(room.code, false);
+            sayBye(end);
             teardown();
         }
         if (!home) return closeDialog();
         hideOverlay();
         closeRoomUI();
         history.back();
+    };
+
+    const askLeave = home => {
+        const back = () => room && room.role === "guest" ? refreshGuestView() : hideOverlay();
+        showStatus({
+            icon: "fa-right-from-bracket",
+            title: "Leave the room, or end it?",
+            text: "You created this room. If you leave, it goes on with everyone else, and you can come back any time. Ending it closes it for everyone, for good.",
+            actions: [
+                { label: "Leave, the room goes on", icon: "fa-right-from-bracket", onClick: () => leaveRoom(false, home) },
+                { label: "End the room for everyone", icon: "fa-door-closed", secondary: true, onClick: () => leaveRoom(false, home, true) }
+            ],
+            onClose: back
+        });
     };
 
     // The player's back arrow (or logo) in a room: going home doesn't have to end it
@@ -4776,14 +5094,14 @@
             icon: "fa-house",
             title: "Go to the home page?",
             text: host
-                ? "Your room stays open while you're on the home page: the video keeps playing for everyone, and you can come back any time. Closing this tab ends the room for everyone."
+                ? "Your room stays open while you're on the home page: the video keeps playing for everyone, and you can come back any time. If you close this tab, the room goes on with everyone else."
                 : "You stay in the room and can come back any time from the home page. Closing this tab takes you out of the room.",
             actions: [
                 { label: host ? "Go home, keep the room open" : "Go home, stay in the room", icon: "fa-house", onClick: () => {
                     restore();
                     history.back();
                 } },
-                { label: host ? "End the room" : "Leave the room", secondary: true, onClick: () => leaveRoom(false, true) }
+                { label: "Leave the room", secondary: true, onClick: () => leaveRoom(true, true) }
             ],
             onClose: restore
         });
@@ -4840,7 +5158,8 @@
 
     const rememberRoom = () => {
         if (!room || !room.remember || !room.title) return;
-        const entry = { code: room.code, password: room.password, title: room.title, role: room.role, ticket: room.ticket || null, at: Date.now() };
+        const entry = { code: room.code, password: room.password, title: room.title, role: room.role, ticket: room.ticket || room.myTicket || null,
+            owner: room.ownerSecret || null, ownerTag: room.ownerTag || null, at: Date.now() };
         writeRooms([entry, ...savedRooms().filter(item => item.code !== room.code)]);
     };
 
@@ -4884,10 +5203,16 @@
         const avatar = storage.get(AVATAR_KEY) || "";
         if (item.role === "host") {
             toPlayer();
+            // A room that went on without this browser: it joins it (its owner, or a former
+            // host, is let straight in), and hosts it again if nobody's hosting it now
+            if (item.owner || item.ownerTag) return startGuest({ code: item.code, password: item.password, name, avatar, remember: true, ticket: item.ticket,
+                owner: item.owner, ownerTag: item.ownerTag, hostIfAlone: { title: item.title } });
             return startHost({ name, avatar, password: item.password, title: item.title, code: item.code, remember: true });
         }
         toPlayer();
-        return startGuest({ code: item.code, password: item.password, name, avatar, remember: true, ticket: item.ticket });
+        // The room's owner hosts it again if nobody's hosting it now
+        return startGuest({ code: item.code, password: item.password, name, avatar, remember: true, ticket: item.ticket,
+            owner: item.owner || null, ownerTag: item.ownerTag || null, hostIfAlone: item.owner ? { title: item.title } : null });
     };
 
     const renderRooms = () => {
