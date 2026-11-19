@@ -4,6 +4,31 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.4] - 2026-11-20
+
+### Video details (phones held upright)
+- More now shows a YouTube video's whole description, with its line breaks and full links (a
+  search only gave its first line or two); a long one scrolls inside the card, and the video
+  keeps its size
+
+### Video call window
+- On your own in a room, turning your camera on opens the call window ("Just you"); people who
+  join come in beside you, one after another
+- Phones and tablets: pinch the window with two fingers to make it larger or smaller, from a
+  small tile up to as large as the screen holds it; the size is remembered, and Larger / Smaller
+  still go back to the two usual sizes
+
+### YouTube on touch screens
+- Tapping the video only ever shows CineTab's own controls: YouTube's player no longer takes a
+  tap, ads included (they play to the end there). An iPhone or iPad still needs one tap on
+  YouTube's player to start a video, until it plays; elsewhere ▶ starts it
+
+### Touch
+- Your profile: the card is rounded all round and sits clear of the call bar below it; swipe it
+  down to close it (a small handle at its top shows it can be pulled)
+- Holding a button no longer flashes a square or selects its label; the room's tabs and buttons
+  light up in their own rounded shape while pressed
+
 ## [1.5.3] - 2026-11-20
 
 ### Swipes in the room (phones and tablets)

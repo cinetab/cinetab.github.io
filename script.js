@@ -375,19 +375,30 @@ const youTubeDetails = (id, info) => {
         if (info.ago) facts.push(info.ago);
         if (facts.length) parts.push(el("p", "details-stats", facts.join(" · ")));
         if (info.description) {
-            const descEl = el("p", detailsDescExpanded ? "details-text expanded" : "details-text", info.description);
+            const descEl = el("p", "details-text", info.description);
             const toggleBtn = el("button", "details-desc-toggle");
             toggleBtn.type = "button";
-            toggleBtn.append(
-                el("i", detailsDescExpanded ? "fa-solid fa-chevron-up" : "fa-solid fa-chevron-down"),
-                el("span", null, detailsDescExpanded ? "Show less" : "More")
-            );
-            toggleBtn.addEventListener("click", () => {
-                detailsDescExpanded = !detailsDescExpanded;
+            toggleBtn.append(el("i"), el("span"));
+            // The search only gave the first line or two: the whole description comes when it's
+            // opened (once per video), scrolling inside the card if it's long
+            let whole = null;
+            const showDesc = () => {
                 descEl.classList.toggle("expanded", detailsDescExpanded);
                 toggleBtn.querySelector("i").className = detailsDescExpanded ? "fa-solid fa-chevron-up" : "fa-solid fa-chevron-down";
                 toggleBtn.querySelector("span").textContent = detailsDescExpanded ? "Show less" : "More";
+                toggleBtn.setAttribute("aria-expanded", String(detailsDescExpanded));
+                if (!detailsDescExpanded) descEl.scrollTop = 0;
+                if (!detailsDescExpanded || whole) return;
+                whole = CineYouTube.fullDescription(id).then(full => {
+                    if (full === null) whole = null; // no server answered: tried again next time
+                    else if (full && descEl.isConnected) descEl.textContent = full;
+                });
+            };
+            toggleBtn.addEventListener("click", () => {
+                detailsDescExpanded = !detailsDescExpanded;
+                showDesc();
             });
+            showDesc();
             actions.append(toggleBtn);
             parts.push(descEl);
         }
@@ -1821,6 +1832,9 @@ pipBtn.addEventListener("click", toggleCustomPiP);
 // The whole player page goes fullscreen, so a room's chat can stay open beside the video.
 // Phones turn sideways for a wide video; the iPhone can only show the video itself fullscreen.
 const isTouch = matchMedia("(pointer: coarse)").matches;
+// iPhones and iPads start a YouTube video only from a tap on YouTube's own player (elsewhere the
+// player's ▶ starts it); also iPads that say they're a Mac
+const mustTapYouTube = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
 // The button where some kind of picture in picture works; phones and tablets always have it (it
 // floats the video from fullscreen where the browser has no picture in picture for pages)

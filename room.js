@@ -1130,6 +1130,61 @@
     profileSheet.addEventListener("click", e => {
         if (e.target === profileSheet) closeProfile();
     });
+
+    // Swiped down (a phone or tablet): the card follows the finger and, far or fast enough, slides
+    // away and closes; otherwise it springs back. Only from the top of what it scrolls, and not
+    // from the name field, so scrolling the avatars and typing work as before.
+    const profileCard = profileSheet.querySelector(".room-sheet-card");
+    let sheetSwipe = null;
+    profileCard.addEventListener("touchstart", e => {
+        sheetSwipe = e.touches.length === 1 && !e.target.closest("input") ? { y: e.touches[0].clientY, x: e.touches[0].clientX, at: performance.now(), on: false, dy: 0 } : null;
+    }, { passive: true });
+    profileCard.addEventListener("touchmove", e => {
+        if (!sheetSwipe || e.touches.length !== 1) return;
+        const dy = e.touches[0].clientY - sheetSwipe.y;
+        const dx = e.touches[0].clientX - sheetSwipe.x;
+        if (!sheetSwipe.on) {
+            if (Math.abs(dy) < 10 && Math.abs(dx) < 10) return;
+            // Down, at the top of the card, and still ours to take: a swipe; anything else isn't
+            if (dy <= 0 || Math.abs(dx) > dy || profileCard.scrollTop > 0 || !e.cancelable) {
+                sheetSwipe = null;
+                return;
+            }
+            sheetSwipe.on = true;
+            sheetSwipe.y = e.touches[0].clientY;
+            sheetSwipe.at = performance.now();
+        }
+        e.preventDefault();
+        sheetSwipe.dy = Math.max(0, e.touches[0].clientY - sheetSwipe.y);
+        profileCard.style.transform = `translateY(${sheetSwipe.dy}px)`;
+        profileSheet.style.backgroundColor = `rgba(10, 10, 13, ${0.6 * Math.max(0.2, 1 - sheetSwipe.dy / profileCard.offsetHeight)})`;
+    }, { passive: false });
+    const endSheetSwipe = cancelled => {
+        const done = sheetSwipe;
+        sheetSwipe = null;
+        if (!done || !done.on) return;
+        const fast = done.dy / Math.max(1, performance.now() - done.at) > 0.5 && done.dy > 30;
+        const from = profileCard.style.transform || "none";
+        const reset = () => {
+            profileCard.style.transform = "";
+            profileSheet.style.backgroundColor = "";
+        };
+        if (cancelled || !(done.dy > Math.min(120, profileCard.offsetHeight * 0.3) || fast)) {
+            reset();
+            if (!calmer()) profileCard.animate([{ transform: from }, { transform: "none" }], { duration: 200, easing: PANEL_EASE });
+            return;
+        }
+        if (calmer()) {
+            reset();
+            return closeProfile();
+        }
+        profileCard.animate([{ transform: from }, { transform: "translateY(calc(100% + 16px))" }], { duration: 200, easing: "cubic-bezier(0.4, 0, 1, 1)" }).onfinish = () => {
+            reset();
+            closeProfile();
+        };
+    };
+    profileCard.addEventListener("touchend", () => endSheetSwipe(false));
+    profileCard.addEventListener("touchcancel", () => endSheetSwipe(true));
     profileSheet.addEventListener("submit", e => {
         e.preventDefault();
         const name = clean(profileName.value, 30);
@@ -1491,16 +1546,18 @@
     // It can fold up to its title bar, and be small or large; where it was left, folded and size
     // are remembered (where as a share of the screen, so it fits a phone turned sideways too).
     const CALL_KEY = "cinetab:call";
-    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map() };
+    // `tile`: a tile's width pinched to on a touch screen (px), or null for the small / large one
+    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), tile: null, touches: new Map(), pinch: null };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
             if (finite(saved.x, 0, 1) && finite(saved.y, 0, 1)) call.pos = { x: saved.x, y: saved.y };
             call.collapsed = saved.collapsed === true;
             call.big = saved.big === true;
+            if (finite(saved.tile, 40, 600)) call.tile = saved.tile;
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, ...(call.tile ? { tile: call.tile } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1525,7 +1582,8 @@
     // Where it is: where it was left (as a share of the room it has to move in), or at first the
     // top right of the picture, below its title bar
     const placeCall = () => {
-        if (callWin.hidden) return;
+        // (while it's pinched, it stays around its middle; placed again once it's let go)
+        if (callWin.hidden || call.pinch) return;
         const page = playerPage.getBoundingClientRect();
         const width = callWin.offsetWidth;
         const height = callWin.offsetHeight;
@@ -1548,14 +1606,85 @@
     window.addEventListener("resize", placeCall);
     if ("ResizeObserver" in window) new ResizeObserver(placeCall).observe(callWin);
 
+    // Pinched with two fingers (a phone or tablet): larger or smaller, from a little tile up to as
+    // large as the screen still holds it, around its middle; remembered like where it is
+    const TILE_MIN = 64;
+    const callCols = count => count <= 1 ? 1 : count <= 4 || !call.big ? 2 : 3;
+    const tileMax = () => {
+        const page = playerPage.getBoundingClientRect();
+        const count = Math.max(1, callGrid.children.length);
+        const cols = callCols(count);
+        const rows = Math.ceil(count / cols);
+        const wide = (page.width - 32 - (cols - 1) * 6) / cols;
+        const tall = (page.height - 24 - callBar.offsetHeight - (rows - 1) * 6) / (rows * 0.75);
+        return Math.max(TILE_MIN, Math.min(320, wide, tall));
+    };
+    // The pinched size, within what fits now (a phone turned, more people in the window)
+    const applyTile = () => {
+        if (!call.tile) return callWin.style.removeProperty("--tile");
+        callWin.style.setProperty("--tile", `${Math.round(Math.max(TILE_MIN, Math.min(call.tile, tileMax())))}px`);
+    };
+    const pinchGap = () => {
+        const [a, b] = [...call.touches.values()];
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const pinchTo = scale => {
+        const centre = { x: call.x + callWin.offsetWidth / 2, y: call.y + callWin.offsetHeight / 2 };
+        call.tile = Math.round(Math.max(TILE_MIN, Math.min(call.pinch.tile * scale, tileMax())));
+        // Large enough, it's the large window (names always shown, three across for many people)
+        const big = call.tile >= 120;
+        if (big !== call.big) {
+            call.big = big;
+            renderCallButtons();
+            callWin.style.setProperty("--cols", callCols(callGrid.children.length));
+        }
+        applyTile();
+        const page = playerPage.getBoundingClientRect();
+        const margin = 8;
+        call.x = Math.max(margin, Math.min(centre.x - callWin.offsetWidth / 2, page.width - callWin.offsetWidth - margin));
+        call.y = Math.max(margin, Math.min(centre.y - callWin.offsetHeight / 2, page.height - callWin.offsetHeight - margin));
+        callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
+    };
+    // Where it is, as a share of the room it has to move in
+    const keepCallPlace = () => {
+        const page = playerPage.getBoundingClientRect();
+        const roomX = page.width - callWin.offsetWidth;
+        const roomY = page.height - callWin.offsetHeight;
+        call.pos = { x: roomX > 0 ? Math.min(1, Math.max(0, call.x / roomX)) : 0, y: roomY > 0 ? Math.min(1, Math.max(0, call.y / roomY)) : 0 };
+        saveCall();
+    };
+
     // Dragged by any part of it but its buttons, with a mouse or a finger
     callWin.addEventListener("pointerdown", e => {
+        if (e.pointerType === "touch") {
+            call.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            // A second finger: a pinch instead of a drag (not while it's folded up to its title)
+            if (call.touches.size === 2 && !call.collapsed && callGrid.firstElementChild) {
+                if (call.drag) {
+                    call.drag = null;
+                    callWin.classList.remove("dragging");
+                }
+                try {
+                    callWin.setPointerCapture(e.pointerId);
+                } catch (err) {}
+                call.pinch = { gap: Math.max(1, pinchGap()), tile: callGrid.firstElementChild.offsetWidth };
+                callWin.classList.add("resizing");
+                showCallNames();
+                return;
+            }
+            if (call.touches.size > 2 || call.pinch) return;
+        }
         if (e.button > 0 || e.target.closest("button")) return;
         call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y };
         callWin.setPointerCapture(e.pointerId);
         callWin.classList.add("dragging");
     });
     callWin.addEventListener("pointermove", e => {
+        if (call.touches.has(e.pointerId)) call.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (call.pinch) {
+            if (call.touches.size >= 2) pinchTo(pinchGap() / call.pinch.gap);
+            return;
+        }
         if (!call.drag || call.drag.id !== e.pointerId) return;
         const page = playerPage.getBoundingClientRect();
         const margin = 8;
@@ -1564,14 +1693,20 @@
         callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
     });
     const endCallDrag = e => {
+        call.touches.delete(e.pointerId);
+        // A finger lifted: the pinch ends (the other one doesn't start dragging it)
+        if (call.pinch) {
+            if (call.touches.size < 2) {
+                call.pinch = null;
+                callWin.classList.remove("resizing");
+                keepCallPlace();
+            }
+            return;
+        }
         if (!call.drag || call.drag.id !== e.pointerId) return;
         call.drag = null;
         callWin.classList.remove("dragging");
-        const page = playerPage.getBoundingClientRect();
-        const roomX = page.width - callWin.offsetWidth;
-        const roomY = page.height - callWin.offsetHeight;
-        call.pos = { x: roomX > 0 ? Math.min(1, Math.max(0, call.x / roomX)) : 0, y: roomY > 0 ? Math.min(1, Math.max(0, call.y / roomY)) : 0 };
-        saveCall();
+        keepCallPlace();
     };
     callWin.addEventListener("pointerup", endCallDrag);
     callWin.addEventListener("pointercancel", endCallDrag);
@@ -1606,6 +1741,9 @@
         placeCall();
     });
     callSizeBtn.addEventListener("click", () => {
+        // Back to the small or large size (from one pinched to)
+        call.tile = null;
+        applyTile();
         call.big = !call.big;
         renderCallButtons();
         saveCall();
@@ -1614,7 +1752,8 @@
     renderCallButtons();
 
     // Everyone in the room: { key, name, avatar, mic, track (their camera, or null), me }, the
-    // others first (the host first of them), then you
+    // others first (the host first of them), then you. Alone, only once your camera is on (to see
+    // yourself); whoever joins then comes in beside you
     const callPeople = () => {
         if (!room) return [];
         const me = { key: "me", name: room.name || "You", avatar: room.avatar, mic: micEnabled, track: camTrack(), me: true, mirror: camFacing === "user" };
@@ -1623,7 +1762,7 @@
                 key: peer.id, name: peer.name, avatar: peer.avatar, mic: !!peer.micOn,
                 track: peer.camOn && peer.camTransceiver ? peer.camTransceiver.receiver.track : null
             }));
-            return others.length ? [...others, me] : [];
+            return others.length || me.track ? [...others, me] : [];
         }
         if (room.phase !== "in" || !Array.isArray(room.members)) return [];
         const peer = room.peer;
@@ -1637,7 +1776,7 @@
             }
             return { key: member.id, name: member.name, avatar: member.avatar, mic: member.mic === true, track, host: member.host };
         });
-        return others.length ? [...others, me] : [];
+        return others.length || me.track ? [...others, me] : [];
     };
 
     const renderCameras = () => {
@@ -1648,7 +1787,7 @@
         const who = people.map(person => person.key).join();
         if (people.length && (wasHidden || who !== call.who)) showCallNames();
         call.who = who;
-        callTitle.textContent = `${people.length} in the room`;
+        callTitle.textContent = people.length === 1 ? "Just you" : `${people.length} in the room`;
         const keep = new Set(people.map(person => person.key));
         call.tiles.forEach((tile, key) => {
             if (keep.has(key)) return;
@@ -1711,7 +1850,8 @@
         // In order (moved only when it changed, so nothing playing is interrupted)
         const order = people.map(person => call.tiles.get(person.key).el);
         if (order.length !== callGrid.children.length || order.some((item, i) => callGrid.children[i] !== item)) callGrid.replaceChildren(...order);
-        callWin.style.setProperty("--cols", people.length <= 1 ? 1 : people.length <= 4 || !call.big ? 2 : 3);
+        callWin.style.setProperty("--cols", callCols(people.length));
+        applyTile();
         placeCall();
     };
 
@@ -2963,7 +3103,7 @@
         const wasYouTube = together.stream === ytControls;
         together.stream = null;
         if (room) clearInterval(room.streamTimer);
-        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad", "yt-host");
+        container.classList.remove("remote", "audio-mode", "youtube", "yt-ad", "yt-tap", "yt-host");
         cueBox.hidden = streamWait.hidden = true;
         // Falls back to this browser's own file, if one is open
         if (wasYouTube) ytStop();
@@ -3229,9 +3369,12 @@
         // Still loading, an error, or a browser that wants a click before playing sound
         const blocked = yt.ready && playing && !yt.error && yt.player.getPlayerState() === YT.UNSTARTED && now() - yt.started > 5000;
         // The layer over YouTube's player steps aside, so its Skip button (or its player, to
-        // start) can be clicked
-        container.classList.toggle("yt-ad", ad || blocked);
-        const note = yt.error || (!yt.ready ? "Loading YouTube…" : blocked ? "Click the video to start it" : null);
+        // start) can be clicked: on a touch screen never for an ad (only CineTab's controls show
+        // there), and to start only on an iPhone or iPad, which need it (elsewhere ▶ starts it)
+        container.classList.toggle("yt-ad", ad || (blocked && !isTouch));
+        container.classList.toggle("yt-tap", blocked && isTouch && mustTapYouTube);
+        const note = yt.error || (!yt.ready ? "Loading YouTube…" : !blocked ? null
+            : !isTouch ? "Click the video to start it" : mustTapYouTube ? "Tap the video to start it" : "Tap ▶ to start it");
         streamWait.hidden = !note;
         if (note && streamWaitText.textContent !== note) streamWaitText.textContent = note;
     };

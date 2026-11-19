@@ -15,6 +15,28 @@
   color-scheme: dark;
 }
 
+/* Touch screens: a tapped or held button shows no square flash, and holding it doesn't select its
+   label or open the browser's menu (Android draws both as plain rectangles over rounded buttons).
+   Buttons show they're pressed in their own rounded shape instead. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role="button"],
+[role="tab"] {
+  -webkit-touch-callout: none;
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  [role="tab"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -132,6 +154,11 @@ body.watching {
   align-items: stretch;
 }
 
+/* The picture keeps its size; what's below it (the video's details) gives way instead */
+.player-page.title-below > .container {
+  flex-shrink: 0;
+}
+
 .player-page.title-below > .player-meta:not(.empty),
 .player-page.now-below > .player-meta {
   display: block;
@@ -175,7 +202,9 @@ body.watching {
 .player-page.title-below > .player-details:not([hidden]) {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  /* No taller than the screen leaves it: a long description scrolls inside (below) */
+  flex-shrink: 1;
+  min-height: 0;
   margin: 2px 12px 12px;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -255,9 +284,33 @@ body.watching {
   color: rgba(255, 255, 255, 0.62);
 }
 
-.details-text.expanded {
+.player-details > * {
+  flex-shrink: 0;
+}
+
+/* The whole description, with its line breaks, scrolling in the space the card has */
+.player-details > .details-text.expanded {
   display: block;
   -webkit-line-clamp: unset;
+  flex: 0 1 auto;
+  min-height: 4.5em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+.details-text.expanded::-webkit-scrollbar {
+  width: 4px;
+}
+
+.details-text.expanded::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* Copy link + actions row below channel info */
@@ -4567,6 +4620,19 @@ body > .room-toasts {
   display: none;
 }
 
+/* Touch screens: YouTube's own player and controls never take a tap; only CineTab's controls
+   show, ads included. The one exception: an iPhone or iPad starting a video, which only a tap on
+   YouTube's player does (.yt-tap, until it plays; youtube.js, room.js). */
+@media (pointer: coarse) {
+  .container.youtube.yt-ad .yt-shield {
+    display: block;
+  }
+}
+
+.container.youtube.yt-tap .yt-shield {
+  display: none;
+}
+
 @media not all and (pointer: coarse) {
   .container.youtube.yt-ad .wrapper {
     opacity: 0 !important;
@@ -4655,9 +4721,15 @@ body > .room-toasts {
   --tile: 168px;
 }
 
-.room-call.dragging {
+.room-call.dragging,
+.room-call.resizing {
   cursor: grabbing;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* Pinched larger or smaller (room.js): its outline shows it's being resized */
+.room-call.resizing {
+  border-color: rgba(62, 151, 253, 0.6);
 }
 
 .room-call.collapsed {
@@ -4986,6 +5058,24 @@ body > .room-toasts {
 
 .room-tab-btn.active i {
   color: #6fb0ff;
+}
+
+/* Pressed, on a touch screen: in the button's own rounded shape (no square flash; see the top) */
+@media (hover: none) {
+  .room-tab-btn:active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .room-tab-btn.active:active {
+    background: rgba(62, 151, 253, 0.32);
+  }
+  .room-icon-btn:not(:disabled):active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .room-small-btn:not(:disabled):active {
+    filter: brightness(1.2);
+  }
 }
 
 .room-tab-badge {
@@ -6286,13 +6376,16 @@ body > .room-toasts {
   outline: none;
 }
 
-/* Profile editor, over the panel */
+/* Profile editor, over the panel: a card rounded all round, a little in from the panel's edges, so
+   it sits clear of the call bar below it (and of the panel's own rounded corners) */
 .room-sheet {
   position: absolute;
   inset: 0;
   z-index: 2;
   display: flex;
   align-items: flex-end;
+  padding: 8px;
+  border-radius: inherit;
   background: rgba(10, 10, 13, 0.6);
   backdrop-filter: blur(3px);
 }
@@ -6306,12 +6399,28 @@ body > .room-toasts {
   width: 100%;
   max-height: 100%;
   overflow-y: auto;
-  padding: 22px 18px 18px;
-  border-radius: 18px 18px 0 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  overscroll-behavior: contain;
+  padding: 24px 18px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
   background: #1f1f26;
-  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   animation: room-sheet-in 0.2s ease;
+}
+
+/* A grab handle at its top: on a touch screen, swiping the card down closes it (room.js) */
+@media (pointer: coarse) {
+  .room-sheet-card::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.28);
+  }
 }
 
 @keyframes room-sheet-in {

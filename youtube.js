@@ -359,6 +359,44 @@
         return detailsCache.get(id);
     };
 
+    // A video's whole description, as plain text with its line breaks ("" when it has none, null
+    // when no server answered). A search only gives its first line or two. Piped sends it as HTML
+    // (<br>, links), read here as text without running or loading anything; Invidious as text.
+    const descriptionCache = new Map();
+    const fullDescription = id => {
+        if (!YT_ID.test(id || "")) return Promise.resolve(null);
+        if (!descriptionCache.has(id)) {
+            descriptionCache.set(id, (async () => {
+                for (const base of pipedBases()) {
+                    try {
+                        const data = await getJSON(`${base}/streams/${id}`, 6000);
+                        if (!data || typeof data.description !== "string") continue;
+                        const html = data.description.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*<p[^>]*>/gi, "\n\n");
+                        const doc = new DOMParser().parseFromString(html, "text/html");
+                        // Its links' text is cut short ("https://example.com/pa..."): the whole address
+                        doc.querySelectorAll("a[href]").forEach(link => {
+                            if (!/(\.\.\.|…)$/.test(link.textContent.trim())) return;
+                            try {
+                                link.textContent = new URL(link.getAttribute("href"), "https://www.youtube.com").href;
+                            } catch (e) {}
+                        });
+                        storage.set(PIPED_KEY, base);
+                        return doc.documentElement.textContent.trim().slice(0, 10000);
+                    } catch (e) {}
+                }
+                for (const base of INVIDIOUS_APIS) {
+                    try {
+                        const data = await getJSON(`${base}/api/v1/videos/${id}?fields=description`, 6000);
+                        if (data && typeof data.description === "string") return data.description.trim().slice(0, 10000);
+                    } catch (e) {}
+                }
+                descriptionCache.delete(id);
+                return null;
+            })());
+        }
+        return descriptionCache.get(id);
+    };
+
     // ---------- Search results, on the home page and in a room
 
     const shortTime = seconds => {
@@ -995,12 +1033,15 @@
         nextTrackBtn.hidden = !autoplay && (!ids || ids.length < 2);
         prevTrackBtn.disabled = !canStep(-1);
         nextTrackBtn.disabled = !canStep(1);
-        // Still loading, an error, or a browser that wants a tap on YouTube's player first. On a
-        // phone the layer over the player steps aside (as during an ad), so it can be tapped.
+        // Still loading, an error, or a browser that wants a tap on YouTube's player first. The
+        // layer over the player steps aside so YouTube's player can be clicked: on a computer for an
+        // ad (its Skip) or to start; on a touch screen never for an ad (only CineTab's controls show
+        // there), and to start only on an iPhone or iPad, which need it (elsewhere ▶ starts it).
         const blocked = solo.ready && solo.intent && !solo.error && (s === S.UNSTARTED || s === S.CUED) && now() - solo.started > 4000;
-        container.classList.toggle("yt-ad", ad || blocked);
+        container.classList.toggle("yt-ad", ad || (blocked && !isTouch));
+        container.classList.toggle("yt-tap", blocked && isTouch && mustTapYouTube);
         showNote(solo.error || (!solo.ready ? "Loading YouTube…" : solo.finding ? "Autoplay: finding what's next…"
-            : blocked ? (isTouch ? "Tap the video to start it" : "Click the video to start it") : null));
+            : blocked ? (!isTouch ? "Click the video to start it" : mustTapYouTube ? "Tap the video to start it" : "Tap ▶ to start it") : null));
         if (playing && !ad && now() - solo.savedAt > 5000) save();
     }
 
@@ -1134,7 +1175,7 @@
         prevTrackBtn.hidden = nextTrackBtn.hidden = true;
         if (!reset || together.stream !== soloControls) return;
         together.stream = null;
-        container.classList.remove("remote", "youtube", "yt-ad");
+        container.classList.remove("remote", "youtube", "yt-ad", "yt-tap");
         showNote(null);
         videoTitle.textContent = audioTitle.textContent = "No Video Loaded";
         videoTitle.title = "No video loaded";
@@ -1298,5 +1339,5 @@
     together.step = n => together.solo.step(n);
     window.addEventListener("pagehide", () => solo.active && save());
 
-    window.CineYouTube = { parse, search, api, play, createResults, thumbOf, suggestedAfter, details, views };
+    window.CineYouTube = { parse, search, api, play, createResults, thumbOf, suggestedAfter, details, fullDescription, views };
 })();
