@@ -4,7 +4,34 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [1.5.8] - 2026-11-20
+## [1.5.9] - 2026-11-20
+
+### Search and commands (new)
+- A search button at the top right of the player (or Ctrl+K / ⌘K, or /) opens one box for
+  everything, on computers, tablets and phones (a sheet filling a phone's screen):
+  - Search YouTube: the results come in the box (Play; in a room, Play now or Add to queue)
+  - Paste a link to a video, playlist or Mix: a card with what it is, and Play (in a room, Play now
+    and Add to queue, with or without the rest of its list)
+  - Run a command: play / pause, open a video, fullscreen, picture in picture, subtitles, mute, jump
+    10 seconds, a speed, next / previous, Watch together, shortcuts, home; in a room also the mic,
+    camera, invite link, chat, people, queue, settings, leave and end the room. Typing filters
+    them; Enter runs the first (↑ ↓ choose another); words no command has search YouTube
+  - Type a time (1:23, 1h2m), a speed (1.5x) or a share (40%) to jump there or play at it
+- Empty, it shows the main commands and what you watched before
+- The room's panel no longer has a Search tab: the YouTube button in Now playing, Find more videos
+  under the queue and the player's Search YouTube button open this box
+
+### Video call window
+- A narrow call window or docked column no longer has buttons spilling out of its title bar:
+  too narrow for everything, the buttons go onto a second row (the number in the room stays)
+- The Wider / Narrower button is gone: drag the docked column's long edge instead (double-click
+  it for its own width again)
+
+### Phones held sideways
+- The docked call column's buttons sit neatly in two rows under everyone (how many and float;
+  mic, camera and leave), all the same size, so the pictures get more of the column
+- The room's panel and the call column use the whole screen, the camera's cutout too, like a
+  video filling it
 
 ### Phones: the call bar and the call window are one
 - In a room, the call bar (you, mic, camera, leave) and everyone's video are one thing, there all
@@ -674,6 +701,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.9
 [1.5.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.8
 [1.5.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.7
 [1.5.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.6

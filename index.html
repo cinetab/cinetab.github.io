@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.5.8">
+  <meta name="version" content="1.5.9">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.5.8",
+      "softwareVersion": "1.5.9",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -336,7 +336,7 @@
         </details>
         <details>
           <summary>Can I watch YouTube videos together?</summary>
-          <p>Yes. Search YouTube from the <a href="#dashboard">dashboard</a> (or paste a video or playlist link) and it plays right here with CineTab's controls. Click <b>Watch together</b> in the player to create a room: it carries on with the same video for everyone, each person watching on YouTube's own player, in sync. In a room, the <b>Queue</b> tab searches YouTube too. Search results come from YouTube through public Piped servers; if they're busy, search on YouTube and paste the link instead.</p>
+          <p>Yes. Search YouTube from the <a href="#dashboard">dashboard</a> (or paste a video or playlist link) and it plays right here with CineTab's controls. Click <b>Watch together</b> in the player to create a room: it carries on with the same video for everyone, each person watching on YouTube's own player, in sync. In the player, the search button at the top right (or <b>Ctrl+K</b>) searches YouTube too, and in a room plays or queues for everyone. Search results come from YouTube through public Piped servers; if they're busy, search on YouTube and paste the link instead.</p>
         </details>
         <details>
           <summary>Can I install CineTab as an app on my phone?</summary>
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.5.8</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.5.9</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -426,6 +426,8 @@
       </div>
       <!-- A YouTube video watched on your own: when it ends, its YouTube Mix plays next (youtube.js) -->
       <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-label">Autoplay</span><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
+      <!-- Search and commands: YouTube, a pasted link, or anything the player does (script.js) -->
+      <button class="player-search-btn" title="Search and commands (Ctrl+K or /)" aria-label="Search YouTube, or run a command" aria-keyshortcuts="Control+K /"><i class="fa-solid fa-magnifying-glass"></i></button>
       <button class="share-help-btn" title="How to watch together (R)"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
     </div>
 
@@ -527,6 +529,7 @@
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
             <dt><kbd>R</kbd></dt><dd>Room panel: show / hide (outside a room: Watch together)</dd>
             <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
+            <dt><kbd>Ctrl</kbd>+<kbd>K</kbd><kbd>/</kbd></dt><dd>Search YouTube, paste a link, or run a command (a time like 1:23, a speed like 1.5x)</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
             <dt><kbd>Esc</kbd></dt><dd>Close a dialog</dd>
           </dl>
@@ -818,7 +821,6 @@
     <div class="room-tabbar">
       <nav class="room-tabs" role="tablist" aria-label="Room">
         <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
-        <button class="room-tab-btn" role="tab" data-tab="search" title="Search YouTube or paste a link, to play or queue for everyone" hidden><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
         <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
         <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room, and inviting more people"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
@@ -838,32 +840,6 @@
         <input class="room-chat-input" maxlength="500" autocomplete="off" placeholder="Send a message to everyone" aria-label="Chat message">
         <button type="submit" class="room-send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
       </form>
-    </section>
-
-    <!-- Search: find a YouTube video, or paste a link (a playlist adds all its videos), to play now or queue -->
-    <section class="room-tab room-tab-search" data-tab="search" role="tabpanel" hidden>
-      <form class="room-queue-form" novalidate>
-        <div class="room-queue-row">
-          <input class="room-queue-input" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Search YouTube or paste a link" aria-label="Search YouTube, or a YouTube link to add">
-          <button type="button" class="room-icon-btn room-queue-paste" title="Paste the link you copied" aria-label="Paste the link you copied"><i class="fa-regular fa-paste"></i></button>
-          <button type="submit" class="room-icon-btn room-search-go" title="Search YouTube (Enter)" aria-label="Search YouTube"><i class="fa-solid fa-magnifying-glass"></i></button>
-        </div>
-        <!-- A pasted link: what it is (a video, a playlist, a Mix), and play it now or queue it (room.js) -->
-        <div class="room-link-card" hidden>
-          <div class="room-link-main">
-            <span class="room-link-thumb"></span>
-            <span class="room-link-info"><small class="room-link-kind"></small><b class="room-link-title"></b></span>
-          </div>
-          <label class="room-link-whole" hidden><input type="checkbox" checked> <span></span></label>
-          <div class="room-queue-row room-link-actions">
-            <button type="button" class="room-small-btn primary" data-where="play"><i class="fa-solid fa-play"></i> Play now</button>
-            <button type="button" class="room-small-btn" data-where="end"><i class="fa-solid fa-plus"></i> Add to queue</button>
-          </div>
-        </div>
-        <small class="room-queue-hint"></small>
-        <div class="yt-results room-queue-results" hidden></div>
-      </form>
-      <p class="room-search-intro"><i class="fa-brands fa-youtube"></i> Type words to search YouTube, or paste a link to a video, a playlist or a Mix (radio), public or unlisted. Play it now or add it to the queue; everyone watches it together, in sync.</p>
     </section>
 
     <!-- The YouTube queue: reorder, play one now, remove; drop a link on it to add one -->

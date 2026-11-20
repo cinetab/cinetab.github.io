@@ -121,15 +121,9 @@
     ytHint = ytForm.querySelector(".room-yt-hint"),
     ytMount = document.querySelector(".yt-mount"),
     queueTabBtn = panel.querySelector('.room-tab-btn[data-tab="queue"]'),
-    searchTabBtn = panel.querySelector('.room-tab-btn[data-tab="search"]'),
     queueTitle = panel.querySelector(".room-queue-title"),
     queueTab = panel.querySelector(".room-tab-queue"),
     queueMoreBtn = queueTab.querySelector(".room-queue-more"),
-    searchTab = panel.querySelector(".room-tab-search"),
-    queueForm = searchTab.querySelector(".room-queue-form"),
-    queueInput = searchTab.querySelector(".room-queue-input"),
-    queuePasteBtn = searchTab.querySelector(".room-queue-paste"),
-    queueHint = searchTab.querySelector(".room-queue-hint"),
     queueCount = queueTab.querySelector(".room-queue-count"),
     queueList = queueTab.querySelector(".room-queue"),
     prevTrackBtn = document.querySelector(".container .prev-track"),
@@ -922,10 +916,9 @@
         nowList.hidden = true;
         closeYouTubeForm();
         queueTabBtn.hidden = true;
-        searchTabBtn.hidden = true;
         prevTrackBtn.hidden = nextTrackBtn.hidden = true;
         queueList.replaceChildren();
-        if (activeTab === "queue" || activeTab === "search") showTab("chat");
+        if (activeTab === "queue") showTab("chat");
     };
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
@@ -1581,16 +1574,14 @@
     // `sizes`: the size (px) it was resized to, { landscape, portrait } (none: fits everyone)
     // `docked`: chosen to be a panel; `dock`: how it's docked now ("side", "strip", or null while
     // floating; a phone held upright in fullscreen, with the room's panel closed, floats it);
-    // `big`: the wider column, or the larger strip, while docked; `dockW`: the column's width (px)
-    // dragged to by its long edge (none: the narrow or wide one)
+    // `dockW`: the docked column's width (px) dragged to by its long edge (none: its own)
     // `unitFloat`: on a phone, floating instead of docked
-    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockable: true, dockW: null, unitFloat: false };
+    const call = { x: 0, y: 0, pos: null, collapsed: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockable: true, dockW: null, unitFloat: false };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
             if (finite(saved.x, 0, 1) && finite(saved.y, 0, 1)) call.pos = { x: saved.x, y: saved.y };
             call.collapsed = saved.collapsed === true;
-            call.big = saved.big === true;
             call.docked = saved.docked === true;
             call.unitFloat = saved.unitFloat === true;
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
@@ -1600,7 +1591,7 @@
             });
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, docked: call.docked, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1625,7 +1616,6 @@
     callPipBtn.hidden = !("documentPictureInPicture" in window) || isTouch;
     callPipBtn.addEventListener("click", () => together.pip && together.pip());
     const callDockBtn = callButton("room-call-dock", "Dock as a panel");
-    const callSizeBtn = callButton("room-call-size", "Wider");
     const callFoldBtn = callButton("room-call-fold", "Fold up");
     // Folded up: a camera with a live dot in front of the number, so the small pill stands out
     const callLive = el("span", "room-call-live");
@@ -1670,7 +1660,7 @@
     });
     document.addEventListener("click", e => !callLeaveMenu.hidden && !callLeaveMenu.contains(e.target) && showCallLeave(false));
     document.addEventListener("keydown", e => e.key === "Escape" && !callLeaveMenu.hidden && showCallLeave(false));
-    callBar.append(callLive, callTitle, callControls, callPipBtn, callDockBtn, callSizeBtn, callFoldBtn, callLeaveBtn);
+    callBar.append(callLive, callTitle, callControls, callPipBtn, callDockBtn, callFoldBtn, callLeaveBtn);
     callWin.classList.toggle("has-pip", !callPipBtn.hidden);
 
     // On a phone, in the call bar: everyone's video shown or folded away (with how many are in
@@ -1717,7 +1707,7 @@
     const CALL_PAD = 6;
     // (with the picture in picture button, one more in the title bar); on a phone, the call bar's
     // width, upright
-    const CALL_MIN_W = callPipBtn.hidden ? 156 : 186;
+    const CALL_MIN_W = 140;
     const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W
         : phoneUpright.matches ? Math.min(330, playerPage.getBoundingClientRect().width - 16) : 150;
     const CALL_MIN_H = 88;
@@ -1767,7 +1757,7 @@
             const width = side && call.dockW ? Math.round(within(call.dockW, DOCK_MIN_W, dockMaxW())) : 0;
             if (width) callWin.style.setProperty("--dock-w", `${width}px`);
             else callWin.style.removeProperty("--dock-w");
-            callWin.classList.toggle("big", width ? width >= 250 : !!call.dock && call.big);
+            callWin.classList.toggle("big", width >= 250);
             return;
         }
         const page = playerPage.getBoundingClientRect();
@@ -2042,12 +2032,6 @@
         callFoldBtn.title = call.collapsed ? "Show everyone" : "Fold up";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
-        // Docked: a wider column, or a larger strip (floating, its edges or two fingers size it)
-        callSizeBtn.hidden = !call.dock;
-        const wide = call.dock === "side" && call.dockW ? call.dockW >= 240 : call.big;
-        callSizeBtn.firstChild.className = `fa-solid ${wide ? "fa-down-left-and-up-right-to-center" : "fa-up-right-and-down-left-from-center"}`;
-        callSizeBtn.title = call.dock === "side" ? (wide ? "Narrower" : "Wider") : call.big ? "Smaller" : "Larger";
-        callSizeBtn.setAttribute("aria-label", callSizeBtn.title);
     };
     // Small pictures show names for a few seconds (when it appears, someone joins or leaves, or
     // it's touched or pointed at), then just the pictures and mics; large ones always show them
@@ -2068,22 +2052,13 @@
         saveCall();
         placeCall();
     });
-    // The docked column's width changes in motion (the button, a double-click on its edge)
+    // The docked column's width back to its own, in motion (a double-click on its long edge)
     const dockInMotion = () => {
         if (calmer() || call.dock !== "side") return;
         callWin.classList.add("dock-moving");
         clearTimeout(call.motionTimer);
         call.motionTimer = setTimeout(() => callWin.classList.remove("dock-moving"), 400);
     };
-    callSizeBtn.addEventListener("click", () => {
-        // From a width dragged to: the narrow or wide one, whichever it's further from
-        call.big = call.dockW ? call.dockW < 240 : !call.big;
-        call.dockW = null;
-        dockInMotion();
-        renderCallButtons();
-        layoutCall();
-        saveCall();
-    });
 
     // Its long edge, dragged with a mouse: the column follows it, and the video beside it
     callDockEdge.addEventListener("pointerdown", e => {
@@ -4749,9 +4724,6 @@
         // YouTube links: for anyone who may share videos (no Chrome or Edge needed)
         nowYtBtn.hidden = !allowed;
         if (!allowed) closeYouTubeForm();
-        // Searching YouTube has its own tab, for the same people
-        searchTabBtn.hidden = !allowed;
-        if (!allowed && activeTab === "search") showTab("chat");
         // A playlist or queue: which video, and the previous / next one for everyone
         const control = host || room.settings.control;
         const hasNext = youtube ? (file.yt.index + 1 < file.yt.count || autoplayOn()) : false;
@@ -4780,7 +4752,7 @@
         queueMoreBtn.hidden = !allowed;
         if (youtube && !room.queueShown) {
             room.queueShown = true;
-            if (document.activeElement !== chatInput && activeTab !== "search") {
+            if (document.activeElement !== chatInput && !(together.searchOpen && together.searchOpen())) {
                 showPanel(true);
                 showTab("queue");
             }
@@ -4807,15 +4779,12 @@
         ytHint.classList.toggle("error", error);
     };
 
-    // YouTube's button (and Find more videos, under the queue) opens the Search tab: one place to
-    // find, play and queue videos
+    // YouTube's button (and Find more videos, under the queue) opens the player's search (script.js):
+    // one place to find, play and queue videos
     const openSearch = () => {
         if (!canShareYouTube()) return;
         closeYouTubeForm();
-        searchTabBtn.hidden = false;
-        showPanel(true);
-        showTab("search");
-        queueInput.focus();
+        if (together.openSearch) together.openSearch();
     };
     nowYtBtn.addEventListener("click", openSearch);
     queueMoreBtn.addEventListener("click", openSearch);
@@ -4881,20 +4850,14 @@
 
     // ---------- The YouTube queue tab
 
-    const queueHintText = queueHint.textContent;
-    const showQueueHint = (text = queueHintText, error = false) => {
-        queueHint.textContent = text;
-        queueHint.classList.toggle("error", error);
-        // (a link dropped on the queue: its hint is in Search, so a problem shows as a toast)
-        if (error && activeTab !== "search") toast(text);
-    };
+    // (a link dropped on the queue: how that went)
+    const showQueueHint = text => text && toast(text);
 
     const renderQueue = () => {
         if (!room) return;
         const queue = room.queue || { index: 0, items: [] };
         const edit = canShareYouTube();
         const items = queue.items;
-        queueForm.hidden = !edit;
         // No "Queue" heading over an empty queue (searching before anything plays)
         queueTitle.hidden = !items.length;
         queueCount.textContent = items.length ? `${Math.min(queue.index + 1, items.length)} of ${items.length}` : "";
@@ -4988,7 +4951,6 @@
         const starting = !(room.file && room.file.yt);
         showQueueHint(starting || where === "play" ? (ref.list ? "Opening it for everyone…" : "Playing it now for everyone…")
             : ref.list ? "Adding the videos to the queue…" : "Added to the queue.");
-        setTimeout(() => queueHint.textContent !== queueHintText && !queueHint.classList.contains("error") && showQueueHint(), 3000);
         return true;
     };
     const addToQueue = (text, where) => {
@@ -5001,139 +4963,30 @@
         return addRefToQueue(ref, where);
     };
 
-    // Search results in the Search tab: play one now, or add it to the queue
-    const queueResults = window.CineYouTube && queueForm.querySelector(".yt-results") && CineYouTube.createResults({
-        host: queueForm.querySelector(".yt-results"),
-        input: queueInput,
-        suggest: true,
-        compact: true,
-        actions: [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }],
-        onPick: (ref, where) => addRefToQueue(ref, where)
-    });
-    // While results show, they take the whole tab and are all that scrolls (the link card, hint and
-    // intro step aside until the search is cleared). On a phone held upright the panel is short
-    // (under the video and its title, and the keyboard takes half the screen), so while the Search
-    // tab shows results or suggestions it grows into a sheet over the video, up to the top of the
-    // screen; clearing the search, another tab or closing the panel puts it back.
-    const queueResultsBox = queueForm.querySelector(".yt-results");
-    const searching = () => {
-        const on = !!queueResultsBox && !queueResultsBox.hidden;
-        searchTab.classList.toggle("searching", on);
-        playerPage.classList.toggle("search-expanded", on && !!room && !panel.hidden && !searchTab.hidden);
+    // ---------- For the player's search and commands (script.js): a link or a result queued for
+    // everyone (or starting, when nothing's on), whether that's allowed, and the room's own commands
+    together.canQueueYouTube = () => canShareYouTube();
+    together.queueYouTube = ref => shareYouTubeRef(ref, "end");
+    together.roomCommands = () => {
+        if (!room) return [];
+        const host = room.role === "host";
+        const panelTo = tab => () => {
+            showPanel(true);
+            showTab(tab);
+            if (tab === "chat") chatInput.focus();
+        };
+        return [
+            { label: micEnabled ? "Turn the microphone off" : "Turn the microphone on", icon: micEnabled ? "fa-microphone-slash" : "fa-microphone", words: "mic microphone mute unmute talk voice", run: toggleMicrophone },
+            { label: camEnabled ? "Turn the camera off" : "Turn the camera on", icon: camEnabled ? "fa-video-slash" : "fa-video", words: "camera cam video webcam face", run: () => camEnabled ? disableCamera() : enableCamera() },
+            { label: "Invite people: copy the room's link", icon: "fa-link", words: "invite share link copy friends join", run: () => copy(inviteLink(), "Invite link") },
+            { label: "Chat", icon: "fa-message", words: "chat message talk write", run: panelTo("chat") },
+            { label: "People in the room", icon: "fa-user-group", words: "people members guests who invite qr code", run: panelTo("people") },
+            room.file && room.file.yt && { label: "The queue", icon: "fa-list-ol", words: "queue playlist next up list", run: panelTo("queue") },
+            host && { label: "Room settings", icon: "fa-sliders", words: "settings options lobby lock quality", run: panelTo("settings") },
+            { label: "Leave the room", icon: "fa-right-from-bracket", words: "leave exit quit hang up go", run: () => leaveJustBtn.click() },
+            { label: "End the room for everyone", icon: "fa-door-closed", words: "end close stop room everyone", danger: true, run: () => leaveEndBtn.click() }
+        ].filter(Boolean);
     };
-    if (queueResultsBox) new MutationObserver(searching).observe(queueResultsBox, { attributes: true, attributeFilter: ["hidden"] });
-    new MutationObserver(searching).observe(searchTab, { attributes: true, attributeFilter: ["hidden"] });
-    new MutationObserver(searching).observe(panel, { attributes: true, attributeFilter: ["hidden"] });
-    searching();
-
-    // ---------- A pasted link: what it is, and Play now / Add to queue. A video, a playlist, or a
-    // video in a playlist or a Mix (YouTube's radio: a list starting "RD"), which can go with the
-    // rest of its list or alone.
-    const linkCard = searchTab.querySelector(".room-link-card");
-    const linkThumb = linkCard.querySelector(".room-link-thumb");
-    const linkKind = linkCard.querySelector(".room-link-kind");
-    const linkTitle = linkCard.querySelector(".room-link-title");
-    const linkWhole = linkCard.querySelector(".room-link-whole");
-    const linkWholeBox = linkWhole.querySelector("input");
-    const link = { ref: null, key: "" };
-    const isMix = list => /^RD/.test(list || "");
-    const startAt = seconds => {
-        const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, sec = String(seconds % 60).padStart(2, "0");
-        return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
-    };
-    const renderLinkCard = () => {
-        const value = queueInput.value.trim();
-        const ref = value && !/\s/.test(value) ? parseYouTube(value) : null;
-        link.ref = ref;
-        linkCard.hidden = !ref;
-        if (!ref) return link.key = "";
-        const key = `${ref.id}|${ref.list}|${ref.start}`;
-        if (key === link.key) return;
-        link.key = key;
-        const mix = isMix(ref.list);
-        const kind = !ref.list ? "YouTube video" : !ref.id ? (mix ? "YouTube Mix (radio)" : "YouTube playlist")
-            : mix ? "Video, with its Mix (radio)" : "Video in a playlist";
-        linkKind.replaceChildren(el("i", `fa-solid ${!ref.list ? "fa-play" : mix ? "fa-tower-broadcast" : "fa-list"}`), ` ${kind}${ref.start ? ` · from ${startAt(ref.start)}` : ""}`);
-        linkWhole.hidden = !(ref.id && ref.list);
-        linkWholeBox.checked = true;
-        linkWhole.querySelector("span").textContent = mix ? "With the rest of the Mix after it" : "With the rest of the playlist from it";
-        // Its picture and title (YouTube's oEmbed; a Mix often has none)
-        linkThumb.replaceChildren();
-        if (ref.id) {
-            const img = el("img");
-            img.src = `https://i.ytimg.com/vi/${ref.id}/mqdefault.jpg`;
-            img.alt = "";
-            img.referrerPolicy = "no-referrer";
-            linkThumb.append(img);
-        } else linkThumb.append(el("i", `fa-solid ${mix ? "fa-tower-broadcast" : "fa-list"}`));
-        const fallback = !ref.list || ref.id ? "YouTube video" : mix ? "YouTube Mix" : "YouTube playlist";
-        linkTitle.textContent = "Loading…";
-        linkTitle.classList.add("loading");
-        const page = ref.id ? `https://www.youtube.com/watch?v=${ref.id}` : `https://www.youtube.com/playlist?list=${ref.list}`;
-        fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(page)}`)
-            .then(response => response.ok ? response.json() : null)
-            .catch(() => null)
-            .then(data => {
-                if (link.key !== key) return;
-                linkTitle.classList.remove("loading");
-                linkTitle.textContent = data && clean(data.title, 200) || fallback;
-                linkTitle.title = linkTitle.textContent;
-                if (!ref.id && data && typeof data.thumbnail_url === "string" && /^https:\/\/i\d?\.ytimg\.com\//.test(data.thumbnail_url)) {
-                    const img = el("img");
-                    img.src = data.thumbnail_url;
-                    img.alt = "";
-                    img.referrerPolicy = "no-referrer";
-                    linkThumb.replaceChildren(img);
-                }
-            });
-    };
-    linkCard.addEventListener("click", e => {
-        const button = e.target.closest("button[data-where]");
-        if (!button || !link.ref) return;
-        const ref = { ...link.ref };
-        // Just the video, without the rest of its list
-        if (ref.id && ref.list && !linkWholeBox.checked) ref.list = null;
-        if (addRefToQueue(ref, button.dataset.where)) {
-            queueInput.value = "";
-            renderLinkCard();
-        }
-    });
-
-    queueForm.addEventListener("submit", e => {
-        e.preventDefault();
-        const value = queueInput.value.trim();
-        if (!value) return queueInput.focus();
-        // A link: the card under the box asks what to do with it
-        if (parseYouTube(value) && !/\s/.test(value)) {
-            renderLinkCard();
-            return showQueueHint();
-        }
-        // Words: search YouTube for them (on a phone the keyboard goes, so the results have room)
-        if (!queueResults) return showQueueHint("Searching YouTube isn't available here. Paste a link instead.", true);
-        showQueueHint();
-        queueResults.run(value);
-        if (isTouch) queueInput.blur();
-    });
-    queueInput.addEventListener("input", () => {
-        if (queueHint.classList.contains("error")) showQueueHint();
-        renderLinkCard();
-    });
-    queueInput.addEventListener("keydown", e => e.key === "Escape" && (e.stopPropagation(), queueInput.blur()));
-
-    // Paste: the link copied from YouTube's page
-    queuePasteBtn.addEventListener("click", async () => {
-        try {
-            const text = (await navigator.clipboard.readText()).trim();
-            queueInput.value = text;
-            if (queueResults) queueResults.clear();
-            renderLinkCard();
-            if (parseYouTube(text)) showQueueHint();
-            else showQueueHint("What you copied isn't a YouTube link.", true);
-        } catch (error) {
-            showQueueHint("This browser didn't allow reading what you copied. Paste the link with Ctrl+V (or a long press).", true);
-        }
-        queueInput.focus();
-    });
 
     // Drag to reorder, or drop a link (from YouTube's page in another window) onto the queue
     let draggedK = null;
@@ -5209,11 +5062,8 @@
     document.addEventListener("visibilitychange", () => {
         if (document.hidden || !leftForYouTube) return;
         leftForYouTube = false;
-        if (!room || together.stream !== ytControls || !canShareYouTube()) return;
-        showPanel(true);
-        showTab("search");
-        showQueueHint("Back from YouTube? Copy the video's link there, then paste it here (or press the paste button) to add it to the queue.");
-        queueInput.focus();
+        if (!room || together.stream !== ytControls || !canShareYouTube() || !together.openSearch) return;
+        together.openSearch("", "Back from YouTube? Copy the video's link there, then paste it here to play it or add it to the queue.");
     });
 
     // A playlist's previous / next video, for everyone

@@ -364,14 +364,15 @@
     new MutationObserver(() => !homePage.hidden && render(true)).observe(homePage, { attributes: true, attributeFilter: ["hidden"] });
     render(true);
 
-    // The player's "Select a movie" box can search YouTube too (outside a room; a room has its own)
+    // The player's "Select a movie" box can search YouTube too: the player's own search (script.js)
     const uploadScroll = uploadOverlay.querySelector(".box-scroll");
     const toSearch = el("button", "secondary-btn upload-yt");
     toSearch.type = "button";
-    toSearch.title = "Search YouTube and play a video or playlist here";
+    toSearch.title = "Search YouTube and play a video or playlist here (Ctrl+K)";
     toSearch.append(el("i", "fa-brands fa-youtube"), " Search YouTube");
     uploadScroll.querySelector("#browse-btn").after(toSearch);
     toSearch.addEventListener("click", () => {
+        if (together.openSearch) return together.openSearch();
         if (together.active()) return together.openPanel && together.openPanel();
         if (location.hash === "#watch") history.back();
         else showHome();

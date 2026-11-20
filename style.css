@@ -500,6 +500,413 @@ body.watching {
 }
 
 /* Autoplay, a switch like YouTube's (a YouTube video watched on your own: youtube.js) */
+/* Search and commands (script.js): a round button at the top right, beside Watch together */
+.player-search-btn {
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.player-search-btn:hover,
+.player-search-btn[aria-expanded="true"] {
+  border-color: #3e97fd;
+  background: #3e97fd;
+}
+
+/* (Autoplay, when it shows, goes first: the search button follows it) */
+:is(.container.solo-yt, .container.youtube.yt-host) .yt-autoplay ~ .player-search-btn {
+  margin-left: 0;
+}
+
+/* The box: over the player (in fullscreen too), near the top on a large screen; a sheet filling a
+   phone's screen, so its results have room above the keyboard */
+.cmd-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(48px, 8vh) 16px 16px;
+  background: rgba(5, 5, 8, 0.55);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.cmd-overlay[hidden] {
+  display: none;
+}
+
+.cmd-box {
+  width: min(640px, 100%);
+  max-height: min(74vh, 660px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  font-family: "Poppins", sans-serif;
+  color: #e8e8ee;
+  background: #17171c;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  animation: cmdIn 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes cmdIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmd-box {
+    animation: none;
+  }
+}
+
+.cmd-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cmd-glass {
+  font-size: 15px;
+  color: #8f8f9e;
+}
+
+.cmd-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 4px;
+  border: none;
+  outline: none;
+  font: inherit;
+  /* (16px: a phone doesn't zoom in on it) */
+  font-size: 16px;
+  color: #fff;
+  background: transparent;
+}
+
+.cmd-input::placeholder {
+  color: #7d7d8c;
+}
+
+.cmd-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.cmd-icon-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  font-size: 15px;
+  color: #b8b8c6;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cmd-icon-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cmd-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.cmd-note {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #9a9aab;
+}
+
+.cmd-note.error {
+  color: #ff8a8a;
+}
+
+.cmd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #e8e8ee;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cmd-item.chosen {
+  color: #fff;
+  background: rgba(62, 151, 253, 0.16);
+}
+
+.cmd-item-icon {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 14px;
+  color: #9a9aab;
+}
+
+.cmd-item.chosen .cmd-item-icon {
+  color: #6fb0ff;
+}
+
+.cmd-item.search .cmd-item-icon {
+  color: #ff4d4d;
+}
+
+.cmd-item.danger,
+.cmd-item.danger .cmd-item-icon {
+  color: #ff8a8a;
+}
+
+.cmd-item-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmd-item-keys {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cmd-box kbd {
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: #c8c8d4;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.cmd-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11.5px;
+  color: #8f8f9e;
+}
+
+.cmd-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* A pasted link: its picture, what it is and its title, then Play (in a room: Play now, Add to queue) */
+.cmd-link {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(62, 151, 253, 0.35);
+  border-radius: 12px;
+  background: rgba(62, 151, 253, 0.07);
+}
+
+.cmd-link[hidden] {
+  display: none;
+}
+
+.cmd-link-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cmd-link-thumb {
+  position: relative;
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  font-size: 20px;
+  color: #ff4d4d;
+  background: #101015;
+}
+
+.cmd-link-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cmd-link-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cmd-link-kind {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #6fb0ff;
+}
+
+.cmd-link-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+}
+
+.cmd-link-title.loading {
+  font-weight: 400;
+  color: #8f8f9e;
+}
+
+.cmd-link-whole {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #d6d6e2;
+  cursor: pointer;
+}
+
+.cmd-link-whole[hidden] {
+  display: none;
+}
+
+.cmd-link-whole input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #3e97fd;
+}
+
+.cmd-link-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cmd-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.cmd-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.cmd-btn.primary {
+  border-color: #3e97fd;
+  background: #3e97fd;
+}
+
+.cmd-btn.primary:hover {
+  background: #2f86ea;
+}
+
+/* YouTube's results (youtube.js) scroll with the rest of the box */
+.cmd-results {
+  margin-top: 0;
+}
+
+/* Touch screens: no keyboard hints */
+@media (pointer: coarse) {
+  .cmd-foot {
+    display: none;
+  }
+}
+
+/* Phones (upright, or sideways): a sheet filling the screen, below the camera's cutout */
+@media (pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 500px) {
+  .cmd-overlay {
+    padding: 0;
+    background: rgba(5, 5, 8, 0.4);
+  }
+  .cmd-box {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .cmd-item {
+    min-height: 46px;
+  }
+}
+
 .yt-autoplay {
   display: none;
   pointer-events: auto;
@@ -5043,9 +5450,12 @@ body > .room-toasts {
 /* The title bar: how many are in the room, your mic and camera, and its buttons, compact */
 .room-call-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
-  height: 30px;
+  min-height: 30px;
+  padding: 3px 0;
   font-size: 12px;
   color: #d6d6e2;
 }
@@ -5056,8 +5466,8 @@ body > .room-toasts {
 }
 
 .room-call-title {
-  flex: 1;
-  min-width: 0;
+  /* (it keeps its width: too narrow for everything, the buttons go onto a second row) */
+  flex: 1 0 auto;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -5075,37 +5485,6 @@ body > .room-toasts {
   font-size: 12.5px;
   font-weight: 600;
   color: #fff;
-}
-
-/* Narrow (a slim column of pictures): the number without its icon; narrower still, just the
-   buttons (the number shows on pointing at the bar). With picture in picture, one button more.
-   (A phone's call window has no title bar: its call bar does that.) */
-.room-call:not(.collapsed):not(.unit) {
-  container-type: inline-size;
-}
-
-@container (max-width: 164px) {
-  .room-call-title i {
-    display: none;
-  }
-}
-
-@container (max-width: 153px) {
-  .room-call-title {
-    visibility: hidden;
-  }
-}
-
-@container (max-width: 192px) {
-  .room-call.has-pip .room-call-title i {
-    display: none;
-  }
-}
-
-@container (max-width: 181px) {
-  .room-call.has-pip .room-call-title {
-    visibility: hidden;
-  }
 }
 
 .room-call-btn {
@@ -7895,9 +8274,10 @@ body > .room-toasts {
    rounded cards like on a computer, only 6px apart (and clear of a camera cutout or the home
    indicator), so hardly any space goes */
 @media screen and (orientation: landscape) and (max-height: 500px) {
+  /* (the whole screen, the camera's cutout too, like a video filling it) */
   .player-page.room-open {
     gap: 6px;
-    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding: 6px;
   }
   .player-page.room-open .container,
   .player-page.room-open .container.fullscreen {
@@ -7998,9 +8378,6 @@ body > .room-toasts {
   width: var(--dock-w);
 }
 
-.room-call.docked.side.big {
-  --dock-w: 280px;
-}
 
 /* Wider / Narrower (or back to its width): in motion, the video beside it following */
 .room-call.docked.side.dock-moving {
@@ -8098,9 +8475,6 @@ body > .room-toasts {
   margin: 0 12px 10px;
 }
 
-.room-call.docked.strip.big {
-  --strip-tile: 150px;
-}
 
 .player-page.room-open > .room-call.docked.strip {
   margin-top: 8px;
@@ -8134,7 +8508,7 @@ body > .room-toasts {
 @media screen and (orientation: landscape) and (max-height: 500px) {
   .player-page.call-dock-side {
     gap: 6px;
-    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding: 6px;
   }
   .player-page.call-dock-side .container,
   .player-page.call-dock-side .container.fullscreen {
@@ -8145,9 +8519,6 @@ body > .room-toasts {
   }
   .room-call.docked.side {
     --dock-w: min(132px, 20vw);
-  }
-  .room-call.docked.side.big {
-    --dock-w: min(190px, 28vw);
   }
 }
 
@@ -8334,11 +8705,12 @@ body > .room-toasts {
   --dock-w: min(150px, 22vw);
 }
 
-.room-call.unit.side .room-foot,
-.room-call.unit.docked.side .room-foot {
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
+.room-call.unit.side .room-foot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
+  align-items: center;
+  gap: 6px 4px;
   padding: 8px 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
@@ -8347,16 +8719,28 @@ body > .room-toasts {
   display: none;
 }
 
+/* Top row: how many (folding everyone away) across two cells, then float */
 .room-call.unit.side .room-unit-people {
-  margin-left: 0;
-  padding: 0 10px;
+  grid-column: span 2;
+  order: -2;
+  justify-self: stretch;
+  justify-content: center;
+  height: 34px;
+  margin: 0;
+  padding: 0 8px;
 }
 
+.room-call.unit.side .room-unit-float {
+  order: -1;
+}
+
+.room-call.unit.side .room-mic-btn,
 .room-call.unit.side .room-leave-btn {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   justify-content: center;
+  font-size: 13px;
 }
 
 .room-call.unit.side .room-leave-btn span {
@@ -8385,18 +8769,19 @@ body > .room-toasts {
 }
 
 .room-call.unit.docked.side:is(.collapsed, .no-people) .room-foot {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  justify-content: flex-start;
+  grid-template-columns: 1fr;
+  gap: 8px;
   border-top: 0;
 }
 
 .room-call.unit.docked.side:is(.collapsed, .no-people) .room-unit-people {
+  grid-column: auto;
   flex-direction: column;
+  justify-self: center;
   height: auto;
   gap: 2px;
+  width: 36px;
   padding: 8px 0;
-  width: 40px;
 }
 
 /* Upright, a narrow phone: the Leave button's word goes, so everything fits */

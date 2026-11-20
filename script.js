@@ -2770,6 +2770,11 @@ document.addEventListener("keydown", e => {
 
         case "Slash":
             if (e.shiftKey) toggleShortcuts(); // ?
+            else {
+                // Search and commands
+                e.preventDefault();
+                cmdPalette.open();
+            }
             break;
     }
 
@@ -2780,4 +2785,446 @@ document.addEventListener("keydown", e => {
             showFeedback("fa-forward", `${digit * 10}%`);
         }
     }
+});
+
+// ---------- Search and commands: the button at the player's top right, Ctrl+K (⌘K) or /. One box
+// to search YouTube, play (or, in a room, queue) a pasted link, or run anything the player does:
+// fullscreen, subtitles, a speed, a time to jump to, the room's panel, your mic... Typing filters
+// the commands (Enter runs the first, or the one chosen with ↑ ↓); words no command has search
+// YouTube. "1:23" jumps there, "1.5x" plays at that speed, "40%" jumps to 40%. Phones, tablets and
+// computers alike: a sheet from the top on a small screen, a box near the top on a large one.
+const cmdPalette = (() => {
+    const make = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = text;
+        return node;
+    };
+    const iconButton = (className, icon, label) => {
+        const button = make("button", className);
+        button.type = "button";
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.append(make("i", icon));
+        return button;
+    };
+    const searchBtn = container.querySelector(".player-search-btn");
+    const youtube = () => !!window.CineYouTube;
+
+    const overlay = make("div", "cmd-overlay");
+    overlay.hidden = true;
+    const box = make("div", "cmd-box");
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", "Search and commands");
+    const form = make("form", "cmd-form");
+    form.noValidate = true;
+    form.setAttribute("role", "search");
+    const input = make("input", "cmd-input");
+    input.type = "search";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.maxLength = 300;
+    input.setAttribute("enterkeyhint", "search");
+    input.setAttribute("aria-autocomplete", "list");
+    const pasteBtn = iconButton("cmd-icon-btn cmd-paste", "fa-regular fa-paste", "Paste a link you copied");
+    const closeBtn = iconButton("cmd-icon-btn cmd-close", "fa-solid fa-xmark", "Close (Esc)");
+    form.append(make("i", "fa-solid fa-magnifying-glass cmd-glass"), input, pasteBtn, closeBtn);
+    const body = make("div", "cmd-body");
+    const note = make("p", "cmd-note");
+    note.setAttribute("aria-live", "polite");
+    note.hidden = true;
+    // A pasted link: what it is, and what to do with it
+    const link = make("div", "cmd-link");
+    link.hidden = true;
+    const linkThumb = make("span", "cmd-link-thumb");
+    const linkKind = make("small", "cmd-link-kind");
+    const linkTitle = make("b", "cmd-link-title");
+    const linkInfo = make("span", "cmd-link-info");
+    linkInfo.append(linkKind, linkTitle);
+    const linkMain = make("div", "cmd-link-main");
+    linkMain.append(linkThumb, linkInfo);
+    const linkWhole = make("label", "cmd-link-whole");
+    const linkWholeBox = make("input");
+    linkWholeBox.type = "checkbox";
+    linkWholeBox.checked = true;
+    const linkWholeText = make("span");
+    linkWhole.append(linkWholeBox, linkWholeText);
+    const linkActions = make("div", "cmd-link-actions");
+    link.append(linkMain, linkWhole, linkActions);
+    // Commands (and "Search YouTube for …")
+    const list = make("ul", "cmd-list");
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", "Commands");
+    const resultsHost = make("div", "yt-results cmd-results");
+    body.append(note, link, list, resultsHost);
+    const foot = make("div", "cmd-foot");
+    foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> run or search</span><span><kbd>Esc</kbd> close</span>";
+    box.append(form, body, foot);
+    overlay.append(box);
+    playerPage.append(overlay);
+
+    const showNote = (text = "", error = false) => {
+        note.textContent = text;
+        note.hidden = !text;
+        note.classList.toggle("error", error);
+    };
+
+    // ---------- The player's commands, as things are now (and the room's, from room.js)
+    const step = dir => container.querySelector(dir > 0 ? ".next-track" : ".prev-track");
+    const playerCommands = () => {
+        const paused = mediaPaused();
+        const inRoom = together.active();
+        const canStep = dir => { const button = step(dir); return !!button && !button.hidden && !button.disabled; };
+        return [
+            { label: paused ? "Play" : "Pause", icon: paused ? "fa-play" : "fa-pause", keys: ["Space"], words: "play pause resume stop", top: true, run: togglePlay },
+            { label: "Open a video from this device", icon: "fa-folder-open", words: "open file browse movie local video choose", top: true, run: () => fileInput.click() },
+            { label: fullscreenElement() ? "Leave fullscreen" : "Fullscreen", icon: fullscreenElement() ? "fa-compress" : "fa-expand", keys: ["F"], words: "fullscreen full screen big", top: true, run: toggleFullscreen },
+            { label: "Picture in picture", icon: "fa-clone", keys: ["P"], words: "pip picture float mini window popup", top: !isTouch, run: toggleCustomPiP },
+            { label: "Subtitles on / off", icon: "fa-closed-captioning", keys: ["C"], words: "subtitles captions cc", top: true, run: toggleSubtitles },
+            { label: "Choose a subtitle file", icon: "fa-file-lines", words: "subtitles captions srt vtt file add", run: () => subtitleInput.click() },
+            { label: mainVideo.volume > 0 ? "Mute" : "Unmute", icon: mainVideo.volume > 0 ? "fa-volume-xmark" : "fa-volume-high", keys: ["M"], words: "mute unmute sound volume silent", run: () => setVolume(mainVideo.volume > 0 ? 0 : 1) },
+            { label: "Back 10 seconds", icon: "fa-rotate-left", keys: ["J"], words: "back rewind backward 10 seconds", run: () => seek(-10) },
+            { label: "Forward 10 seconds", icon: "fa-rotate-right", keys: ["L"], words: "forward skip ahead 10 seconds", run: () => seek(10) },
+            canStep(1) && { label: "Next video", icon: "fa-forward-step", keys: ["Shift", "N"], words: "next video skip queue playlist", top: true, run: () => step(1).click() },
+            canStep(-1) && { label: "Previous video", icon: "fa-backward-step", keys: ["Shift", "P"], words: "previous video back queue playlist", run: () => step(-1).click() },
+            ...[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => ({
+                label: rate === 1 ? "Normal speed" : `Speed ${rate}x`, icon: "fa-gauge-high", speed: true,
+                words: `speed rate playback ${rate}x ${rate < 1 ? "slow slower" : rate > 1 ? "fast faster" : "normal"}`, run: () => setSpeed(rate)
+            })),
+            { label: inRoom ? "The room's panel" : "Watch together", icon: "fa-users", keys: ["R"], words: "watch together room friends party panel chat invite", top: !inRoom, run: () => shareHelpBtn.click() },
+            ...(together.roomCommands ? together.roomCommands().map((command, i) => ({ ...command, top: i < 3 })) : []),
+            { label: "Keyboard shortcuts", icon: "fa-keyboard", keys: ["?"], words: "keyboard shortcuts keys help", run: toggleShortcuts },
+            { label: "Back to home", icon: "fa-house", words: "home back dashboard exit", run: () => playerBackBtn.click() }
+        ].filter(Boolean);
+    };
+
+    // What's typed, as a command of its own: a time ("1:23", "1h2m"), a speed ("1.5x"), a share ("40%")
+    const typedCommands = query => {
+        const out = [];
+        const clock = query.match(/^(?:go\s*to\s*|jump\s*to\s*|at\s*)?(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/i);
+        const units = query.match(/^(?:go\s*to\s*|jump\s*to\s*)?(?:(\d{1,2})h\s*)?(?:(\d{1,3})m\s*)?(?:(\d{1,3})s)?$/i);
+        let seconds = null;
+        if (clock) seconds = (+(clock[1] || 0)) * 3600 + (+clock[2]) * 60 + (+clock[3]);
+        else if (units && (units[1] || units[2] || units[3])) seconds = (+(units[1] || 0)) * 3600 + (+(units[2] || 0)) * 60 + (+(units[3] || 0));
+        const duration = mediaDuration();
+        if (seconds !== null && Number.isFinite(duration) && duration > 0) {
+            const at = Math.min(seconds, duration);
+            out.push({ label: `Jump to ${formatTime(at)}`, icon: "fa-clock", run: () => seekTo(at) });
+        }
+        const speed = query.match(/^(?:speed\s*)?(\d+(?:\.\d+)?)\s*x$/i) || query.match(/^speed\s+(\d+(?:\.\d+)?)$/i);
+        if (speed) {
+            const rate = +speed[1];
+            if (rate >= 0.25 && rate <= 4) out.push({ label: `Play at ${rate}x`, icon: "fa-gauge-high", speed: true, run: () => setSpeed(rate) });
+        }
+        const share = query.match(/^(?:go\s*to\s*|jump\s*to\s*)?(\d{1,3})\s*%$/);
+        if (share && +share[1] <= 100 && Number.isFinite(duration) && duration > 0) {
+            out.push({ label: `Jump to ${share[1]}%`, icon: "fa-forward", run: () => seekTo(duration * share[1] / 100) });
+        }
+        return out;
+    };
+
+    // ---------- The list: commands that match, and "Search YouTube for …"
+    let items = [];
+    let chosen = 0;
+    const matches = (command, words) => {
+        const hay = `${command.label} ${command.words || ""}`.toLowerCase();
+        return words.every(word => hay.includes(word));
+    };
+    const renderList = () => {
+        const query = input.value.trim();
+        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        const all = playerCommands();
+        if (!query) items = all.filter(command => command.top);
+        else {
+            // (a speed typed: not the speeds listed as well)
+            const typed = typedCommands(query);
+            const typedSpeed = typed.some(command => command.speed);
+            items = [...typed, ...all.filter(command => !(typedSpeed && command.speed) && matches(command, words))].slice(0, 7);
+        }
+        if (query && youtube()) items.push({ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query });
+        chosen = Math.min(chosen, Math.max(0, items.length - 1));
+        list.replaceChildren(...items.map((item, i) => {
+            const li = make("li", `cmd-item${item.danger ? " danger" : ""}${item.search ? " search" : ""}`);
+            li.setAttribute("role", "option");
+            li.id = `cmd-item-${i}`;
+            li.dataset.i = i;
+            li.append(make("i", `${/^fa-(brands|regular)/.test(item.icon) ? "" : "fa-solid "}${item.icon} cmd-item-icon`), make("span", "cmd-item-label", item.label));
+            if (item.keys && !isTouch) {
+                const keys = make("span", "cmd-item-keys");
+                item.keys.forEach(key => keys.append(make("kbd", null, key)));
+                li.append(keys);
+            }
+            return li;
+        }));
+        list.hidden = !items.length;
+        markChosen();
+    };
+    const markChosen = () => {
+        [...list.children].forEach((li, i) => {
+            const on = i === chosen;
+            li.classList.toggle("chosen", on);
+            li.setAttribute("aria-selected", String(on));
+        });
+        if (items.length) input.setAttribute("aria-activedescendant", `cmd-item-${chosen}`);
+        else input.removeAttribute("aria-activedescendant");
+    };
+    const runItem = item => {
+        if (!item) return;
+        if (item.search) return searchYouTube(item.search);
+        close();
+        // (straight away, while the key press or tap still counts: fullscreen, file pickers)
+        item.run();
+    };
+    list.addEventListener("click", e => {
+        const li = e.target.closest(".cmd-item");
+        if (li) runItem(items[+li.dataset.i]);
+    });
+    list.addEventListener("pointermove", e => {
+        const li = e.target.closest(".cmd-item");
+        if (!li || +li.dataset.i === chosen) return;
+        chosen = +li.dataset.i;
+        markChosen();
+    });
+
+    // ---------- YouTube: results, and a pasted link (play, or in a room play now / add to queue)
+    const roomQueue = () => together.active() && !!together.canQueueYouTube && together.canQueueYouTube();
+    const resultActions = [];
+    const setResultActions = () => resultActions.splice(0, resultActions.length, ...(roomQueue()
+        ? [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }]
+        : [{ key: "play", label: "Play", icon: "fa-play" }]));
+    setResultActions();
+    // Play: here (on your own), or for everyone in a room; Add to queue (a room): stays open for more
+    const pick = (ref, where, meta = {}) => {
+        if (where === "end") {
+            const refused = together.queueYouTube(ref);
+            if (refused) return showNote(refused, true);
+            showNote(ref.list ? "Adding the videos to the queue…" : "Added to the queue. Add more, or close.");
+            return;
+        }
+        const refused = CineYouTube.play(ref, meta);
+        if (refused) return showNote(refused, true);
+        close();
+    };
+    // (made the first time it opens: youtube.js loads after this file)
+    let results = null;
+    resultsHost.hidden = true;
+    const ensureResults = () => {
+        if (results || !youtube()) return results;
+        results = CineYouTube.createResults({
+            host: resultsHost,
+            input,
+            suggest: true,
+            compact: true,
+            actions: resultActions,
+            onPick: (ref, where, item) => pick(ref, where, item.kind === "playlist"
+                ? { listTitle: item.title, channel: item.channel, count: item.count }
+                : { title: item.title, channel: item.channel, live: !!item.live })
+        });
+        return results;
+    };
+    const searchYouTube = query => {
+        if (!results) return;
+        showNote("");
+        results.run(query);
+        // On a phone the keyboard steps aside for the results
+        if (isTouch) input.blur();
+    };
+
+    const linkState = { ref: null, key: "" };
+    const renderLink = () => {
+        const value = input.value.trim();
+        const ref = youtube() && value && !/\s/.test(value) ? CineYouTube.parse(value) : null;
+        linkState.ref = ref;
+        link.hidden = !ref;
+        if (!ref) return linkState.key = "";
+        const key = `${ref.id}|${ref.list}|${ref.start}`;
+        if (key === linkState.key) return;
+        linkState.key = key;
+        const mix = /^RD/.test(ref.list || "");
+        const kind = !ref.list ? "YouTube video" : !ref.id ? (mix ? "YouTube Mix (radio)" : "YouTube playlist")
+            : mix ? "Video, with its Mix (radio)" : "Video in a playlist";
+        linkKind.replaceChildren(make("i", `fa-solid ${!ref.list ? "fa-play" : mix ? "fa-tower-broadcast" : "fa-list"}`), ` ${kind}${ref.start ? ` · from ${formatTime(ref.start)}` : ""}`);
+        linkWhole.hidden = !(ref.id && ref.list);
+        linkWholeBox.checked = true;
+        linkWholeText.textContent = mix ? "With the rest of the Mix after it" : "With the rest of the playlist from it";
+        linkThumb.replaceChildren();
+        if (ref.id) {
+            const img = make("img");
+            img.src = `https://i.ytimg.com/vi/${ref.id}/mqdefault.jpg`;
+            img.alt = "";
+            img.referrerPolicy = "no-referrer";
+            linkThumb.append(img);
+        } else linkThumb.append(make("i", `fa-solid ${mix ? "fa-tower-broadcast" : "fa-list"}`));
+        linkTitle.textContent = "Loading…";
+        linkTitle.classList.add("loading");
+        const fallback = ref.id ? "YouTube video" : mix ? "YouTube Mix" : "YouTube playlist";
+        const page = ref.id ? `https://www.youtube.com/watch?v=${ref.id}` : `https://www.youtube.com/playlist?list=${ref.list}`;
+        fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(page)}`)
+            .then(response => response.ok ? response.json() : null)
+            .catch(() => null)
+            .then(data => {
+                if (linkState.key !== key) return;
+                linkTitle.classList.remove("loading");
+                linkTitle.textContent = data && typeof data.title === "string" && data.title.trim() ? data.title.trim().slice(0, 200) : fallback;
+                if (!ref.id && data && typeof data.thumbnail_url === "string" && /^https:\/\/i\d?\.ytimg\.com\//.test(data.thumbnail_url)) {
+                    const img = make("img");
+                    img.src = data.thumbnail_url;
+                    img.alt = "";
+                    img.referrerPolicy = "no-referrer";
+                    linkThumb.replaceChildren(img);
+                }
+            });
+        // Play (or, in a room, Play now and Add to queue)
+        const queue = roomQueue();
+        const action = (where, icon, text, primary) => {
+            const button = make("button", `cmd-btn${primary ? " primary" : ""}`);
+            button.type = "button";
+            button.dataset.where = where;
+            button.append(make("i", `fa-solid ${icon}`), ` ${text}`);
+            return button;
+        };
+        linkActions.replaceChildren(action("play", "fa-play", queue ? "Play now" : "Play", true), ...(queue ? [action("end", "fa-plus", "Add to queue")] : []));
+    };
+    const linkRef = () => {
+        const ref = linkState.ref && { ...linkState.ref };
+        if (ref && ref.id && ref.list && !linkWholeBox.checked) ref.list = null;
+        return ref;
+    };
+    linkActions.addEventListener("click", e => {
+        const button = e.target.closest("button[data-where]");
+        const ref = button && linkRef();
+        if (!ref) return;
+        if (button.dataset.where === "end") {
+            pick(ref, "end");
+            input.value = "";
+            renderAll();
+            return input.focus();
+        }
+        pick(ref, "play");
+    });
+
+    // ---------- Typing, choosing, Enter
+    const renderAll = () => {
+        renderLink();
+        // A link: its card is the choice (no commands, no earlier results)
+        if (linkState.ref) {
+            if (results) results.clear();
+            items = [];
+            list.replaceChildren();
+            list.hidden = true;
+            return;
+        }
+        renderList();
+    };
+    input.addEventListener("input", () => {
+        chosen = 0;
+        if (note.classList.contains("error")) showNote("");
+        renderAll();
+    });
+    input.addEventListener("keydown", e => {
+        if ((e.key === "ArrowDown" || e.key === "ArrowUp") && items.length) {
+            e.preventDefault();
+            chosen = (chosen + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+            markChosen();
+            list.children[chosen]?.scrollIntoView({ block: "nearest" });
+        }
+    });
+    form.addEventListener("submit", e => {
+        e.preventDefault();
+        const ref = linkRef();
+        if (ref) return pick(ref, "play");
+        const value = input.value.trim();
+        if (!value) return;
+        if (items[chosen]) return runItem(items[chosen]);
+        if (!youtube()) showNote("No command like that. Searching YouTube needs the website (with an internet connection).", true);
+    });
+    pasteBtn.addEventListener("click", async () => {
+        try {
+            const text = (await navigator.clipboard.readText()).trim();
+            if (!text) return showNote("There's nothing copied to paste.", true);
+            input.value = text;
+            if (results) results.clear();
+            renderAll();
+            if (!linkState.ref) showNote("What you copied isn't a YouTube link: Enter searches for it.");
+        } catch (error) {
+            showNote("This browser didn't allow reading what you copied. Paste with Ctrl+V (or a long press).", true);
+        }
+        input.focus();
+    });
+
+    // ---------- Opening and closing
+    const open = (text = "", message = "") => {
+        if (playerPage.hidden) showPlayer();
+        if (overlay.hidden) {
+            ensureResults();
+            setResultActions();
+            overlay.hidden = false;
+            searchBtn.setAttribute("aria-expanded", "true");
+            input.placeholder = youtube() ? "Search YouTube, paste a link, or type a command" : "Type a command (a time like 1:23, a speed like 1.5x)";
+            if (results) results.clear();
+            linkState.key = "";
+        }
+        input.value = text;
+        chosen = 0;
+        showNote(message);
+        renderAll();
+        input.focus();
+        if (!overlay.hidden && !isTouch) input.select();
+    };
+    const close = () => {
+        if (overlay.hidden) return;
+        overlay.hidden = true;
+        searchBtn.setAttribute("aria-expanded", "false");
+        if (results) results.clear();
+        input.value = "";
+        linkState.ref = null;
+        link.hidden = true;
+        input.blur();
+    };
+    const toggle = () => overlay.hidden ? open() : close();
+    searchBtn.setAttribute("aria-haspopup", "dialog");
+    searchBtn.setAttribute("aria-expanded", "false");
+    searchBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        toggle();
+    });
+    closeBtn.addEventListener("click", close);
+    overlay.addEventListener("pointerdown", e => e.target === overlay && close());
+    // Esc: the results first (youtube.js), then the box; keys typed here aren't the player's
+    overlay.addEventListener("keydown", e => {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
+            e.preventDefault();
+            e.stopPropagation();
+            close();
+            return;
+        }
+        if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            close();
+            return;
+        }
+        if (e.key === "Tab") {
+            // (focus stays in the box)
+            const focusable = [...box.querySelectorAll("input, button, a[href], [tabindex]:not([tabindex='-1'])")].filter(node => node.getClientRects().length && !node.disabled);
+            const first = focusable[0], last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+        e.stopPropagation();
+    });
+    // The player going away closes it
+    new MutationObserver(() => playerPage.hidden && close()).observe(playerPage, { attributes: true, attributeFilter: ["hidden"] });
+
+    together.openSearch = open;
+    together.searchOpen = () => !overlay.hidden;
+    return { open, close, toggle, get isOpen() { return !overlay.hidden; } };
+})();
+
+// Ctrl+K (⌘K on a Mac): search and commands, from anywhere in the player (even while typing in a box)
+document.addEventListener("keydown", e => {
+    if (playerPage.hidden || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "k") return;
+    e.preventDefault();
+    cmdPalette.toggle();
 });
