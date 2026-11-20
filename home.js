@@ -102,6 +102,26 @@
     };
     window.CineHome = { show: showView, get view() { return currentView && currentView.dataset.view; } };
 
+    // Quick search shortcut: / on the home page jumps to the search box - Saved's own, on Saved;
+    // otherwise YouTube's, on the dashboard. (Not while typing, nor in the player: it has its own /)
+    document.addEventListener("keydown", e => {
+        if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+        if (homePage.hidden || document.body.classList.contains("watching")) return;
+        const active = document.activeElement;
+        if (active && (/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable)) return;
+        // (a question open on the page, or a dialog: not now)
+        if (document.querySelector("body > .player-ask, .install-dialog:not([hidden])")) return;
+        const onSaved = currentView && currentView.dataset.view === "favorites";
+        const searchInput = home.querySelector(onSaved ? ".fav-search input" : ".yt-search-input");
+        if (!searchInput || (onSaved && searchInput.closest("[hidden]"))) return;
+        e.preventDefault();
+        if (!onSaved) showView("dashboard");
+        setTimeout(() => {
+            searchInput.focus();
+            searchInput.select();
+        }, 40);
+    });
+
     // The sidebar shrunk to its icons (remembered): pointed at (or tabbed into), it opens out
     // over the page with their names, and folds back as the pointer leaves
     const collapseBtn = home.querySelector(".side-collapse");

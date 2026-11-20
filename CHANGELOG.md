@@ -6,6 +6,31 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.10] - 2026-11-21
+
+### Queue
+- A playlist's block is one card again, with its buttons in it: a heart (save the whole
+  playlist), shuffle and remove, on the line under its name (which now has the full width), quiet
+  until pointed at; a click anywhere else on it opens or folds it. Removing a whole playlist asks
+  first, saying how many videos go
+- A heart on every video in the queue, to keep it in Saved: at the end of its row, pink once
+  saved (pointed at, or always on a touch screen, otherwise)
+
+### Polish
+- / on the home page jumps to the search: Saved's own on Saved, YouTube's (on the dashboard)
+  anywhere else; a small "/" hint sits in the dashboard's search box on a computer
+- Slim dark scrollbars, a blue text selection, and one blue focus ring for the keyboard on what
+  can be pressed or typed in
+- Buttons press in a little when clicked; FAQ answers and new chat messages slide in
+
+### Fixed
+- The heart in the player's top bar couldn't be clicked: the clicks went through it to the video
+- The video call is back as it was in 1.6.8. Changes that slipped into 1.6.9 had taken out the
+  floating window (and with it resizing the call), the minimize button on the call and the
+  restore button in its bar, made a docked call slide away and back as the pointer moved over
+  and off it (it shook when you went to click a button), and turned the folded-up call's glowing
+  pill plain. Where you put the call is remembered again, too
+
 ## [1.6.9] - 2026-11-21
 
 ### Home page, redesigned

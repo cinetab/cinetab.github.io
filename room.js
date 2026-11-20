@@ -1954,9 +1954,10 @@
             call.unitFloat = saved.unitFloat === true;
             // (from before the dock: it starts in the dock once)
             if (saved.v === 2) {
-                call.docked = true;
+                call.docked = saved.docked !== false;
                 if (["bottom", "side"].includes(saved.dockPos)) call.dockPos = saved.dockPos;
-                else call.dockPos = "bottom";
+                // (pinned above the video, which is gone: pinned left)
+                else if (saved.dockPos === "top") call.dockPos = "side";
             }
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
             if (finite(saved.stripH, 40, 2000)) call.stripH = saved.stripH;
@@ -1996,7 +1997,8 @@
     // column pinned at the side (phones have their own call bar: below)
     const CALL_LAYOUTS = [
         { mode: "bottom", icon: "fa-arrows-down-to-line", text: "Dock on the video" },
-        { mode: "side", icon: "fa-table-columns", text: "Pin to the side" }
+        { mode: "side", icon: "fa-table-columns", text: "Pin to the side" },
+        { mode: "float", icon: "fa-window-restore", text: "Floating window" }
     ];
     const callLayoutBtn = callButton("room-call-layout", "Call layout");
     callLayoutBtn.setAttribute("aria-haspopup", "menu");
@@ -2136,8 +2138,21 @@
     const unitFloatBtn = el("button", "room-unit-only room-mic-btn room-unit-float");
     unitFloatBtn.type = "button";
     unitFloatBtn.append(el("i"));
+    // Minimized: everyone's video back, from the call bar
+    const unitExpandBtn = el("button", "room-unit-only room-mic-btn room-unit-expand");
+    unitExpandBtn.type = "button";
+    unitExpandBtn.title = "Show everyone's video";
+    unitExpandBtn.setAttribute("aria-label", unitExpandBtn.title);
+    unitExpandBtn.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
     roomFoot.insertBefore(unitPeopleBtn, leaveWrap);
+    roomFoot.insertBefore(unitExpandBtn, leaveWrap);
     roomFoot.insertBefore(unitFloatBtn, leaveWrap);
+    // On the call itself, floating or docked: minimize it (to its call bar)
+    const unitMinBtn = el("button", "room-call-unit-min");
+    unitMinBtn.type = "button";
+    unitMinBtn.title = "Minimize";
+    unitMinBtn.setAttribute("aria-label", "Minimize the video call");
+    unitMinBtn.append(el("i", "fa-solid fa-minus"));
     // (also a computer's window made as narrow as a phone: the phone's call window)
     const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px), (orientation: portrait) and (max-width: 600px)");
     const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
@@ -2222,7 +2237,7 @@
     callStripGrip.type = "button";
     callStripGrip.title = "Drag to make the videos taller or shorter (tap: taller / back)";
     callStripGrip.setAttribute("aria-label", "Video call height (drag, or tap)");
-    callWin.append(callStripGrip, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
+    callWin.append(callStripGrip, unitMinBtn, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
@@ -2432,7 +2447,7 @@
 
     // An edge or corner, dragged with a mouse: that side moves, the opposite one stays put
     const startCallResize = (e, handle) => {
-        if (e.button > 0 || call.collapsed || call.dock || !callWin.classList.contains("expanded")) return;
+        if (e.button > 0 || call.collapsed || call.dock) return;
         e.preventDefault();
         e.stopPropagation();
         handle.setPointerCapture(e.pointerId);
@@ -2671,6 +2686,9 @@
         unitFloatBtn.title = call.dock ? "Float it: drag it anywhere" : phoneSideways.matches ? "Dock it on the left" : "Dock it at the bottom";
         unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
         unitFloatBtn.hidden = !call.dock && !call.dockable;
+        // (minimize on the call, restore in its bar; docked at the bottom, a chevron down)
+        unitExpandBtn.hidden = !(unit && call.collapsed && !alone);
+        unitMinBtn.firstChild.className = `fa-solid ${call.dock === "strip" ? "fa-chevron-down" : "fa-minus"}`;
         // Hide 3-dot more menu; pin and minimize buttons are shown directly in the bar
         callMoreBtn.hidden = true;
         showCallMore(false);
@@ -2714,6 +2732,11 @@
     callWin.addEventListener("pointerdown", showCallNames);
 
     unitPeopleBtn.addEventListener("click", () => callFoldBtn.click());
+    unitExpandBtn.addEventListener("click", () => call.collapsed && callFoldBtn.click());
+    unitMinBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!call.collapsed) callFoldBtn.click();
+    });
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -2781,7 +2804,7 @@
 
     // Its long edge, dragged with a mouse: the column follows it, and the video beside it
     callDockEdge.addEventListener("pointerdown", e => {
-        if (e.button > 0 || call.dock !== "side" || call.collapsed) return;
+        if (e.button > 0 || call.dock !== "side") return;
         e.preventDefault();
         e.stopPropagation();
         callDockEdge.setPointerCapture(e.pointerId);
@@ -2958,23 +2981,20 @@
     // ---------- A phone, sideways or fullscreen, with the call minimized: after a few seconds
     // without a touch it steps aside (a slim column slides away, the video taking its place; a
     // floating pill fades out), like a video call's buttons; a touch anywhere brings it back
-    const CALL_IDLE_MS = 3500;
+    const CALL_IDLE_MS = 4000;
     let callIdleTimer = null;
-    const callIdleWanted = () => !callWin.hidden && call.collapsed
-        && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden)
-        && !callWin.matches(":hover") && !callWin.matches(":focus-within")
-        && !callWin.querySelector(":focus-visible") && callLayoutMenu.hidden && callLeaveMenu.hidden;
+    const callIdleWanted = () => !callWin.hidden && callWin.classList.contains("unit") && call.collapsed && call.dock !== "strip"
+        && (phoneSideways.matches || !!(document.fullscreenElement || document.webkitFullscreenElement))
+        && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden);
     const setCallIdle = idle => {
         callWin.classList.toggle("idle", idle);
-        playerPage.classList.toggle("call-idle", idle);
+        playerPage.classList.toggle("call-idle", idle && call.dock === "side");
     };
     const wakeCall = () => {
         clearTimeout(callIdleTimer);
         if (callWin.classList.contains("idle")) setCallIdle(false);
         if (callIdleWanted()) callIdleTimer = setTimeout(() => callIdleWanted() && setCallIdle(true), CALL_IDLE_MS);
     };
-    playerPage.addEventListener("pointermove", wakeCall, { passive: true });
-    container.addEventListener("pointermove", wakeCall, { passive: true });
     playerPage.addEventListener("pointerdown", wakeCall, true);
     document.addEventListener("keydown", wakeCall, true);
     document.addEventListener("fullscreenchange", wakeCall);
@@ -6008,6 +6028,23 @@
     // first video's picture, how many videos (and which is playing, "3 / 25"); a tap unfolds its
     // videos below it, indented, and folds them up again - like YouTube's app
     const openPlaylists = new Set();
+    // A heart in the queue: the video (or the whole playlist) kept in Saved (history.js)
+    const queueHeart = item => {
+        const key = item && window.CineSaved && window.CineYouTube && CineYouTube.paintHeart && CineSaved.keyOf(item);
+        if (!key) return null;
+        const heart = el("button", "room-icon-btn room-queue-fav");
+        heart.type = "button";
+        heart.dataset.saveKey = key;
+        heart.draggable = false;
+        heart.append(el("i"));
+        CineYouTube.paintHeart(heart);
+        heart.addEventListener("click", e => {
+            e.stopPropagation();
+            const saved = CineSaved.toggle(item);
+            if (saved !== null) showFeedback(saved ? "fa-heart" : "fa-heart-crack", saved ? `${item.kind === "playlist" ? "Playlist" : "Video"} saved` : "Taken out of Saved");
+        });
+        return heart;
+    };
     const groupPlaylists = (items, index) => {
         const rows = [...queueList.querySelectorAll("li[data-k]")];
         const edit = room ? canShareYouTube() : true;
@@ -6040,27 +6077,29 @@
                 title.title = name;
                 info.append(el("small", "room-queue-group-kind", "Playlist"), title,
                     el("small", null, playing ? `Playing ${index - i + 1} / ${count}` : `${count} videos`));
-                button.append(cover, info, el("i", "fa-solid fa-chevron-down room-queue-group-chevron"));
+                button.append(cover, info);
                 head.append(button);
-                if (edit) {
-                    const actions = el("span", "room-queue-group-actions");
-                    const shuffleGroupBtn = el("button", "room-icon-btn");
-                    shuffleGroupBtn.type = "button";
-                    shuffleGroupBtn.dataset.q = "shuffle-playlist";
-                    shuffleGroupBtn.dataset.pl = pl;
-                    shuffleGroupBtn.title = "Shuffle this playlist";
-                    shuffleGroupBtn.setAttribute("aria-label", "Shuffle this playlist");
-                    shuffleGroupBtn.append(el("i", "fa-solid fa-shuffle"));
-                    const removeBtn = el("button", "room-icon-btn danger");
-                    removeBtn.type = "button";
-                    removeBtn.dataset.q = "remove-playlist";
-                    removeBtn.dataset.pl = pl;
-                    removeBtn.title = "Remove whole playlist";
-                    removeBtn.setAttribute("aria-label", "Remove whole playlist from queue");
-                    removeBtn.append(el("i", "fa-solid fa-trash-can"));
-                    actions.append(shuffleGroupBtn, removeBtn);
-                    head.append(actions);
-                }
+                const actions = el("span", "room-queue-group-actions");
+                const groupAction = (op, icon, label, danger = false) => {
+                    const action = el("button", `room-icon-btn${danger ? " danger" : ""}`);
+                    action.type = "button";
+                    action.dataset.q = op;
+                    action.dataset.pl = pl;
+                    action.title = label;
+                    action.setAttribute("aria-label", label);
+                    action.append(el("i", `fa-solid ${icon}`));
+                    return action;
+                };
+                // (a heart: the whole playlist kept in Saved, when its YouTube id is known)
+                const heart = queueHeart(items[i].pll ? { kind: "playlist", list: items[i].pll, id: items[i].id, title: name, count } : null);
+                if (heart) actions.append(heart);
+                if (edit) actions.append(groupAction("shuffle-playlist", "fa-shuffle", "Shuffle this playlist"),
+                    groupAction("remove-playlist", "fa-trash-can", "Remove the whole playlist from the queue", true));
+                if (actions.childElementCount) head.append(actions);
+                const fold = el("span", "room-queue-group-chevron");
+                fold.setAttribute("aria-hidden", "true");
+                fold.append(el("i", "fa-solid fa-chevron-down"));
+                head.append(fold);
                 rows[i].before(head);
                 for (let k = i; k <= j; k++) {
                     rows[k].dataset.pl = pl;
@@ -6075,9 +6114,9 @@
         }
     };
     queueList.addEventListener("click", e => {
-        const head = e.target.closest(".room-queue-group-head");
-        if (!head) return;
-        const pl = head.parentNode.dataset.pl;
+        const head = e.target.closest(".room-queue-group");
+        if (!head || e.target.closest("[data-q], [data-save-key]")) return;
+        const pl = head.dataset.pl;
         if (openPlaylists.has(pl)) openPlaylists.delete(pl);
         else openPlaylists.add(pl);
         renderQueue();
@@ -6133,6 +6172,8 @@
             title.title = item.title || item.id;
             info.append(title, el("small", null, current ? "Now playing" : item.auto ? "Added by Autoplay" : (item.by ? `Added by ${item.by}` : "Added by You")));
             li.append(cover, info);
+            const heart = queueHeart({ kind: "video", id: item.id, title: item.title || "" });
+            if (heart) li.append(heart);
             if (edit) {
                 const actions = el("span", "room-queue-actions");
                 const action = (op, icon, label, disabled = false) => {
@@ -6220,7 +6261,6 @@
         renderQueue();
         renderShuffle();
         showFeedback("fa-shuffle", "Playlist shuffled");
-        toast("Shuffled playlist in queue");
     };
 
     const removeSoloPlaylist = pl => {
@@ -6269,8 +6309,14 @@
         if (op === "remove-playlist") {
             const pl = button.dataset.pl || (button.closest("li[data-pl]") && button.closest("li[data-pl]").dataset.pl);
             if (!pl) return;
-            if (!room) removeSoloPlaylist(pl);
-            else sendQueueOp({ op: "remove-playlist", pl });
+            const items = room ? (room.queue && room.queue.items) || [] : soloQueue.items;
+            const videos = items.filter(item => item.pl === pl);
+            const name = (videos[0] && videos[0].plt) || "this playlist";
+            playerAsk({ icon: "fa-trash-can", title: `Remove “${name}”?`, text: `All ${videos.length} of its videos leave the queue`, yes: "Remove", danger: true }).then(yes => {
+                if (!yes) return;
+                if (!room) removeSoloPlaylist(pl);
+                else sendQueueOp({ op: "remove-playlist", pl });
+            });
             return;
         }
         const row = button.closest("li[data-k]");

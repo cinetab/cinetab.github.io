@@ -71,6 +71,49 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Universal sleek dark scrollbars */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Subtle, refined accent text selection */
+::selection {
+  background: rgba(62, 151, 253, 0.35);
+  color: #ffffff;
+}
+
+/* Unified accessible keyboard focus rings: on what can be pressed or typed in (not the video,
+   the player or a panel, which take focus to get the keys) */
+:is(a, button, input, select, textarea, summary, [role="button"], [role="switch"], [role="tab"], [role="menuitem"], [role="radio"]):focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
 body {
   min-height: 100vh;
   background: #0f0f11;
@@ -1408,8 +1451,11 @@ body.watching {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.6);
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(15, 15, 20, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   color: #fff;
   padding: 20px;
   border-radius: 50%;
@@ -1422,7 +1468,7 @@ body.watching {
   pointer-events: none;
   width: 100px;
   height: 100px;
-  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: center;
 }
 
@@ -1621,8 +1667,8 @@ body.watching {
   border-radius: 50%;
   background: #3e97fd;
   transform: translateY(-50%) scale(0);
-  transition: transform 0.1s ease;
-  box-shadow: 0 0 10px rgba(62, 151, 253, 0.5);
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 10px rgba(62, 151, 253, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
 }
 
 .video-timeline:hover .progress-bar::before {
@@ -2931,26 +2977,44 @@ video::cue {
   cursor: pointer;
   text-decoration: none;
   color: #fff;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn:active {
+  transform: scale(0.975);
 }
 
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 8px 24px rgba(91, 120, 255, 0.35);
+  box-shadow: 0 8px 24px rgba(91, 120, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(91, 120, 255, 0.45);
+  box-shadow: 0 12px 30px rgba(91, 120, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.975);
+  box-shadow: 0 4px 12px rgba(91, 120, 255, 0.3);
 }
 
 .btn-ghost {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-ghost:active {
+  transform: translateY(0) scale(0.975);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .btn-sm {
@@ -3470,6 +3534,7 @@ kbd {
 .faq-item[open] {
   border-color: rgba(124, 92, 255, 0.35);
   background: rgba(22, 22, 27, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .faq-item summary {
@@ -3482,6 +3547,7 @@ kbd {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  user-select: none;
 }
 
 .faq-item summary::-webkit-details-marker {
@@ -3491,15 +3557,17 @@ kbd {
 .faq-item summary::after {
   content: "+";
   color: var(--accent);
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 400;
   line-height: 1;
   flex-shrink: 0;
-  margin-top: -1px;
-  transition: transform 0.2s ease;
+  margin-top: -2px;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
 }
 
 .faq-item[open] summary::after {
   transform: rotate(45deg);
+  color: #ff6e6e;
 }
 
 .faq-item p {
@@ -3507,6 +3575,21 @@ kbd {
   font-size: 13.5px;
   line-height: 1.65;
   color: var(--text-soft);
+}
+
+.faq-item[open] p {
+  animation: faqSlideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes faqSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .faq-item b {
@@ -3720,6 +3803,38 @@ kbd {
 .yt-search-input::-webkit-search-cancel-button {
   filter: invert(1);
   opacity: 0.5;
+}
+
+.yt-search-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 1px 7px;
+  height: 22px;
+  pointer-events: none;
+  user-select: none;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.yt-search:focus-within .yt-search-kbd,
+.yt-search-input:not(:placeholder-shown) ~ .yt-search-kbd {
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+}
+
+@media (pointer: coarse), screen and (max-width: 600px) {
+  .yt-search-kbd {
+    display: none;
+  }
 }
 
 .yt-search-paste {
@@ -4072,6 +4187,10 @@ kbd {
 
 .dash-filter:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+.dash-filter:active {
+  transform: scale(0.96);
 }
 
 .dash-filter.active {
@@ -5602,17 +5721,32 @@ body > .room-toasts {
   padding: 0 5px 0 10px;
 }
 
+/* Folded up it's small, so it stands out: a glowing blue pill with a slow pulse around it and a
+   camera with a live dot in front of its title (no pulse for people who asked for less motion) */
 .room-call.collapsed {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 20px;
-  background: rgba(22, 22, 28, 0.85);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  backdrop-filter: blur(18px) saturate(1.3);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  border: 1.5px solid rgba(62, 151, 253, 0.85);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(36, 64, 120, 0.82), rgba(58, 40, 112, 0.82));
+  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.18), 0 0 22px rgba(62, 151, 253, 0.45), 0 10px 26px rgba(0, 0, 0, 0.5);
 }
 
 .room-call.collapsed::after {
-  display: none !important;
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: roomCallPulse 2.6s ease-out infinite;
+}
+
+@keyframes roomCallPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(62, 151, 253, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 12px rgba(62, 151, 253, 0);
+  }
 }
 
 .room-call-live {
@@ -7066,7 +7200,18 @@ body > .room-toasts {
 .room-msg {
   display: flex;
   gap: 10px;
-  animation: room-toast-in 0.2s ease;
+  animation: roomMsgIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes roomMsgIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .room-msg-body {
@@ -12176,69 +12321,100 @@ body > .room-toasts {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 6px 8px 6px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .room-queue-group[hidden] {
   display: none;
 }
 
+.room-queue-group:hover,
+.room-queue-group:focus-within {
+  border-color: rgba(62, 151, 253, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.room-queue-group.current {
+  border-color: rgba(62, 151, 253, 0.5);
+  background: rgba(62, 151, 253, 0.1);
+}
+
+/* (its picture and name: what a click or Enter opens and folds) */
 .room-queue-group-head {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 8px 7px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
   font: inherit;
   text-align: left;
   color: #fff;
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+.room-queue-group-head:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+/* Its buttons, in it: save the whole playlist, shuffle it, remove it - quiet until it's pointed
+   at (always there on a touch screen), the heart pink once it's saved */
 .room-queue-group-actions {
-  display: none;
+  position: absolute;
+  right: 40px;
+  bottom: 4px;
+  display: flex;
   align-items: center;
-  flex-shrink: 0;
   gap: 2px;
 }
 
-.room-queue-group:hover .room-queue-group-actions,
-.room-queue-group:focus-within .room-queue-group-actions {
-  display: flex;
+/* (on the line under its name - "4 videos" - so the name has the whole width) */
+.room-queue-group:has(.room-queue-group-actions) .room-queue-group-info small:last-child {
+  padding-right: 86px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .room-queue-group-actions .room-icon-btn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   font-size: 12px;
+  color: #9a9aab;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.room-queue-group:hover .room-queue-group-actions .room-icon-btn,
+.room-queue-group:focus-within .room-queue-group-actions .room-icon-btn,
+.room-queue-group-actions .room-icon-btn.on {
+  opacity: 1;
+}
+
+.room-queue-group-actions .room-icon-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.room-queue-group-actions .room-icon-btn.danger:hover {
+  color: #ff7a85;
+  background: rgba(255, 77, 94, 0.16);
 }
 
 @media (hover: none) {
-  .room-queue-group-actions {
-    display: flex;
+  .room-queue-group-actions .room-icon-btn {
+    opacity: 1;
   }
-}
-
-.room-queue-group-head:hover,
-.room-queue-group-head:focus-visible {
-  border-color: rgba(62, 151, 253, 0.45);
-  background: rgba(255, 255, 255, 0.07);
-  outline: none;
-}
-
-.room-queue-group.current .room-queue-group-head {
-  border-color: rgba(62, 151, 253, 0.5);
-  background: rgba(62, 151, 253, 0.1);
-}
-
-.room-queue-group.open .room-queue-group-head {
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
 }
 
 /* (the picture, with two cards' edges behind it: a stack, like a playlist's on YouTube) */
@@ -12385,13 +12561,12 @@ body > .room-toasts {
 }
 
 /* (the chevron centred in its circle: Font Awesome's own display would put it at the top) */
-.room-queue-group-head > .room-queue-group-chevron {
-  display: grid;
-  place-items: center;
+.room-queue-group-chevron {
+  margin-left: 2px;
   line-height: 1;
 }
 
-.room-queue-group-head > .room-queue-group-chevron::before {
+.room-queue-group-chevron i {
   display: block;
   line-height: 1;
 }
@@ -12574,7 +12749,7 @@ body > .room-toasts {
    in the playlist; a play mark for the one on), a larger picture, its title on up to two lines;
    the one playing with an accent bar and a tint, those played dimmed; its buttons (play, move,
    remove) and drag handle when pointed at. */
-.room-queue-group.open .room-queue-group-head {
+.room-queue-group.open {
   border-bottom-color: transparent;
   border-radius: 14px 14px 0 0;
 }
@@ -12685,127 +12860,6 @@ body > .room-toasts {
 
 .room-queue-item.in-playlist .room-queue-actions {
   right: 8px;
-}
-
-/* =================== VIDEO CALL DOCK UPDATES =================== */
-
-/* Disallow resizing on minimized call bar */
-.room-call:is(.collapsed, :not(.expanded)) :is(.room-call-edge, .room-call-dock-edge, .room-call-resize, .room-call-strip-grip),
-.room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-dock-edge {
-  display: none !important;
-  pointer-events: none !important;
-}
-
-.room-call:is(.collapsed, :not(.expanded)) {
-  cursor: default !important;
-}
-
-/* Auto-hide minimized bar when idle */
-.player-page.call-idle .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people),
-.room-call.docked.side.idle:is(.collapsed, :not(.has-video), .no-people) {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  margin-left: calc(-1 * var(--dock-w, 200px) - 10px) !important;
-  transform: translateX(-100%) !important;
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease !important;
-}
-
-.room-call.bottom.asleep:not(.expanded) {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  transform: translate(-50%, 14px) scale(0.96) !important;
-  transition: opacity 0.25s ease, transform 0.25s ease !important;
-}
-
-.room-call.collapsed.idle:not(:hover):not(:focus-within) {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  transition: opacity 0.25s ease !important;
-}
-
-.room-call.docked.side:hover,
-.room-call.docked.side:focus-within,
-.room-call.bottom:hover,
-.room-call.bottom:focus-within,
-.room-call.collapsed:hover,
-.room-call.collapsed:focus-within {
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  margin-left: 0 !important;
-}
-
-.room-call.docked.side:hover,
-.room-call.docked.side:focus-within {
-  transform: none !important;
-}
-
-.room-call.bottom:hover,
-.room-call.bottom:focus-within {
-  transform: translate(-50%, 0) !important;
-}
-
-/* Fullscreen and side panel: buttons aligned center and middled vertically when video is off */
-.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people),
-.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) {
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: center !important;
-  align-items: center !important;
-  height: 100% !important;
-  padding: 12px 6px !important;
-}
-
-.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-grid,
-.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-grid {
-  display: none !important;
-}
-
-.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-foot, .room-call-bar),
-.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-foot, .room-call-bar) {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 12px !important;
-  width: 100% !important;
-  margin: auto 0 !important;
-  padding: 0 !important;
-  border-top: none !important;
-}
-
-.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-controls,
-.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-controls {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  gap: 10px !important;
-}
-
-.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-winbtns,
-.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-winbtns {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  gap: 10px !important;
-  margin-left: 0 !important;
-  padding-left: 0 !important;
-  padding-top: 10px !important;
-  border-left: none !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-mic-btn, .room-leave-btn, .room-call-btn, .room-unit-people),
-.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-mic-btn, .room-leave-btn, .room-call-btn, .room-unit-people) {
-  margin: 0 auto !important;
-  align-self: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-}
-
-/* Ensure redundant mobile buttons stay hidden */
-.room-call-unit-min,
-.room-unit-expand {
-  display: none !important;
 }
 
 /* =================== HOME SHELL: A SIDEBAR, SECTIONS, MICA =================== */
@@ -14837,10 +14891,25 @@ body > .notice-layer {
   color: #ff7aa8;
 }
 
-/* ---------- The player's heart (top bar) and its menu: this video, or the whole playlist */
+/* ---------- The player's heart (top bar) and its menu: this video, or the whole playlist. (The
+   top bar lets clicks through to the video; its buttons, the heart too, take them) */
 .player-save-wrap {
   position: relative;
   display: inline-flex;
+  flex-shrink: 0;
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.top-bar .player-save-btn,
+.player-save-menu {
+  pointer-events: auto;
+}
+
+/* (it goes first on the right, beside Search - after Autoplay when that shows) */
+.top-bar .player-save-wrap:not([hidden]) ~ .player-search-btn,
+:is(.container.solo-yt, .container.youtube.yt-host) .yt-autoplay ~ .player-save-wrap {
+  margin-left: 0;
 }
 
 .player-save-wrap[hidden] {
@@ -15142,3 +15211,51 @@ body > .notice-layer {
   }
 }
 /* =================== /SAVED: HEARTS =================== */
+
+/* =================== QUEUE: HEARTS (room.js) =================== */
+/* Each video of the queue (and each playlist block) has a heart, to keep it in Saved: at the end
+   of its row, showing when pointed at (always on a touch screen), pink and always there once
+   saved; the row's buttons, when pointed at, sit just before it */
+.room-queue-item > .room-queue-fav {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  font-size: 12px;
+  color: #9a9aab;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.room-queue-item:hover > .room-queue-fav,
+.room-queue-item:focus-within > .room-queue-fav,
+.room-queue-fav.on {
+  opacity: 1;
+}
+
+.room-queue-fav:hover {
+  color: #fff;
+}
+
+.room-queue-fav.on i,
+.room-queue-group-actions .room-queue-fav.on i {
+  color: #ff4f8b;
+}
+
+.room-queue-item:has(> .room-queue-fav) .room-queue-actions {
+  right: 38px;
+}
+
+@media (hover: none) {
+  .room-queue-item > .room-queue-fav {
+    opacity: 1;
+  }
+}
+
+/* (narrow: the row's buttons go under it, and the heart stays at its end) */
+@media (max-width: 600px) {
+  .room-queue-item:has(> .room-queue-fav) .room-queue-actions {
+    right: auto;
+  }
+}
+/* =================== /QUEUE: HEARTS =================== */
