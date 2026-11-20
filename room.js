@@ -1549,17 +1549,24 @@
     // ---------- The call window: everyone in the room, like a video call, in a small window over
     // the player that can be dragged anywhere (computer or phone; fullscreen too). Each person is
     // their camera, or their avatar while it's off, with their name and whether their mic is on.
-    // It can fold up to its title bar, and be small or large; where it was left, folded and size
-    // are remembered (where as a share of the screen, so it fits a phone turned sideways too).
+    // Its title bar is just how many are in the room, your mic and camera, and its buttons.
+    // At first it fits everyone: one under another on a computer or a phone held sideways, side by
+    // side on a phone held upright. With a mouse, any edge or corner resizes it to any shape (like
+    // a computer's window; double-click its title bar for the size that fits everyone again); on a
+    // touch screen, two fingers. The pictures share the window, as many across as makes them
+    // largest for its shape. It can fold up to its title bar. Where it was left, folded and its
+    // size are remembered (where as a share of the screen; the size for sideways and upright).
     // It can also be docked as a panel instead of floating over the picture: a column on the left
     // of the video (computers, phones held sideways), everyone one under another and scrolling up
     // and down; or, on a phone held upright, a strip under the video's details (or the room's
     // chat), just above the call bar, everyone side by side and scrolling across.
     const CALL_KEY = "cinetab:call";
-    // `tile`: a tile's width pinched to on a touch screen (px), or null for the small / large one
+    // `sizes`: the size (px) it was resized to, { landscape, portrait } (none: fits everyone)
     // `docked`: chosen to be a panel; `dock`: how it's docked now ("side", "strip", or null while
-    // floating; a phone held upright in fullscreen, with the room's panel closed, floats it)
-    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), tile: null, touches: new Map(), pinch: null, docked: false, dock: null, dockable: true };
+    // floating; a phone held upright in fullscreen, with the room's panel closed, floats it);
+    // `big`: the wider column, or the larger strip, while docked; `dockW`: the column's width (px)
+    // dragged to by its long edge (none: the narrow or wide one)
+    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockable: true, dockW: null };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
@@ -1567,16 +1574,23 @@
             call.collapsed = saved.collapsed === true;
             call.big = saved.big === true;
             call.docked = saved.docked === true;
-            if (finite(saved.tile, 40, 600)) call.tile = saved.tile;
+            if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
+            if (saved.sizes && typeof saved.sizes === "object") ["landscape", "portrait"].forEach(key => {
+                const size = saved.sizes[key];
+                if (size && finite(size.w, 60, 6000) && finite(size.h, 60, 6000)) call.sizes[key] = { w: size.w, h: size.h };
+            });
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, docked: call.docked, ...(call.tile ? { tile: call.tile } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, docked: call.docked, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
     callWin.setAttribute("aria-label", "People in the room");
     const callBar = el("div", "room-call-bar");
+    // How many are in the room: a number
     const callTitle = el("span", "room-call-title");
+    const callCount = el("b");
+    callTitle.append(el("i", "fa-solid fa-user-group"), callCount);
     const callButton = (className, label) => {
         const button = el("button", `room-call-btn ${className}`);
         button.type = "button";
@@ -1586,22 +1600,13 @@
         return button;
     };
     const callDockBtn = callButton("room-call-dock", "Dock as a panel");
-    const callSizeBtn = callButton("room-call-size", "Larger");
+    const callSizeBtn = callButton("room-call-size", "Wider");
     const callFoldBtn = callButton("room-call-fold", "Fold up");
-    // Folded up: a camera with a live dot in front of the title, so the small pill stands out
+    // Folded up: a camera with a live dot in front of the number, so the small pill stands out
     const callLive = el("span", "room-call-live");
     callLive.setAttribute("aria-hidden", "true");
     callLive.append(el("i", "fa-solid fa-video"));
-    callBar.append(el("i", "fa-solid fa-grip-vertical room-call-grip"), callLive, callTitle, callDockBtn, callSizeBtn, callFoldBtn);
-    const callGrid = el("div", "room-call-grid");
-    // With a mouse: a grip in the bottom right corner, dragged to make it larger or smaller (arrow
-    // keys too, once it has focus); on a touch screen, two fingers do it (below)
-    const callResize = el("button", "room-call-resize");
-    callResize.type = "button";
-    callResize.title = "Drag to resize";
-    callResize.setAttribute("aria-label", "Resize (drag, or arrow keys)");
-    // Your mic and camera, so they can be turned on or off without opening the room's panel: a
-    // row below everyone while it's open, and in its title bar once folded up (renderCallButtons)
+    // Your mic and camera, so they can be turned on or off without opening the room's panel
     const callMicBtn = callButton("room-call-media room-call-mic-btn", "Turn microphone on");
     const callCamBtn = callButton("room-call-media room-call-cam-btn", "Turn camera on");
     callMicBtn.addEventListener("click", toggleMicrophone);
@@ -1610,8 +1615,94 @@
     renderMic();
     const callControls = el("div", "room-call-controls");
     callControls.append(callMicBtn, callCamBtn);
-    callWin.append(callBar, callGrid, callControls, callResize);
+    callBar.append(callLive, callTitle, callControls, callDockBtn, callSizeBtn, callFoldBtn);
+    const callGrid = el("div", "room-call-grid");
+    // With a mouse: every edge and corner resizes it; the bottom right corner shows a grip (and
+    // takes the arrow keys, once it has focus). On a touch screen, two fingers do it (below).
+    const callEdges = ["n", "s", "e", "w", "ne", "nw", "sw"].map(edge => {
+        const handle = el("span", `room-call-edge ${edge}`);
+        handle.dataset.edge = edge;
+        handle.setAttribute("aria-hidden", "true");
+        return handle;
+    });
+    const callResize = el("button", "room-call-resize room-call-edge se");
+    callResize.type = "button";
+    callResize.dataset.edge = "se";
+    callResize.title = "Drag to resize";
+    callResize.setAttribute("aria-label", "Resize (drag, or arrow keys)");
+    // Docked beside the video (with a mouse): its long right edge, dragged to make it wider or
+    // narrower (arrow keys too, once it has focus; a double-click goes back to the set width)
+    const callDockEdge = el("button", "room-call-dock-edge");
+    callDockEdge.type = "button";
+    callDockEdge.title = "Drag to make the panel wider or narrower (double-click: back to its size)";
+    callDockEdge.setAttribute("aria-label", "Panel width (drag, or arrow keys)");
+    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge);
     playerPage.append(callWin);
+
+    // ---------- Its size, and the pictures inside it
+    const CALL_GAP = 6;
+    const CALL_PAD = 6;
+    const CALL_MIN_W = 120;
+    const CALL_MIN_H = 88;
+    const DOCK_MIN_W = 140;
+    const dockMaxW = () => Math.max(DOCK_MIN_W, Math.min(560, playerPage.getBoundingClientRect().width * 0.45));
+    const within = (value, min, max) => Math.max(min, Math.min(value, max));
+    const callOrient = page => page.width >= page.height ? "landscape" : "portrait";
+    // Around the pictures: its sides and bottom, its border, and the title bar
+    const callChrome = () => ({ x: CALL_PAD * 2 + 2, y: (callBar.offsetHeight || 30) + CALL_PAD + 2 });
+    // The size that fits everyone: one under another when the screen is wider than tall (a
+    // computer, a phone held sideways), side by side when it's taller (a phone held upright)
+    const fittingCallSize = (page, count, landscape) => {
+        const tile = !isTouch ? 168 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
+        const tall = tile * 3 / 4;
+        const chrome = callChrome();
+        return landscape
+            ? { w: tile + chrome.x, h: count * tall + (count - 1) * CALL_GAP + chrome.y }
+            : { w: count * tile + (count - 1) * CALL_GAP + chrome.x, h: tall + chrome.y };
+    };
+    // How many across: whatever makes everyone's picture largest (as a 4:3 picture) in this shape
+    const fitCall = (count, width, height) => {
+        let best = { cols: 1, rows: count, size: -1 };
+        for (let cols = 1; cols <= count; cols++) {
+            const rows = Math.ceil(count / cols);
+            const across = (width - (cols - 1) * CALL_GAP) / cols;
+            const down = (height - (rows - 1) * CALL_GAP) / rows;
+            const size = Math.min(across, down * 4 / 3);
+            if (size > best.size + 0.5) best = { cols, rows, size };
+        }
+        return best;
+    };
+    // Floating: its size (the one it was given, within the screen) and the grid of pictures;
+    // folded up or docked, the page's styles size it
+    const layoutCall = () => {
+        if (callWin.hidden || call.dock || call.collapsed) {
+            ["width", "height", "--tile", "--cols", "--rows"].forEach(name => callWin.style.removeProperty(name));
+            // Docked beside the video: the width its edge was dragged to, within what leaves the
+            // video room
+            const side = call.dock === "side";
+            const width = side && call.dockW ? Math.round(within(call.dockW, DOCK_MIN_W, dockMaxW())) : 0;
+            if (width) callWin.style.setProperty("--dock-w", `${width}px`);
+            else callWin.style.removeProperty("--dock-w");
+            callWin.classList.toggle("big", width ? width >= 250 : !!call.dock && call.big);
+            return;
+        }
+        const page = playerPage.getBoundingClientRect();
+        if (!page.width || !page.height) return;
+        const count = Math.max(1, callGrid.children.length);
+        const orient = callOrient(page);
+        const size = call.sizes[orient] || fittingCallSize(page, count, orient === "landscape");
+        const width = Math.round(within(size.w, CALL_MIN_W, Math.max(CALL_MIN_W, page.width - 16)));
+        const height = Math.round(within(size.h, CALL_MIN_H, Math.max(CALL_MIN_H, page.height - 16)));
+        callWin.style.width = `${width}px`;
+        callWin.style.height = `${height}px`;
+        const chrome = callChrome();
+        const fit = fitCall(count, width - chrome.x, height - chrome.y);
+        callWin.style.setProperty("--cols", fit.cols);
+        callWin.style.setProperty("--rows", fit.rows);
+        callWin.style.setProperty("--tile", `${Math.max(40, Math.round(fit.size))}px`);
+        // Large pictures always show names
+        callWin.classList.toggle("big", fit.size >= 150);
+    };
 
     // Where it is: where it was left (as a share of the room it has to move in), or at first the
     // top right of the picture, below its title bar
@@ -1638,54 +1729,12 @@
         call.y = Math.max(margin, Math.min(y, page.height - height - margin));
         callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
     };
-    window.addEventListener("resize", placeCall);
+    window.addEventListener("resize", () => {
+        layoutCall();
+        placeCall();
+    });
     if ("ResizeObserver" in window) new ResizeObserver(placeCall).observe(callWin);
 
-    // Pinched with two fingers (a phone or tablet): larger or smaller, from a little tile up to as
-    // large as the screen still holds it, around its middle; remembered like where it is
-    const TILE_MIN = 64;
-    const callCols = count => count <= 1 ? 1 : count <= 4 || !call.big ? 2 : 3;
-    const tileMax = () => {
-        const page = playerPage.getBoundingClientRect();
-        const count = Math.max(1, callGrid.children.length);
-        const cols = callCols(count);
-        const rows = Math.ceil(count / cols);
-        const wide = (page.width - 32 - (cols - 1) * 6) / cols;
-        const tall = (page.height - 24 - callBar.offsetHeight - (rows - 1) * 6) / (rows * 0.75);
-        return Math.max(TILE_MIN, Math.min(320, wide, tall));
-    };
-    // The pinched size, within what fits now (a phone turned, more people in the window)
-    const applyTile = () => {
-        if (!call.tile || call.dock) return callWin.style.removeProperty("--tile");
-        callWin.style.setProperty("--tile", `${Math.round(Math.max(TILE_MIN, Math.min(call.tile, tileMax())))}px`);
-    };
-    const pinchGap = () => {
-        const [a, b] = [...call.touches.values()];
-        return Math.hypot(a.x - b.x, a.y - b.y);
-    };
-    // A tile's width (px), within what fits; `anchor`: the point of the window that stays put
-    // ("centre" for a pinch, "corner" (top left) for the grip)
-    const sizeCall = (tile, anchor) => {
-        const centre = { x: call.x + callWin.offsetWidth / 2, y: call.y + callWin.offsetHeight / 2 };
-        call.tile = Math.round(Math.max(TILE_MIN, Math.min(tile, tileMax())));
-        // Large enough, it's the large window (names always shown, three across for many people)
-        const big = call.tile >= 120;
-        if (big !== call.big) {
-            call.big = big;
-            renderCallButtons();
-            callWin.style.setProperty("--cols", callCols(callGrid.children.length));
-        }
-        applyTile();
-        const page = playerPage.getBoundingClientRect();
-        const margin = 8;
-        const x = anchor === "centre" ? centre.x - callWin.offsetWidth / 2 : call.x;
-        const y = anchor === "centre" ? centre.y - callWin.offsetHeight / 2 : call.y;
-        call.x = Math.max(margin, Math.min(x, page.width - callWin.offsetWidth - margin));
-        call.y = Math.max(margin, Math.min(y, page.height - callWin.offsetHeight - margin));
-        callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
-    };
-    const pinchTo = scale => sizeCall(call.pinch.tile * scale, "centre");
-    const tileNow = () => callGrid.firstElementChild ? callGrid.firstElementChild.offsetWidth : 104;
     // Where it is, as a share of the room it has to move in
     const keepCallPlace = () => {
         const page = playerPage.getBoundingClientRect();
@@ -1695,42 +1744,102 @@
         saveCall();
     };
 
-    // The grip: the tile grows by however far it's dragged, across or down (whichever is more),
-    // shared between the columns and rows; the top left corner stays put
-    callResize.addEventListener("pointerdown", e => {
+    // A new size and place (px): remembered for the way the screen is held
+    const resizeCall = (x, y, width, height) => {
+        const page = playerPage.getBoundingClientRect();
+        call.sizes[callOrient(page)] = { w: Math.round(width), h: Math.round(height) };
+        call.x = x;
+        call.y = y;
+        layoutCall();
+        callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`;
+    };
+
+    // An edge or corner, dragged with a mouse: that side moves, the opposite one stays put
+    const startCallResize = (e, handle) => {
         if (e.button > 0 || call.collapsed || call.dock) return;
         e.preventDefault();
         e.stopPropagation();
-        callResize.setPointerCapture(e.pointerId);
-        const count = Math.max(1, callGrid.children.length);
-        const cols = callCols(count);
-        call.sizing = { id: e.pointerId, x: e.clientX, y: e.clientY, tile: tileNow(), cols, rows: Math.ceil(count / cols) };
+        handle.setPointerCapture(e.pointerId);
+        call.sizing = { id: e.pointerId, edge: handle.dataset.edge, x0: e.clientX, y0: e.clientY, x: call.x, y: call.y, w: callWin.offsetWidth, h: callWin.offsetHeight };
         callWin.classList.add("resizing");
         showCallNames();
-    });
-    callResize.addEventListener("pointermove", e => {
-        const sizing = call.sizing;
-        if (!sizing || sizing.id !== e.pointerId) return;
-        const across = (e.clientX - sizing.x) / sizing.cols;
-        const down = (e.clientY - sizing.y) / (sizing.rows * 0.75);
-        sizeCall(sizing.tile + (Math.abs(across) >= Math.abs(down) ? across : down), "corner");
-    });
-    const endResize = e => {
+    };
+    const moveCallResize = e => {
+        const s = call.sizing;
+        if (!s || s.id !== e.pointerId) return;
+        const page = playerPage.getBoundingClientRect();
+        const margin = 8;
+        const dx = e.clientX - s.x0;
+        const dy = e.clientY - s.y0;
+        let { x, y, w, h } = s;
+        if (s.edge.includes("e")) w = within(s.w + dx, CALL_MIN_W, page.width - margin - s.x);
+        if (s.edge.includes("w")) {
+            w = within(s.w - dx, CALL_MIN_W, s.x + s.w - margin);
+            x = s.x + s.w - w;
+        }
+        if (s.edge.includes("s")) h = within(s.h + dy, CALL_MIN_H, page.height - margin - s.y);
+        if (s.edge.includes("n")) {
+            h = within(s.h - dy, CALL_MIN_H, s.y + s.h - margin);
+            y = s.y + s.h - h;
+        }
+        resizeCall(x, y, w, h);
+    };
+    const endCallResize = e => {
         if (!call.sizing || call.sizing.id !== e.pointerId) return;
         call.sizing = null;
         callWin.classList.remove("resizing");
         keepCallPlace();
     };
-    callResize.addEventListener("pointerup", endResize);
-    callResize.addEventListener("pointercancel", endResize);
+    [...callEdges, callResize].forEach(handle => {
+        handle.addEventListener("pointerdown", e => startCallResize(e, handle));
+        handle.addEventListener("pointermove", moveCallResize);
+        handle.addEventListener("pointerup", endCallResize);
+        handle.addEventListener("pointercancel", endCallResize);
+    });
+    // The grip, with the keyboard: arrows make it wider / narrower and taller / shorter
     callResize.addEventListener("keydown", e => {
-        const step = { ArrowRight: 8, ArrowDown: 8, ArrowLeft: -8, ArrowUp: -8 }[e.key];
-        if (!step || call.collapsed) return;
+        const step = { ArrowRight: [8, 0], ArrowLeft: [-8, 0], ArrowDown: [0, 8], ArrowUp: [0, -8] }[e.key];
+        if (!step || call.collapsed || call.dock) return;
         e.preventDefault();
         e.stopPropagation();
-        sizeCall(tileNow() + step * (e.shiftKey ? 3 : 1), "corner");
+        const page = playerPage.getBoundingClientRect();
+        const times = e.shiftKey ? 3 : 1;
+        const w = within(callWin.offsetWidth + step[0] * times, CALL_MIN_W, page.width - 8 - call.x);
+        const h = within(callWin.offsetHeight + step[1] * times, CALL_MIN_H, page.height - 8 - call.y);
+        resizeCall(call.x, call.y, w, h);
         keepCallPlace();
     });
+    // Double-clicking the title bar: back to the size that fits everyone (the window holds the
+    // pointer for dragging, so the click is the window's: where it was decides)
+    callWin.addEventListener("dblclick", e => {
+        const bar = callBar.getBoundingClientRect();
+        if (e.clientY < bar.top || e.clientY > bar.bottom || call.collapsed || call.dock) return;
+        if ([...callBar.querySelectorAll("button")].some(button => {
+            const box = button.getBoundingClientRect();
+            return e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
+        })) return;
+        delete call.sizes[callOrient(playerPage.getBoundingClientRect())];
+        layoutCall();
+        placeCall();
+        saveCall();
+    });
+
+    // Pinched with two fingers (a phone or tablet): larger or smaller around its middle, keeping
+    // its shape, from small up to as large as the screen holds it
+    const pinchGap = () => {
+        const [a, b] = [...call.touches.values()];
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const pinchTo = scale => {
+        const pinch = call.pinch;
+        const page = playerPage.getBoundingClientRect();
+        const most = Math.min((page.width - 16) / pinch.w, (page.height - 16) / pinch.h);
+        const least = Math.max(CALL_MIN_W / pinch.w, CALL_MIN_H / pinch.h);
+        const s = within(scale, Math.min(least, most), Math.max(least, most));
+        const w = pinch.w * s;
+        const h = pinch.h * s;
+        resizeCall(within(pinch.cx - w / 2, 8, page.width - w - 8), within(pinch.cy - h / 2, 8, page.height - h - 8), w, h);
+    };
 
     // Dragged by any part of it but its buttons, with a mouse or a finger (docked, it stays put
     // and a finger scrolls it)
@@ -1747,14 +1856,16 @@
                 try {
                     callWin.setPointerCapture(e.pointerId);
                 } catch (err) {}
-                call.pinch = { gap: Math.max(1, pinchGap()), tile: callGrid.firstElementChild.offsetWidth };
+                const w = callWin.offsetWidth;
+                const h = callWin.offsetHeight;
+                call.pinch = { gap: Math.max(1, pinchGap()), w, h, cx: call.x + w / 2, cy: call.y + h / 2 };
                 callWin.classList.add("resizing");
                 showCallNames();
                 return;
             }
             if (call.touches.size > 2 || call.pinch) return;
         }
-        if (e.button > 0 || e.target.closest("button")) return;
+        if (e.button > 0 || e.target.closest("button, .room-call-edge")) return;
         call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y };
         callWin.setPointerCapture(e.pointerId);
         callWin.classList.add("dragging");
@@ -1795,7 +1906,6 @@
         // Docked, it doesn't fold up (it can float again, and fold up there)
         const folded = call.collapsed && !call.dock;
         callWin.classList.toggle("collapsed", folded);
-        callWin.classList.toggle("big", call.big);
         callFoldBtn.hidden = !!call.dock;
         callDockBtn.hidden = folded || (!call.dock && !call.dockable);
         callDockBtn.firstChild.className = `fa-solid ${call.dock ? "fa-up-right-from-square" : "fa-table-columns"}`;
@@ -1806,17 +1916,15 @@
         callFoldBtn.title = call.collapsed ? "Show everyone" : "Fold up";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
-        callSizeBtn.hidden = folded;
-        // Folded up (or a strip under the video): the mic and camera go into the title bar, before
-        // its buttons
-        if (folded || call.dock === "strip") callBar.insertBefore(callControls, callDockBtn);
-        else callWin.insertBefore(callControls, callResize);
-        callSizeBtn.firstChild.className = `fa-solid ${call.big ? "fa-down-left-and-up-right-to-center" : "fa-up-right-and-down-left-from-center"}`;
-        callSizeBtn.title = call.dock === "side" ? (call.big ? "Narrower" : "Wider") : call.big ? "Smaller" : "Larger";
+        // Docked: a wider column, or a larger strip (floating, its edges or two fingers size it)
+        callSizeBtn.hidden = !call.dock;
+        const wide = call.dock === "side" && call.dockW ? call.dockW >= 240 : call.big;
+        callSizeBtn.firstChild.className = `fa-solid ${wide ? "fa-down-left-and-up-right-to-center" : "fa-up-right-and-down-left-from-center"}`;
+        callSizeBtn.title = call.dock === "side" ? (wide ? "Narrower" : "Wider") : call.big ? "Smaller" : "Larger";
         callSizeBtn.setAttribute("aria-label", callSizeBtn.title);
     };
-    // The small window shows names for a few seconds (when it appears, someone joins or leaves, or
-    // it's touched or pointed at), then just the pictures and mics; the large one always shows them
+    // Small pictures show names for a few seconds (when it appears, someone joins or leaves, or
+    // it's touched or pointed at), then just the pictures and mics; large ones always show them
     let callNamesTimer = null;
     const showCallNames = () => {
         callWin.classList.remove("quiet");
@@ -1829,24 +1937,81 @@
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
+        layoutCall();
         saveCall();
         placeCall();
     });
+    // The docked column's width changes in motion (the button, a double-click on its edge)
+    const dockInMotion = () => {
+        if (calmer() || call.dock !== "side") return;
+        callWin.classList.add("dock-moving");
+        clearTimeout(call.motionTimer);
+        call.motionTimer = setTimeout(() => callWin.classList.remove("dock-moving"), 400);
+    };
     callSizeBtn.addEventListener("click", () => {
-        // Back to the small or large size (from one pinched to)
-        call.tile = null;
-        applyTile();
-        call.big = !call.big;
+        // From a width dragged to: the narrow or wide one, whichever it's further from
+        call.big = call.dockW ? call.dockW < 240 : !call.big;
+        call.dockW = null;
+        dockInMotion();
+        renderCallButtons();
+        layoutCall();
+        saveCall();
+    });
+
+    // Its long edge, dragged with a mouse: the column follows it, and the video beside it
+    callDockEdge.addEventListener("pointerdown", e => {
+        if (e.button > 0 || call.dock !== "side") return;
+        e.preventDefault();
+        e.stopPropagation();
+        callDockEdge.setPointerCapture(e.pointerId);
+        call.dockSizing = { id: e.pointerId, x0: e.clientX, w: callWin.offsetWidth };
+        callWin.classList.add("dock-sizing");
+        playerPage.classList.add("dock-sizing");
+    });
+    callDockEdge.addEventListener("pointermove", e => {
+        const sizing = call.dockSizing;
+        if (!sizing || sizing.id !== e.pointerId) return;
+        call.dockW = Math.round(within(sizing.w + e.clientX - sizing.x0, DOCK_MIN_W, dockMaxW()));
+        layoutCall();
+    });
+    const endDockSizing = e => {
+        if (!call.dockSizing || call.dockSizing.id !== e.pointerId) return;
+        call.dockSizing = null;
+        callWin.classList.remove("dock-sizing");
+        playerPage.classList.remove("dock-sizing");
         renderCallButtons();
         saveCall();
-        placeCall();
+    };
+    callDockEdge.addEventListener("pointerup", endDockSizing);
+    callDockEdge.addEventListener("pointercancel", endDockSizing);
+    callDockEdge.addEventListener("dblclick", () => {
+        call.dockW = null;
+        dockInMotion();
+        renderCallButtons();
+        layoutCall();
+        saveCall();
+    });
+    callDockEdge.addEventListener("keydown", e => {
+        const step = { ArrowRight: 10, ArrowLeft: -10 }[e.key];
+        if (!step || call.dock !== "side") return;
+        e.preventDefault();
+        e.stopPropagation();
+        call.dockW = Math.round(within(callWin.offsetWidth + step * (e.shiftKey ? 3 : 1), DOCK_MIN_W, dockMaxW()));
+        layoutCall();
+        renderCallButtons();
+        saveCall();
     });
 
     // Docked or floating, by the page's layout: beside the video when the player and the room's
     // panel sit side by side, under it when they're stacked (a phone held upright). A phone held
     // upright with the video filling the screen has no room for it, so it floats there.
     const uprightTouch = matchMedia("(pointer: coarse) and (orientation: portrait)");
-    const placeDock = () => {
+    // `motion`: docked or floated by its button, so it moves there smoothly: the video glides to
+    // its new place, a docked column slides in from its side (a strip up from below), a floating
+    // window fades in where it lands
+    const placeDock = (motion = false) => {
+        const moving = motion === true && !calmer() && !callWin.hidden;
+        const videoWas = moving ? container.getBoundingClientRect() : null;
         const column = getComputedStyle(playerPage).flexDirection === "column";
         call.dockable = column || !uprightTouch.matches;
         const dock = call.docked && !callWin.hidden && !playerPage.hidden && call.dockable ? (column ? "strip" : "side") : null;
@@ -1859,19 +2024,29 @@
         call.dock = dock;
         renderCallButtons();
         if (was !== dock) {
-            applyTile();
+            // Docked, the page's layout places it (not where it floated)
+            if (dock) callWin.style.removeProperty("transform");
+            layoutCall();
             placeCall();
+            if (moving) {
+                glidePlayer(videoWas);
+                const at = callWin.style.transform || "translate(0px, 0px)";
+                callWin.animate(dock === "side" ? [{ opacity: 0, transform: "translateX(-28px)" }, { opacity: 1, transform: "none" }]
+                    : dock === "strip" ? [{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }]
+                    : [{ opacity: 0, transform: `${at} scale(0.94)` }, { opacity: 1, transform: `${at} scale(1)` }],
+                    { duration: 300, easing: PANEL_EASE });
+            }
         }
     };
-    window.addEventListener("resize", placeDock);
+    window.addEventListener("resize", () => placeDock());
     // (the room's panel opening or closing, the title moving below the picture, fullscreen)
-    new MutationObserver(placeDock).observe(playerPage, { attributes: true, attributeFilter: ["class", "hidden"] });
+    new MutationObserver(() => placeDock()).observe(playerPage, { attributes: true, attributeFilter: ["class", "hidden"] });
     callDockBtn.addEventListener("click", () => {
         call.docked = !call.dock;
         // Into the panel open, with everyone shown
         if (call.docked) call.collapsed = false;
         saveCall();
-        placeDock();
+        placeDock(true);
     });
     renderCallButtons();
 
@@ -1911,7 +2086,9 @@
         const who = people.map(person => person.key).join();
         if (people.length && (wasHidden || who !== call.who)) showCallNames();
         call.who = who;
-        callTitle.textContent = people.length === 1 ? "Just you" : `${people.length} in the room`;
+        callCount.textContent = String(people.length);
+        callTitle.title = people.length === 1 ? "Just you in the room" : `${people.length} in the room`;
+        callTitle.setAttribute("aria-label", callTitle.title);
         const keep = new Set(people.map(person => person.key));
         call.tiles.forEach((tile, key) => {
             if (keep.has(key)) return;
@@ -1974,9 +2151,8 @@
         // In order (moved only when it changed, so nothing playing is interrupted)
         const order = people.map(person => call.tiles.get(person.key).el);
         if (order.length !== callGrid.children.length || order.some((item, i) => callGrid.children[i] !== item)) callGrid.replaceChildren(...order);
-        callWin.style.setProperty("--cols", callCols(people.length));
         placeDock();
-        applyTile();
+        layoutCall();
         placeCall();
     };
 

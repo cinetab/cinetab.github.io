@@ -4703,16 +4703,15 @@ body > .room-toasts {
 
 /* The call window (room.js): everyone in the room, like a video call, over the player wherever it
    was dragged to (also in fullscreen). Each tile is a camera, or an avatar while it's off, with the
-   person's name and their mic: on, or muted (red). */
+   person's name and their mic: on, or muted (red). Floating, room.js gives it its size (any shape,
+   resized from its edges) and how many pictures go across (--cols, --rows); they fill it. */
 .room-call {
   --tile: 104px;
   position: absolute;
   left: 0;
   top: 0;
   z-index: 60;
-  width: calc(var(--cols, 2) * var(--tile) + (var(--cols, 2) - 1) * 6px + 16px);
-  max-width: calc(100% - 16px);
-  padding: 0 8px 8px;
+  padding: 0 6px 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
   color: #fff;
@@ -4821,6 +4820,11 @@ body > .room-toasts {
   color: #fff;
 }
 
+/* (the camera with the live dot is enough in front of the number there) */
+.room-call.collapsed .room-call-title i {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .room-call.collapsed::after,
   .room-call.collapsed .room-call-live::after {
@@ -4857,22 +4861,89 @@ body > .room-toasts {
   outline-offset: -2px;
 }
 
-/* Folded up, or on a touch screen (two fingers resize it there): no grip */
-.room-call.collapsed .room-call-resize {
+/* Every edge and corner resizes it with a mouse, like a computer's window (room.js): thin strips
+   along its sides, a little outside them, and squares at its corners */
+.room-call-edge {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+
+.room-call-edge.n,
+.room-call-edge.s {
+  left: 12px;
+  right: 12px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.room-call-edge.n {
+  top: -4px;
+}
+
+.room-call-edge.s {
+  bottom: -4px;
+}
+
+.room-call-edge.e,
+.room-call-edge.w {
+  top: 12px;
+  bottom: 12px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.room-call-edge.e {
+  right: -4px;
+}
+
+.room-call-edge.w {
+  left: -4px;
+}
+
+.room-call-edge.ne,
+.room-call-edge.nw,
+.room-call-edge.sw {
+  width: 14px;
+  height: 14px;
+}
+
+.room-call-edge.ne {
+  top: -4px;
+  right: -4px;
+  cursor: nesw-resize;
+}
+
+.room-call-edge.nw {
+  top: -4px;
+  left: -4px;
+  cursor: nwse-resize;
+}
+
+.room-call-edge.sw {
+  bottom: -4px;
+  left: -4px;
+  cursor: nesw-resize;
+}
+
+/* Folded up, docked, or on a touch screen (two fingers resize it there): no edges or grip */
+.room-call.collapsed .room-call-edge,
+.room-call.docked .room-call-edge {
   display: none;
 }
 
 @media (pointer: coarse) {
-  .room-call-resize {
+  .room-call-edge {
     display: none;
   }
 }
 
+/* The title bar: how many are in the room, your mic and camera, and its buttons, compact */
 .room-call-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 34px;
+  gap: 4px;
+  height: 30px;
   font-size: 12px;
   color: #d6d6e2;
 }
@@ -4885,14 +4956,46 @@ body > .room-toasts {
 .room-call-title {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 2px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.room-call-title i {
+  font-size: 10px;
+  color: #9a9aab;
+}
+
+.room-call-title b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Narrow (a slim column of pictures): the number without its icon; narrower still, just the
+   buttons (the number shows on pointing at the bar) */
+.room-call:not(.collapsed) {
+  container-type: inline-size;
+}
+
+@container (max-width: 137px) {
+  .room-call-title i {
+    display: none;
+  }
+}
+
+@container (max-width: 121px) {
+  .room-call-title {
+    visibility: hidden;
+  }
 }
 
 .room-call-btn {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -4908,34 +5011,11 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.18);
 }
 
-/* Your mic and camera (room.js): a row below everyone, or inside the pill once folded up */
+/* Your mic and camera (room.js), in the title bar: blue while on */
 .room-call-controls {
   display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding-top: 8px;
-}
-
-.room-call-bar .room-call-controls {
-  gap: 6px;
-  padding: 0;
-}
-
-.room-call-controls .room-call-btn {
-  width: 30px;
-  height: 30px;
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.room-call-bar .room-call-controls .room-call-btn {
-  width: 26px;
-  height: 26px;
-  font-size: 11px;
-}
-
-.room-call-controls .room-call-btn:hover {
-  background: rgba(255, 255, 255, 0.24);
+  flex-shrink: 0;
+  gap: 4px;
 }
 
 .room-call-controls .room-call-btn.active {
@@ -4951,18 +5031,6 @@ body > .room-toasts {
   cursor: default;
 }
 
-.room-call.big .room-call-controls .room-call-btn {
-  width: 34px;
-  height: 34px;
-  font-size: 13px;
-}
-
-.room-call.big.collapsed .room-call-controls .room-call-btn {
-  width: 26px;
-  height: 26px;
-  font-size: 11px;
-}
-
 .room-call-grid {
   display: grid;
   grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
@@ -4976,6 +5044,27 @@ body > .room-toasts {
 
 .room-call.collapsed .room-call-grid {
   display: none;
+}
+
+/* Floating: the pictures fill the window below its title bar, as many across and down as room.js
+   works out for its shape, each taking the shape of its share */
+.room-call:not(.docked):not(.collapsed) {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-call:not(.docked):not(.collapsed) .room-call-grid {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr));
+}
+
+.room-call:not(.docked) .room-call-tile {
+  aspect-ratio: auto;
+  min-height: 0;
 }
 
 .room-call-tile {
@@ -5046,7 +5135,7 @@ body > .room-toasts {
 }
 
 .room-call-face .room-avatar {
-  width: 38%;
+  width: calc(var(--tile) * 0.38);
   height: auto;
   aspect-ratio: 1;
   font-size: calc(var(--tile) * 0.18);
@@ -7738,7 +7827,7 @@ body > .room-toasts {
   left: auto;
   top: auto;
   z-index: auto;
-  transform: none !important;
+  transform: none;
   flex-shrink: 0;
   max-width: none;
   display: flex;
@@ -7788,7 +7877,7 @@ body > .room-toasts {
 
 .room-call.docked.side {
   --dock-w: 200px;
-  --tile: calc(var(--dock-w) - 16px);
+  --tile: calc(var(--dock-w) - 14px);
   order: -1;
   align-self: stretch;
   width: var(--dock-w);
@@ -7796,6 +7885,84 @@ body > .room-toasts {
 
 .room-call.docked.side.big {
   --dock-w: 280px;
+}
+
+/* Wider / Narrower (or back to its width): in motion, the video beside it following */
+.room-call.docked.side.dock-moving {
+  transition: width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), background 1.2s ease;
+}
+
+/* Its long right edge (room.js), with a mouse: dragged to make it wider or narrower. A bar shows
+   on it while pointed at, blue while held. */
+.room-call-dock-edge {
+  display: none;
+}
+
+.room-call.docked.side .room-call-dock-edge {
+  display: block;
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  right: -10px;
+  z-index: 4;
+  width: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.room-call-dock-edge::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 44px;
+  margin: -22px 0 0 -2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, height 0.15s ease, margin 0.15s ease;
+}
+
+.room-call.docked.side:hover .room-call-dock-edge::after,
+.room-call-dock-edge:focus-visible::after,
+.room-call.dock-sizing .room-call-dock-edge::after {
+  opacity: 1;
+}
+
+.room-call-dock-edge:hover::after,
+.room-call-dock-edge:focus-visible::after,
+.room-call.dock-sizing .room-call-dock-edge::after {
+  height: 72px;
+  margin-top: -36px;
+  background: #3e97fd;
+}
+
+.room-call-dock-edge:focus-visible {
+  outline: none;
+}
+
+/* While its width is dragged: the resize cursor everywhere, nothing selected, and YouTube's player
+   doesn't take the pointer (likewise while the floating window is resized) */
+.player-page.dock-sizing,
+.player-page.dock-sizing * {
+  cursor: ew-resize !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.player-page.dock-sizing iframe,
+.player-page:has(.room-call.resizing) iframe {
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .room-call.docked.side .room-call-dock-edge {
+    display: none;
+  }
 }
 
 .room-call.docked.side .room-call-grid {
@@ -7841,12 +8008,6 @@ body > .room-toasts {
 
 .room-call.docked.strip .room-call-tile {
   scroll-snap-align: start;
-}
-
-.room-call.docked.strip.big .room-call-controls .room-call-btn {
-  width: 26px;
-  height: 26px;
-  font-size: 11px;
 }
 
 /* The call bar (you, mic, camera, leave) stays last, below the strip */

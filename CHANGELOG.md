@@ -4,7 +4,24 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [1.5.6] - 2026-11-20
+## [1.5.7] - 2026-11-20
+
+### Video call window
+- Computers: resize it from any edge or corner, to any shape, like a computer's window (the
+  bottom right corner also takes the arrow keys); double-click its title bar for the size that
+  fits everyone again. Phones and tablets: pinch it, and it keeps its shape
+- Everyone's pictures fill the window, as many across as makes them largest for its shape (a
+  tall window: one under another; a wide one: side by side; in between: a grid)
+- At first it fits everyone one under another on computers and phones held sideways, and side by
+  side on phones held upright. Its size is remembered separately for sideways and upright
+- A compact title bar: the number of people in the room (not "2 in the room"), then your mic and
+  camera, dock and fold; the separate row of mic and camera buttons and the Larger / Smaller
+  button are gone (docked, Wider / Narrower stays)
+- Docking and floating it again are in motion: the video glides to its new place, the docked
+  column slides in from the left (a strip up from below), and a floating window fades in where it
+  lands. Wider / Narrower is in motion too. Still, for people who asked for less motion
+- Computers: drag the docked column's long right edge to make it any width (a bar shows on it
+  while pointed at), or use the arrow keys on it; double-click it to go back. Remembered
 
 ### Video call window
 - Mic and camera buttons right in the call window (a row below everyone, and inside the pill when
@@ -630,6 +647,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.7
 [1.5.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.6
 [1.5.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.5
 [1.5.4]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.4
