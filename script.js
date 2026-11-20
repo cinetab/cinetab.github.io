@@ -1618,7 +1618,95 @@ speedInput.addEventListener("keydown", e => {
     if (e.key === "Enter") speedInput.blur();
 });
 
-// MINIMALIST DOCUMENT PICTURE-IN-PICTURE IMPLEMENTATION
+// ---------- Picture in picture on a computer (Chrome, Edge): a small always-on-top window of the
+// page's own, like a video call's. It shows what's playing: your own video or the host's stream
+// (the video itself moves into it, and back when it closes), or a YouTube video (a muted copy of
+// YouTube's player in step with the one on the page, which keeps the sound: YouTube's player
+// can't move without starting over). In a room it also shows everyone, like the call window
+// (room.js, together.callPip): a column beside the video, or a row below it once the window is
+// taller than wide, with your mic and camera.
+
+// A muted YouTube player in the window, following the page's YouTube video (which, its time,
+// paused or not, its speed); returns what stops it. The player is made in yt-pip.html, framed in
+// the window: the window has no address of its own, and YouTube's player won't load without one.
+const followYouTubeIn = (pipWindow, holder) => {
+    const w = pipWindow;
+    const state = { player: null, ready: false, id: null, syncedAt: 0, gone: false, frame: null, YT: null };
+    const frame = w.document.createElement("iframe");
+    frame.src = "yt-pip.html";
+    frame.title = "YouTube";
+    frame.allow = "autoplay; encrypted-media";
+    holder.replaceChildren(frame);
+    // Once that page and YouTube's script in it are ready
+    let waits = 0;
+    const whenReady = () => {
+        if (state.gone) return;
+        const inner = frame.contentWindow;
+        if (inner && inner.YT && inner.YT.Player && inner.document.getElementById("player")) {
+            state.YT = inner.YT;
+            return create(inner);
+        }
+        if (++waits < 100) w.setTimeout(whenReady, 150);
+    };
+    frame.addEventListener("load", whenReady);
+    const create = inner => {
+        if (state.gone) return;
+        state.player = new inner.YT.Player(inner.document.getElementById("player"), {
+            host: "https://www.youtube-nocookie.com",
+            width: "100%",
+            height: "100%",
+            playerVars: { controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, mute: 1, origin: location.origin },
+            events: {
+                onReady: () => {
+                    try {
+                        state.player.mute();
+                        state.player.getIframe().tabIndex = -1;
+                    } catch (e) {}
+                    state.ready = true;
+                    sync();
+                }
+            }
+        });
+    };
+    const sync = () => {
+        const stream = together.stream;
+        const id = youTubeIdShown();
+        if (!state.ready || !stream || !id) return;
+        const player = state.player;
+        const S = state.YT.PlayerState;
+        try {
+            const time = stream.currentTime();
+            const paused = stream.paused;
+            if (state.id !== id) {
+                state.id = id;
+                state.syncedAt = performance.now();
+                player.mute();
+                if (paused) player.cueVideoById({ videoId: id, startSeconds: time });
+                else player.loadVideoById({ videoId: id, startSeconds: time });
+                return;
+            }
+            const playing = player.getPlayerState();
+            if (player.getPlaybackRate() !== stream.rate) player.setPlaybackRate(stream.rate);
+            if (paused && (playing === S.PLAYING || playing === S.BUFFERING)) player.pauseVideo();
+            else if (!paused && playing !== S.PLAYING && playing !== S.BUFFERING) player.playVideo();
+            // (a moment to settle after each jump; a live stream has no timeline to follow)
+            const drift = player.getCurrentTime() - time;
+            if (stream.duration && performance.now() - state.syncedAt > 1500 && Math.abs(drift) > (paused ? 0.3 : 0.8)) {
+                state.syncedAt = performance.now();
+                player.seekTo(time + (paused ? 0 : 0.2), true);
+            }
+        } catch (e) {}
+    };
+    const timer = w.setInterval(sync, 500);
+    return () => {
+        state.gone = true;
+        w.clearInterval(timer);
+        try {
+            if (state.player) state.player.destroy();
+        } catch (e) {}
+    };
+};
+
 const toggleCustomPiP = async () => {
     if ("documentPictureInPicture" in window) {
         if (window.documentPictureInPicture.window) {
@@ -1627,136 +1715,140 @@ const toggleCustomPiP = async () => {
         }
 
         try {
-            const pipWindow = await window.documentPictureInPicture.requestWindow({
-                width: 480,
-                height: 270,
-            });
+            const youtubeId = container.classList.contains("youtube") ? youTubeIdShown() : null;
+            const inRoom = together.active();
+            // In a room: a column of everyone beside the video, so a wider window
+            const pipWindow = await window.documentPictureInPicture.requestWindow(inRoom && together.callPip
+                ? { width: 720, height: 300 } : { width: 480, height: 270 });
+            const pipDoc = pipWindow.document;
 
-            // Inject CSS stylesheets into PiP window
+            // The page's styles, in the window too
             [...document.styleSheets].forEach((styleSheet) => {
                 try {
                     const cssRules = [...styleSheet.cssRules].map(r => r.cssText).join('');
-                    const style = document.createElement('style');
+                    const style = pipDoc.createElement('style');
                     style.textContent = cssRules;
-                    pipWindow.document.head.appendChild(style);
+                    pipDoc.head.appendChild(style);
                 } catch (e) {
-                    const link = document.createElement('link');
+                    const link = pipDoc.createElement('link');
                     link.rel = 'stylesheet';
                     link.href = styleSheet.href;
-                    pipWindow.document.head.appendChild(link);
+                    pipDoc.head.appendChild(link);
                 }
             });
+            pipDoc.title = videoTitle.textContent || "CineTab";
+            pipDoc.body.style.margin = '0';
+            pipDoc.body.style.padding = '0';
+            pipDoc.body.style.overflow = 'hidden';
+            pipDoc.body.style.background = '#000';
 
-            // Reset body margins in PiP window
-            pipWindow.document.body.style.margin = '0';
-            pipWindow.document.body.style.padding = '0';
-            pipWindow.document.body.style.overflow = 'hidden';
-
-            // Construct Overlay HTML
-            const pipContainer = document.createElement('div');
+            const pipContainer = pipDoc.createElement('div');
             pipContainer.className = 'pip-player-container';
+            // In a room, Close just closes (pausing would pause everyone), and there's no Background play
             pipContainer.innerHTML = `
                 <div class="pip-video-wrapper">
                     <div class="pip-overlay">
                         <div class="pip-top-controls">
-                            <button id="pip-min-btn" title="Background Play"><i class="fa-solid fa-window-minimize"></i></button>
+                            ${inRoom ? "" : `<button id="pip-min-btn" title="Background Play"><i class="fa-solid fa-window-minimize"></i></button>`}
                             <button id="pip-focus-btn" title="Back to Tab"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
-                            <button id="pip-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                            <button id="pip-close-btn" title="${inRoom ? "Close" : "Close (pauses the video)"}"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                         <div class="pip-bottom-controls">
                             <button id="pip-seek-back" title="-5s"><i class="fas fa-backward"></i></button>
-                            <button id="pip-play-btn" title="Play/Pause"><i class="${mainVideo.paused ? 'fas fa-play' : 'fas fa-pause'}"></i></button>
+                            <button id="pip-play-btn" title="Play/Pause"><i class="${mediaPaused() ? 'fas fa-play' : 'fas fa-pause'}"></i></button>
                             <button id="pip-seek-forward" title="+5s"><i class="fas fa-forward"></i></button>
                             <button id="pip-mute-btn" title="Mute/Unmute"><i class="${mainVideo.volume === 0 ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high'}"></i></button>
                         </div>
                     </div>
                 </div>
             `;
+            pipDoc.body.appendChild(pipContainer);
+            const videoWrapper = pipContainer.querySelector('.pip-video-wrapper');
 
-            pipWindow.document.body.appendChild(pipContainer);
+            // What's playing: YouTube's copy, or the video itself
+            let stopYouTube = null;
+            if (youtubeId) {
+                const holder = pipDoc.createElement('div');
+                holder.className = 'pip-yt';
+                videoWrapper.insertBefore(holder, videoWrapper.firstChild);
+                stopYouTube = followYouTubeIn(pipWindow, holder);
+            } else {
+                videoWrapper.insertBefore(mainVideo, videoWrapper.firstChild);
+            }
 
-            // Append Video Element inside Wrapper
-            const videoWrapper = pipWindow.document.querySelector('.pip-video-wrapper');
-            videoWrapper.insertBefore(mainVideo, videoWrapper.firstChild);
+            // Everyone in the room (room.js)
+            const people = inRoom && together.callPip ? together.callPip() : null;
+            if (people) {
+                pipContainer.classList.add('with-people');
+                pipContainer.append(people.el);
+            }
 
-            // Get Controls Elements
-            const pipPlayBtn = pipWindow.document.querySelector('#pip-play-btn');
-            const pipMuteBtn = pipWindow.document.querySelector('#pip-mute-btn');
-            const pipMinBtn = pipWindow.document.querySelector('#pip-min-btn');
-            const pipFocusBtn = pipWindow.document.querySelector('#pip-focus-btn');
-            const pipCloseBtn = pipWindow.document.querySelector('#pip-close-btn');
-
-            // Play / Pause / Seek / Mute Actions
+            const pipPlayBtn = pipContainer.querySelector('#pip-play-btn');
+            const pipMuteBtn = pipContainer.querySelector('#pip-mute-btn');
             pipPlayBtn.addEventListener('click', togglePlay);
-            pipWindow.document.querySelector('#pip-seek-back').addEventListener('click', () => seek(-5));
-            pipWindow.document.querySelector('#pip-seek-forward').addEventListener('click', () => seek(5));
+            pipContainer.querySelector('#pip-seek-back').addEventListener('click', () => seek(-5));
+            pipContainer.querySelector('#pip-seek-forward').addEventListener('click', () => seek(5));
+            pipMuteBtn.addEventListener('click', () => setVolume(mainVideo.volume > 0 ? 0 : 1));
 
-            pipMuteBtn.addEventListener('click', () => {
-                if (mainVideo.volume > 0) {
-                    setVolume(0);
-                } else {
-                    setVolume(1);
-                }
-            });
-
-            // Top Right Corner Actions
-            // 1. Background Play (Close PiP window without pausing, audio continues playing)
-            pipMinBtn.addEventListener('click', () => {
+            // Background Play: closes the window, the sound goes on
+            pipContainer.querySelector('#pip-min-btn')?.addEventListener('click', () => {
                 pipWindow.close();
                 showFeedback("fa-window-minimize", "Background Play");
             });
-
-            // 2. Back to Tab (Focus parent window and close PiP)
-            pipFocusBtn.addEventListener('click', () => {
+            // Back to the tab
+            pipContainer.querySelector('#pip-focus-btn').addEventListener('click', () => {
                 window.focus();
                 pipWindow.close();
             });
-
-            // 3. Close (Pause video and close PiP)
-            pipCloseBtn.addEventListener('click', () => {
-                mainVideo.pause();
+            // Close: on your own, the video pauses too
+            pipContainer.querySelector('#pip-close-btn').addEventListener('click', () => {
+                if (!inRoom && !mediaPaused()) togglePlay();
                 pipWindow.close();
             });
 
-            // Sync Control Icons
+            // The buttons as things change (YouTube says nothing to the page: a look twice a second)
             const updatePipIcons = () => {
-                pipPlayBtn.querySelector('i').className = mainVideo.paused ? 'fas fa-play' : 'fas fa-pause';
+                pipPlayBtn.querySelector('i').className = mediaPaused() ? 'fas fa-play' : 'fas fa-pause';
                 pipMuteBtn.querySelector('i').className = mainVideo.volume === 0 ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
             };
-
+            const iconTimer = pipWindow.setInterval(updatePipIcons, 500);
             mainVideo.addEventListener('play', updatePipIcons);
             mainVideo.addEventListener('pause', updatePipIcons);
             mainVideo.addEventListener('volumechange', updatePipIcons);
 
-            // Auto-Hide Controls Logic for PiP
+            // The video's buttons hide while it plays and the pointer rests
             let pipIdleTimer;
             const hidePipControls = () => {
-                if (mainVideo.paused) return;
+                if (mediaPaused()) return;
                 pipIdleTimer = setTimeout(() => {
                     pipContainer.classList.add('hide-controls');
                 }, 2500);
             };
             hidePipControls();
-
-            pipWindow.document.addEventListener('mousemove', () => {
+            videoWrapper.addEventListener('mousemove', () => {
                 pipContainer.classList.remove('hide-controls');
                 clearTimeout(pipIdleTimer);
                 hidePipControls();
             });
-
-            pipWindow.document.addEventListener('mouseleave', () => {
+            videoWrapper.addEventListener('mouseleave', () => {
                 pipContainer.classList.add('hide-controls');
             });
 
-            // Restore Video back to Main Web Page on Close
+            // Closed: the video back in the page, everything else stopped
             pipWindow.addEventListener('pagehide', () => {
-                container.insertBefore(mainVideo, container.querySelector('.wrapper'));
+                if (mainVideo.ownerDocument !== document || !container.contains(mainVideo)) {
+                    container.insertBefore(mainVideo, container.querySelector('.wrapper'));
+                }
+                if (stopYouTube) stopYouTube();
+                if (people) people.close();
+                clearTimeout(pipIdleTimer);
+                pipWindow.clearInterval(iconTimer);
                 mainVideo.removeEventListener('play', updatePipIcons);
                 mainVideo.removeEventListener('pause', updatePipIcons);
                 mainVideo.removeEventListener('volumechange', updatePipIcons);
             });
 
-            showFeedback("fa-clone", "Custom PiP Mode");
+            showFeedback("fa-clone", people ? "Picture in picture, with everyone" : "Picture in picture");
             return;
         } catch (err) {
             console.warn("Document PiP failed, falling back to Native PiP:", err);
@@ -1828,6 +1920,8 @@ document.addEventListener("fullscreenchange", endFloatFullscreen);
 document.addEventListener("webkitfullscreenchange", endFloatFullscreen);
 
 pipBtn.addEventListener("click", toggleCustomPiP);
+// (also the call window's button, room.js)
+together.pip = toggleCustomPiP;
 
 // The whole player page goes fullscreen, so a room's chat can stay open beside the video.
 // Phones turn sideways for a wide video; the iPhone can only show the video itself fullscreen.

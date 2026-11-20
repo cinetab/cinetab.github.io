@@ -1517,6 +1517,108 @@ video::cue {
   transform: scale(0.92);
 }
 
+/* YouTube in the window: a muted copy of its player, filling the picture (script.js); the window's
+   buttons stay on top of it */
+.pip-yt,
+.pip-yt iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.pip-yt {
+  background: #000;
+}
+
+/* In a room: everyone beside the video, like a video call's window (room.js, together.callPip): a
+   column on its right that scrolls up and down; a row below it once the window is taller than wide */
+.pip-player-container.with-people {
+  display: flex;
+  background: #0f0f11;
+}
+
+.pip-player-container.with-people .pip-video-wrapper {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  background: #000;
+}
+
+.pip-people {
+  --tile: 150px;
+  flex-shrink: 0;
+  width: 28%;
+  min-width: 132px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  background: #17171c;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: "Poppins", sans-serif;
+}
+
+.pip-people-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  flex-shrink: 0;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.pip-people-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 6px 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.pip-people .room-call-tile {
+  flex-shrink: 0;
+}
+
+.pip-people .room-call-name {
+  opacity: 1;
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .pip-player-container.with-people {
+    flex-direction: column;
+  }
+  .pip-player-container.with-people .pip-video-wrapper {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+  .pip-people {
+    --tile: 120px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 36%;
+    min-height: 110px;
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .pip-people-grid {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .pip-people .room-call-tile {
+    height: 100%;
+    width: auto;
+  }
+}
+
 /* Responsive */
 @media screen and (max-width: 540px) {
   .options input[type="range"] {
@@ -4976,19 +5078,32 @@ body > .room-toasts {
 }
 
 /* Narrow (a slim column of pictures): the number without its icon; narrower still, just the
-   buttons (the number shows on pointing at the bar) */
-.room-call:not(.collapsed) {
+   buttons (the number shows on pointing at the bar). With picture in picture, one button more.
+   (A phone's call window has no title bar: its call bar does that.) */
+.room-call:not(.collapsed):not(.unit) {
   container-type: inline-size;
 }
 
-@container (max-width: 137px) {
+@container (max-width: 164px) {
   .room-call-title i {
     display: none;
   }
 }
 
-@container (max-width: 121px) {
+@container (max-width: 153px) {
   .room-call-title {
+    visibility: hidden;
+  }
+}
+
+@container (max-width: 192px) {
+  .room-call.has-pip .room-call-title i {
+    display: none;
+  }
+}
+
+@container (max-width: 181px) {
+  .room-call.has-pip .room-call-title {
     visibility: hidden;
   }
 }
@@ -8043,6 +8158,254 @@ body > .room-toasts {
   }
   .room-call.docked.strip.big {
     --strip-tile: 132px;
+  }
+}
+
+/* =================== CALL WINDOW: LEAVE, AND A PHONE'S CALL BAR IN IT =================== */
+/* Leave in the call window's title bar (computers, room.js): red, with Just leave / End room in a
+   little menu below it */
+.room-call-btn.room-call-leave {
+  background: #e5484d;
+}
+
+.room-call-btn.room-call-leave:hover,
+.room-call-btn.room-call-leave[aria-expanded="true"] {
+  background: #cf3a3f;
+}
+
+.room-call-leave-menu {
+  position: absolute;
+  top: 32px;
+  right: 6px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 148px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(22, 22, 28, 0.97);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  animation: roomLeavePopIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+  cursor: default;
+}
+
+.room-call.unit .room-call-leave-menu {
+  display: none;
+}
+
+/* A phone: the call bar (you, mic, camera, everyone, float, leave) is the call window's bottom,
+   and the window has no title bar of its own. Its own buttons show only there. */
+.room-unit-only {
+  display: none !important;
+}
+
+.room-call.unit .room-unit-only:not([hidden]) {
+  display: flex !important;
+}
+
+.room-call.unit {
+  padding: 0;
+  cursor: default;
+}
+
+.room-call.unit .room-call-bar,
+.room-call.unit .room-call-edge,
+.room-call.unit .room-call-dock-edge {
+  display: none;
+}
+
+.room-call.unit .room-call-grid {
+  margin: 8px 8px 0;
+}
+
+.room-call.unit:is(.collapsed, .no-people) .room-call-grid {
+  display: none;
+}
+
+/* Names always show on a phone's call window */
+.room-call.unit.quiet .room-call-name {
+  opacity: 1;
+}
+
+.room-call.unit .room-foot {
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 0;
+}
+
+/* You: just your avatar (it opens your profile) */
+.room-call.unit .room-me {
+  flex: 0 0 auto;
+  padding: 2px;
+}
+
+.room-call.unit .room-me-text {
+  display: none;
+}
+
+/* How many are in the room, and everyone's video shown or folded away */
+.room-unit-people {
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.room-unit-people > i:first-child {
+  font-size: 12px;
+  color: #b8b8c6;
+}
+
+.room-unit-people b {
+  font-weight: 600;
+}
+
+.room-unit-chevron {
+  font-size: 10px;
+  color: #b8b8c6;
+}
+
+.room-unit-people:disabled {
+  cursor: default;
+}
+
+.room-unit-people:disabled .room-unit-chevron {
+  display: none;
+}
+
+/* Folded up, or nobody's video yet: no glowing pill (a computer's folded window), just the bar */
+.room-call.unit.collapsed {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(23, 23, 28, 0.94);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.room-call.unit.collapsed::after {
+  display: none;
+}
+
+/* Floating: the whole of it, video and bar, moves; folded up, a bar that moves */
+.room-call.unit:not(.docked) {
+  border-radius: 18px;
+  background: rgba(23, 23, 28, 0.9);
+  touch-action: none;
+}
+
+/* Held upright, docked: the bottom of the screen, the bar with everyone's video in a row above it */
+.player-page > .room-call.unit.docked.strip {
+  order: 2;
+  align-self: stretch;
+  margin: auto 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-width: 1px 0 0;
+  border-radius: 18px 18px 0 0;
+  background: rgba(23, 23, 28, 0.94);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.player-page.room-open > .room-call.unit.docked.strip {
+  border-radius: 0;
+}
+
+/* Fullscreen upright, with the room's panel: a rounded card like the panel above it */
+.player-page:is(:fullscreen, :-webkit-full-screen) > .room-call.unit.docked.strip {
+  border-width: 1px;
+  border-radius: 14px;
+}
+
+/* Held sideways, docked: a column on the left, everyone one under another, the bar's buttons
+   below them (wrapping onto two rows); folded up, or nobody's video yet, a slim column of buttons */
+.room-call.unit.docked.side {
+  --dock-w: min(150px, 22vw);
+}
+
+.room-call.unit.side .room-foot,
+.room-call.unit.docked.side .room-foot {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.room-call.unit.side .room-me {
+  display: none;
+}
+
+.room-call.unit.side .room-unit-people {
+  margin-left: 0;
+  padding: 0 10px;
+}
+
+.room-call.unit.side .room-leave-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+}
+
+.room-call.unit.side .room-leave-btn span {
+  display: none;
+}
+
+.room-call.unit.side .room-leave-popover {
+  right: auto;
+  left: 0;
+  transform-origin: bottom left;
+}
+
+/* The Leave menu over the video beside or above it: the call window comes up front while it's open
+   (the window's own layer would otherwise keep the menu under the video) */
+.room-call.unit:has(.room-leave-popover:not([hidden])) {
+  z-index: 80;
+}
+
+.room-call.unit.side .room-leave-popover::after {
+  right: auto;
+  left: 14px;
+}
+
+.room-call.unit.docked.side:is(.collapsed, .no-people) {
+  --dock-w: 58px;
+}
+
+.room-call.unit.docked.side:is(.collapsed, .no-people) .room-foot {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  border-top: 0;
+}
+
+.room-call.unit.docked.side:is(.collapsed, .no-people) .room-unit-people {
+  flex-direction: column;
+  height: auto;
+  gap: 2px;
+  padding: 8px 0;
+  width: 40px;
+}
+
+/* Upright, a narrow phone: the Leave button's word goes, so everything fits */
+@media (max-width: 380px) {
+  .room-call.unit .room-leave-btn span {
+    display: none;
+  }
+  .room-call.unit .room-foot {
+    gap: 6px;
   }
 }
 

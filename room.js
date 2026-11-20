@@ -529,12 +529,18 @@
     // panel open or closed
     const roomFoot = panel.querySelector(".room-foot");
     const footHome = roomFoot.nextElementSibling;
+    // On a phone the call bar is part of the call window (the call window section sets this to
+    // give the window, or null elsewhere)
+    let footInCall = null;
     const placeNowBar = () => {
         const below = !!room && !!metaBox && playerPage.classList.contains("title-below");
         if (below && nowBar.parentNode !== metaBox) metaBox.append(nowBar);
         else if (!below && nowBar.parentNode !== panel) panel.insertBefore(nowBar, nowHome);
-        if (below && roomFoot.parentNode !== playerPage) playerPage.append(roomFoot);
-        else if (!below && roomFoot.parentNode !== panel) panel.insertBefore(roomFoot, footHome);
+        const footTo = (footInCall && footInCall()) || (below ? playerPage : panel);
+        if (roomFoot.parentNode !== footTo) {
+            if (footTo === panel) panel.insertBefore(roomFoot, footHome);
+            else footTo.append(roomFoot);
+        }
         playerPage.classList.toggle("now-below", below);
     };
     new MutationObserver(placeNowBar).observe(playerPage, { attributes: true, attributeFilter: ["class"] });
@@ -887,6 +893,7 @@
         renderNow();
         // A new host starts on People (who's in, and the invite details below), a guest on the chat
         showTab(room.role === "host" ? "people" : "chat");
+        renderCameras();
         showPanel(true);
         renderState();
     };
@@ -899,6 +906,8 @@
     };
 
     const closeRoomUI = () => {
+        // Picture in picture with everyone: out of the room, it closes
+        if (pipCall && window.documentPictureInPicture && window.documentPictureInPicture.window) window.documentPictureInPicture.window.close();
         toggleLeaveMenu(false);
         showPanel(false);
         chatUnread = 0;
@@ -1120,6 +1129,8 @@
 
     const openProfile = () => {
         if (!room) return;
+        // (from a phone's call bar, with the room's panel closed: it opens, the editor is in it)
+        if (panel.hidden) showPanel(true);
         profileName.value = room.name;
         profilePicker.value = room.avatar;
         profileSheet.hidden = false;
@@ -1560,13 +1571,20 @@
     // of the video (computers, phones held sideways), everyone one under another and scrolling up
     // and down; or, on a phone held upright, a strip under the video's details (or the room's
     // chat), just above the call bar, everyone side by side and scrolling across.
+    // On a phone, the call bar (you, mic, camera, leave) and the call window are one: in a room it's
+    // always there, docked by default: at the bottom of the screen held upright, the bar with
+    // everyone's video in a row above it; on the left held sideways, everyone one under another
+    // with the bar's buttons below them (the room's panel then has no bar of its own). Folded up,
+    // it's just the bar (sideways, a slim column of its buttons). Floating, the whole of it moves.
+    // Computers get a Leave button in the call window's title bar.
     const CALL_KEY = "cinetab:call";
     // `sizes`: the size (px) it was resized to, { landscape, portrait } (none: fits everyone)
     // `docked`: chosen to be a panel; `dock`: how it's docked now ("side", "strip", or null while
     // floating; a phone held upright in fullscreen, with the room's panel closed, floats it);
     // `big`: the wider column, or the larger strip, while docked; `dockW`: the column's width (px)
     // dragged to by its long edge (none: the narrow or wide one)
-    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockable: true, dockW: null };
+    // `unitFloat`: on a phone, floating instead of docked
+    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockable: true, dockW: null, unitFloat: false };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
@@ -1574,6 +1592,7 @@
             call.collapsed = saved.collapsed === true;
             call.big = saved.big === true;
             call.docked = saved.docked === true;
+            call.unitFloat = saved.unitFloat === true;
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
             if (saved.sizes && typeof saved.sizes === "object") ["landscape", "portrait"].forEach(key => {
                 const size = saved.sizes[key];
@@ -1581,7 +1600,7 @@
             });
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, docked: call.docked, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, docked: call.docked, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1599,6 +1618,12 @@
         button.append(el("i"));
         return button;
     };
+    // Computers (Chrome, Edge): picture in picture, the video and everyone in a small window on
+    // top of everything (script.js)
+    const callPipBtn = callButton("room-call-pip", "Picture in picture: the video and everyone, in a small window on top");
+    callPipBtn.firstChild.className = "fa-solid fa-clone";
+    callPipBtn.hidden = !("documentPictureInPicture" in window) || isTouch;
+    callPipBtn.addEventListener("click", () => together.pip && together.pip());
     const callDockBtn = callButton("room-call-dock", "Dock as a panel");
     const callSizeBtn = callButton("room-call-size", "Wider");
     const callFoldBtn = callButton("room-call-fold", "Fold up");
@@ -1615,7 +1640,55 @@
     renderMic();
     const callControls = el("div", "room-call-controls");
     callControls.append(callMicBtn, callCamBtn);
-    callBar.append(callLive, callTitle, callControls, callDockBtn, callSizeBtn, callFoldBtn);
+    // Leave: just leave, or end the room (the call bar's own choices)
+    const callLeaveBtn = callButton("room-call-leave", "Leave or end the room");
+    callLeaveBtn.firstChild.className = "fa-solid fa-phone-slash";
+    callLeaveBtn.setAttribute("aria-haspopup", "true");
+    callLeaveBtn.setAttribute("aria-expanded", "false");
+    const callLeaveMenu = el("div", "room-call-leave-menu");
+    callLeaveMenu.hidden = true;
+    const showCallLeave = open => {
+        callLeaveMenu.hidden = !open;
+        callLeaveBtn.setAttribute("aria-expanded", String(open));
+    };
+    const callLeaveOption = (className, icon, text, target) => {
+        const button = el("button", `room-leave-opt ${className}`);
+        button.type = "button";
+        button.append(el("i", `fa-solid ${icon}`), el("span", null, text));
+        button.addEventListener("click", e => {
+            e.stopPropagation();
+            showCallLeave(false);
+            target.click();
+        });
+        return button;
+    };
+    callLeaveMenu.append(callLeaveOption("leave-just", "fa-right-from-bracket", "Just leave", leaveJustBtn),
+        callLeaveOption("leave-end", "fa-door-closed", "End room", leaveEndBtn));
+    callLeaveBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        showCallLeave(callLeaveMenu.hidden);
+    });
+    document.addEventListener("click", e => !callLeaveMenu.hidden && !callLeaveMenu.contains(e.target) && showCallLeave(false));
+    document.addEventListener("keydown", e => e.key === "Escape" && !callLeaveMenu.hidden && showCallLeave(false));
+    callBar.append(callLive, callTitle, callControls, callPipBtn, callDockBtn, callSizeBtn, callFoldBtn, callLeaveBtn);
+    callWin.classList.toggle("has-pip", !callPipBtn.hidden);
+
+    // On a phone, in the call bar: everyone's video shown or folded away (with how many are in
+    // the room), and docked or floating
+    const unitPeopleBtn = el("button", "room-unit-only room-unit-people");
+    unitPeopleBtn.type = "button";
+    const unitCount = el("b", null, "1");
+    const unitChevron = el("i", "fa-solid fa-chevron-down room-unit-chevron");
+    unitPeopleBtn.append(el("i", "fa-solid fa-user-group"), unitCount, unitChevron);
+    const unitFloatBtn = el("button", "room-unit-only room-mic-btn room-unit-float");
+    unitFloatBtn.type = "button";
+    unitFloatBtn.append(el("i"));
+    roomFoot.insertBefore(unitPeopleBtn, leaveWrap);
+    roomFoot.insertBefore(unitFloatBtn, leaveWrap);
+    const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px)");
+    const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
+    const unitMode = () => !!room && (phoneUpright.matches || phoneSideways.matches);
+    footInCall = () => unitMode() ? callWin : null;
     const callGrid = el("div", "room-call-grid");
     // With a mouse: every edge and corner resizes it; the bottom right corner shows a grip (and
     // takes the arrow keys, once it has focus). On a touch screen, two fingers do it (below).
@@ -1636,24 +1709,35 @@
     callDockEdge.type = "button";
     callDockEdge.title = "Drag to make the panel wider or narrower (double-click: back to its size)";
     callDockEdge.setAttribute("aria-label", "Panel width (drag, or arrow keys)");
-    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge);
+    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge, callLeaveMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
     const CALL_GAP = 6;
     const CALL_PAD = 6;
-    const CALL_MIN_W = 120;
+    // (with the picture in picture button, one more in the title bar); on a phone, the call bar's
+    // width, upright
+    const CALL_MIN_W = callPipBtn.hidden ? 156 : 186;
+    const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W
+        : phoneUpright.matches ? Math.min(330, playerPage.getBoundingClientRect().width - 16) : 150;
     const CALL_MIN_H = 88;
     const DOCK_MIN_W = 140;
     const dockMaxW = () => Math.max(DOCK_MIN_W, Math.min(560, playerPage.getBoundingClientRect().width * 0.45));
     const within = (value, min, max) => Math.max(min, Math.min(value, max));
     const callOrient = page => page.width >= page.height ? "landscape" : "portrait";
-    // Around the pictures: its sides and bottom, its border, and the title bar
-    const callChrome = () => ({ x: CALL_PAD * 2 + 2, y: (callBar.offsetHeight || 30) + CALL_PAD + 2 });
+    // Around the pictures: its sides and bottom, its border, and the title bar (on a phone, the
+    // call bar below them) - as it is now, while the pictures show
+    const callChrome = () => {
+        if (!callWin.hidden && callGrid.offsetHeight && callGrid.offsetWidth) {
+            return { x: callWin.offsetWidth - callGrid.offsetWidth, y: callWin.offsetHeight - callGrid.offsetHeight };
+        }
+        return callWin.classList.contains("unit") ? { x: 18, y: (roomFoot.offsetHeight || 56) + 10 }
+            : { x: CALL_PAD * 2 + 2, y: (callBar.offsetHeight || 30) + CALL_PAD + 2 };
+    };
     // The size that fits everyone: one under another when the screen is wider than tall (a
     // computer, a phone held sideways), side by side when it's taller (a phone held upright)
     const fittingCallSize = (page, count, landscape) => {
-        const tile = !isTouch ? 168 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
+        const tile = !isTouch ? 200 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
         const tall = tile * 3 / 4;
         const chrome = callChrome();
         return landscape
@@ -1675,7 +1759,7 @@
     // Floating: its size (the one it was given, within the screen) and the grid of pictures;
     // folded up or docked, the page's styles size it
     const layoutCall = () => {
-        if (callWin.hidden || call.dock || call.collapsed) {
+        if (callWin.hidden || call.dock || call.collapsed || callWin.classList.contains("no-people")) {
             ["width", "height", "--tile", "--cols", "--rows"].forEach(name => callWin.style.removeProperty(name));
             // Docked beside the video: the width its edge was dragged to, within what leaves the
             // video room
@@ -1691,7 +1775,8 @@
         const count = Math.max(1, callGrid.children.length);
         const orient = callOrient(page);
         const size = call.sizes[orient] || fittingCallSize(page, count, orient === "landscape");
-        const width = Math.round(within(size.w, CALL_MIN_W, Math.max(CALL_MIN_W, page.width - 16)));
+        const minW = callMinW();
+        const width = Math.round(within(size.w, minW, Math.max(minW, page.width - 16)));
         const height = Math.round(within(size.h, CALL_MIN_H, Math.max(CALL_MIN_H, page.height - 16)));
         callWin.style.width = `${width}px`;
         callWin.style.height = `${height}px`;
@@ -1718,6 +1803,9 @@
         if (call.pos) {
             x = call.pos.x * (page.width - width);
             y = call.pos.y * (page.height - height);
+        } else if (callWin.classList.contains("unit")) {
+            x = (page.width - width) / 2;
+            y = page.height - height - 12;
         } else {
             // At first: the top right of the picture, below its title bar, and within the picture
             // (on a phone held upright, not over the title below it)
@@ -1772,9 +1860,10 @@
         const dx = e.clientX - s.x0;
         const dy = e.clientY - s.y0;
         let { x, y, w, h } = s;
-        if (s.edge.includes("e")) w = within(s.w + dx, CALL_MIN_W, page.width - margin - s.x);
+        const minW = callMinW();
+        if (s.edge.includes("e")) w = within(s.w + dx, minW, page.width - margin - s.x);
         if (s.edge.includes("w")) {
-            w = within(s.w - dx, CALL_MIN_W, s.x + s.w - margin);
+            w = within(s.w - dx, minW, s.x + s.w - margin);
             x = s.x + s.w - w;
         }
         if (s.edge.includes("s")) h = within(s.h + dy, CALL_MIN_H, page.height - margin - s.y);
@@ -1804,7 +1893,7 @@
         e.stopPropagation();
         const page = playerPage.getBoundingClientRect();
         const times = e.shiftKey ? 3 : 1;
-        const w = within(callWin.offsetWidth + step[0] * times, CALL_MIN_W, page.width - 8 - call.x);
+        const w = within(callWin.offsetWidth + step[0] * times, callMinW(), page.width - 8 - call.x);
         const h = within(callWin.offsetHeight + step[1] * times, CALL_MIN_H, page.height - 8 - call.y);
         resizeCall(call.x, call.y, w, h);
         keepCallPlace();
@@ -1834,7 +1923,7 @@
         const pinch = call.pinch;
         const page = playerPage.getBoundingClientRect();
         const most = Math.min((page.width - 16) / pinch.w, (page.height - 16) / pinch.h);
-        const least = Math.max(CALL_MIN_W / pinch.w, CALL_MIN_H / pinch.h);
+        const least = Math.max(callMinW() / pinch.w, CALL_MIN_H / pinch.h);
         const s = within(scale, Math.min(least, most), Math.max(least, most));
         const w = pinch.w * s;
         const h = pinch.h * s;
@@ -1848,7 +1937,7 @@
         if (e.pointerType === "touch") {
             call.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
             // A second finger: a pinch instead of a drag (not while it's folded up to its title)
-            if (call.touches.size === 2 && !call.collapsed && callGrid.firstElementChild) {
+            if (call.touches.size === 2 && !call.collapsed && callGrid.firstElementChild && !callWin.classList.contains("no-people")) {
                 if (call.drag) {
                     call.drag = null;
                     callWin.classList.remove("dragging");
@@ -1865,8 +1954,12 @@
             }
             if (call.touches.size > 2 || call.pinch) return;
         }
-        if (e.button > 0 || e.target.closest("button, .room-call-edge")) return;
-        call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y };
+        if (e.button > 0 || e.target.closest(".room-call-edge")) return;
+        // On a button (a phone's call bar is nearly all buttons): a drag once it moves a little,
+        // and then the button isn't pressed
+        const onButton = !!e.target.closest("button");
+        call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y, x0: e.clientX, y0: e.clientY, live: !onButton };
+        if (onButton) return;
         callWin.setPointerCapture(e.pointerId);
         callWin.classList.add("dragging");
     });
@@ -1877,6 +1970,15 @@
             return;
         }
         if (!call.drag || call.drag.id !== e.pointerId) return;
+        if (!call.drag.live) {
+            if (Math.hypot(e.clientX - call.drag.x0, e.clientY - call.drag.y0) < 10) return;
+            call.drag.live = true;
+            call.drag.fromButton = true;
+            try {
+                callWin.setPointerCapture(e.pointerId);
+            } catch (err) {}
+            callWin.classList.add("dragging");
+        }
         const page = playerPage.getBoundingClientRect();
         const margin = 8;
         call.x = Math.max(margin, Math.min(e.clientX - call.drag.dx, page.width - callWin.offsetWidth - margin));
@@ -1895,16 +1997,40 @@
             return;
         }
         if (!call.drag || call.drag.id !== e.pointerId) return;
+        const drag = call.drag;
         call.drag = null;
+        if (!drag.live) return;
         callWin.classList.remove("dragging");
+        // Dragged from a button: not a press
+        if (drag.fromButton) {
+            call.swallowClick = true;
+            setTimeout(() => call.swallowClick = false, 400);
+        }
         keepCallPlace();
     };
     callWin.addEventListener("pointerup", endCallDrag);
     callWin.addEventListener("pointercancel", endCallDrag);
+    callWin.addEventListener("click", e => {
+        if (!call.swallowClick) return;
+        call.swallowClick = false;
+        e.preventDefault();
+        e.stopPropagation();
+    }, true);
 
     const renderCallButtons = () => {
-        // Docked, it doesn't fold up (it can float again, and fold up there)
-        const folded = call.collapsed && !call.dock;
+        // Docked, it doesn't fold up (it can float again, and fold up there); a phone's does
+        const unit = callWin.classList.contains("unit");
+        const folded = call.collapsed && (!call.dock || unit);
+        const alone = callWin.classList.contains("no-people");
+        unitPeopleBtn.disabled = alone;
+        unitChevron.className = `fa-solid ${call.collapsed ? "fa-chevron-up" : "fa-chevron-down"} room-unit-chevron`;
+        unitPeopleBtn.title = alone ? "Just you: turn your camera on to see yourself" : call.collapsed ? "Show everyone's video" : "Fold everyone's video away";
+        unitPeopleBtn.setAttribute("aria-label", `${unitCount.textContent} in the room. ${unitPeopleBtn.title}`);
+        unitPeopleBtn.setAttribute("aria-expanded", String(!call.collapsed && !alone));
+        unitFloatBtn.firstChild.className = `fa-solid ${call.dock ? "fa-up-down-left-right" : "fa-thumbtack"}`;
+        unitFloatBtn.title = call.dock ? "Float it: drag it anywhere" : phoneSideways.matches ? "Dock it on the left" : "Dock it at the bottom";
+        unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
+        unitFloatBtn.hidden = !call.dock && !call.dockable;
         callWin.classList.toggle("collapsed", folded);
         callFoldBtn.hidden = !!call.dock;
         callDockBtn.hidden = folded || (!call.dock && !call.dockable);
@@ -1934,6 +2060,7 @@
     callWin.addEventListener("pointerenter", showCallNames);
     callWin.addEventListener("pointerdown", showCallNames);
 
+    unitPeopleBtn.addEventListener("click", () => callFoldBtn.click());
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -2012,9 +2139,12 @@
     const placeDock = (motion = false) => {
         const moving = motion === true && !calmer() && !callWin.hidden;
         const videoWas = moving ? container.getBoundingClientRect() : null;
+        const unit = unitMode();
+        callWin.classList.toggle("unit", unit);
         const column = getComputedStyle(playerPage).flexDirection === "column";
         call.dockable = column || !uprightTouch.matches;
-        const dock = call.docked && !callWin.hidden && !playerPage.hidden && call.dockable ? (column ? "strip" : "side") : null;
+        const wanted = unit ? !call.unitFloat : call.docked;
+        const dock = wanted && !callWin.hidden && !playerPage.hidden && call.dockable ? (column ? "strip" : "side") : null;
         callWin.classList.toggle("docked", !!dock);
         callWin.classList.toggle("side", dock === "side");
         callWin.classList.toggle("strip", dock === "strip");
@@ -2041,6 +2171,13 @@
     window.addEventListener("resize", () => placeDock());
     // (the room's panel opening or closing, the title moving below the picture, fullscreen)
     new MutationObserver(() => placeDock()).observe(playerPage, { attributes: true, attributeFilter: ["class", "hidden"] });
+    unitFloatBtn.addEventListener("click", () => {
+        call.unitFloat = !!call.dock;
+        // Floated from the bottom of the screen: from where it was, not where it floated before
+        if (call.unitFloat) call.pos = null;
+        saveCall();
+        placeDock(true);
+    });
     callDockBtn.addEventListener("click", () => {
         call.docked = !call.dock;
         // Into the panel open, with everyone shown
@@ -2078,10 +2215,104 @@
         return others.length || me.track ? [...others, me] : [];
     };
 
+    // ---------- Picture in picture (script.js, a computer's Chrome or Edge): everyone in the room
+    // in its window too, like the call window: how many, your mic and camera, and each person's
+    // camera (or avatar) with their name and mic. Kept up to date with the call window.
+    let pipCall = null;
+    const renderPipCall = () => {
+        if (!pipCall || !room) return;
+        const people = callPeople();
+        // (on your own with the camera off, the call window is hidden; here, you)
+        if (!people.length) people.push({ key: "me", name: room.name || "You", avatar: room.avatar, mic: micEnabled, track: camTrack(), me: true, mirror: camFacing === "user" });
+        pipCall.count.textContent = String(people.length);
+        pipCall.title.title = people.length === 1 ? "Just you in the room" : `${people.length} in the room`;
+        const keep = new Set(people.map(person => person.key));
+        pipCall.tiles.forEach((tile, key) => {
+            if (keep.has(key)) return;
+            tile.video.srcObject = null;
+            tile.el.remove();
+            pipCall.tiles.delete(key);
+        });
+        people.forEach(person => {
+            let tile = pipCall.tiles.get(person.key);
+            if (!tile) {
+                const figure = el("figure", "room-call-tile");
+                const video = el("video");
+                video.muted = true;
+                video.autoplay = true;
+                video.playsInline = true;
+                const face = el("span", "room-call-face");
+                const mic = el("span", "room-call-mic");
+                mic.append(el("i"));
+                const name = el("figcaption", "room-call-name");
+                figure.append(video, face, mic, name);
+                tile = { el: figure, video, face, mic, name, track: null, look: "" };
+                pipCall.tiles.set(person.key, tile);
+            }
+            tile.el.classList.toggle("mirror", !!person.mirror);
+            tile.el.classList.toggle("camera", !!person.track);
+            const label = person.me ? `${person.name} (you)` : person.host ? `${person.name} (host)` : person.name;
+            if (tile.name.textContent !== label) tile.name.textContent = label;
+            tile.mic.classList.toggle("off", !person.mic);
+            tile.mic.firstChild.className = `fa-solid ${person.mic ? "fa-microphone" : "fa-microphone-slash"}`;
+            const look = `${person.name}|${person.avatar || ""}`;
+            if (tile.look !== look) {
+                tile.look = look;
+                tile.face.replaceChildren(makeAvatar(person.name, person.avatar));
+            }
+            if (tile.track !== person.track) {
+                tile.track = person.track;
+                tile.video.srcObject = person.track ? new MediaStream([person.track]) : null;
+                if (person.track) tile.video.play().catch(() => {});
+            }
+        });
+        const order = people.map(person => pipCall.tiles.get(person.key).el);
+        if (order.length !== pipCall.grid.children.length || order.some((item, i) => pipCall.grid.children[i] !== item)) pipCall.grid.replaceChildren(...order);
+    };
+    // The panel for the window: { el, close }, or null outside a room
+    together.callPip = () => {
+        if (!room) return null;
+        const box = el("aside", "pip-people");
+        box.setAttribute("aria-label", "People in the room");
+        const bar = el("div", "pip-people-bar");
+        const title = el("span", "room-call-title");
+        const count = el("b");
+        title.append(el("i", "fa-solid fa-user-group"), count);
+        const mic = callButton("room-call-media", "Turn microphone on");
+        const cam = callButton("room-call-media", "Turn camera on");
+        mic.addEventListener("click", toggleMicrophone);
+        cam.addEventListener("click", () => camEnabled ? disableCamera() : enableCamera());
+        const controls = el("div", "room-call-controls");
+        controls.append(mic, cam);
+        bar.append(title, controls);
+        const grid = el("div", "pip-people-grid");
+        box.append(bar, grid);
+        micButtons.push(mic);
+        camButtons.push(cam);
+        renderMic();
+        renderCam();
+        pipCall = { grid, count, title, tiles: new Map() };
+        renderPipCall();
+        return {
+            el: box,
+            close: () => {
+                [micButtons, camButtons].forEach(list => list.splice(0, list.length, ...list.filter(button => button !== mic && button !== cam)));
+                if (pipCall) pipCall.tiles.forEach(tile => tile.video.srcObject = null);
+                pipCall = null;
+            }
+        };
+    };
+
     const renderCameras = () => {
         const people = callPeople();
+        // On a phone: the call bar in it, and it's there all through a room
+        placeNowBar();
+        const unit = unitMode();
+        callWin.classList.toggle("unit", unit);
+        callWin.classList.toggle("no-people", !people.length);
+        unitCount.textContent = String(Math.max(1, people.length));
         const wasHidden = callWin.hidden;
-        callWin.hidden = !people.length;
+        callWin.hidden = !people.length && !unit;
         // Someone came or went: everyone's name again for a moment
         const who = people.map(person => person.key).join();
         if (people.length && (wasHidden || who !== call.who)) showCallNames();
@@ -2152,9 +2383,13 @@
         const order = people.map(person => call.tiles.get(person.key).el);
         if (order.length !== callGrid.children.length || order.some((item, i) => callGrid.children[i] !== item)) callGrid.replaceChildren(...order);
         placeDock();
+        renderCallButtons();
         layoutCall();
         placeCall();
+        renderPipCall();
     };
+    // A phone turned: docked at the bottom, or on the left
+    [phoneUpright, phoneSideways].forEach(query => query.addEventListener && query.addEventListener("change", () => renderCameras()));
 
     // The host: its own camera to every guest, and each guest gets the others' cameras passed on
     // (and is told whose is where)

@@ -4,7 +4,34 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [1.5.7] - 2026-11-20
+## [1.5.8] - 2026-11-20
+
+### Phones: the call bar and the call window are one
+- In a room, the call bar (you, mic, camera, leave) and everyone's video are one thing, there all
+  through the room. Docked by default:
+  - Held upright: at the bottom of the screen, the bar with everyone's video in a row above it
+    (scrolling across)
+  - Held sideways: a column on the left, everyone one under another with the bar's buttons below
+    them (mic, camera, everyone, float, leave or end the room); the room's panel on the right no
+    longer has a bar of its own
+- The bar's new people button (with how many are in the room) folds everyone's video away and
+  back: upright, just the bar stays; sideways, a slim column of its buttons
+- Float: the whole of it, video and bar, moves anywhere (drag it by a picture, or by the bar, even
+  from a button); folded up, a bar that moves. Dock: back to the bottom (or the left)
+- Tapping your avatar in the bar opens your profile, with the room's panel
+
+### Video call window (computers)
+- A Leave button in its title bar: Just leave, or End room, without opening the room's panel
+
+### Picture in picture (computers: Chrome, Edge)
+- In a room, picture in picture shows everyone too, like a video call's window: the video, and a
+  column beside it with each person's camera (or avatar), name and mic, the number in the room,
+  and your mic and camera buttons; a row below the video once the window is taller than wide.
+  Open it from the call window's new button, or the player's picture in picture button
+- A YouTube video now shows in picture in picture (a muted copy in step with the page, which
+  keeps the sound), on your own or in a room; before, the window stayed black
+- In a room, the window's Close no longer pauses the video for everyone, and it closes when you
+  leave the room
 
 ### Video call window
 - Computers: resize it from any edge or corner, to any shape, like a computer's window (the
@@ -647,6 +674,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.8
 [1.5.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.7
 [1.5.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.6
 [1.5.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.5
