@@ -3361,12 +3361,80 @@ const cmdPalette = (() => {
                 thumb.append(bar);
             }
             card.append(thumb, make("span", "cmd-card-title", item.label), make("span", "cmd-card-meta", item.meta));
-            return card;
+            // Its buttons, on its picture: take it out of Recently played (×), keep it in Saved (a
+            // heart: YouTube), and play it or add it to the queue (YouTube) - showing when it's
+            // pointed at or chosen with the arrows, always on a touch screen
+            const wrap = make("div", "cmd-card-wrap");
+            wrap.dataset.i = i;
+            const act = (name, icon, label) => {
+                const button = make("button", `cmd-card-act ${name}`);
+                button.type = "button";
+                button.dataset.act = name;
+                button.title = label;
+                button.setAttribute("aria-label", `${label}: ${item.label}`);
+                button.tabIndex = -1;
+                button.append(make("i", `fa-solid ${icon}`));
+                return button;
+            };
+            const entry = item.entry || {};
+            const youTube = entry.type === "video" || entry.type === "playlist";
+            const acts = make("span", "cmd-card-acts");
+            acts.append(act("forget", "fa-xmark", "Remove from Recently played"));
+            const saveItem = savedItemOfEntry(entry);
+            const key = saveItem && window.CineSaved && window.CineYouTube && CineYouTube.paintHeart && CineSaved.keyOf(saveItem);
+            if (key) {
+                const heart = make("button", "cmd-card-act fav");
+                heart.type = "button";
+                heart.dataset.act = "fav";
+                heart.dataset.saveKey = key;
+                heart.tabIndex = -1;
+                heart.append(make("i"));
+                CineYouTube.paintHeart(heart);
+                acts.append(heart);
+            }
+            const run = make("span", "cmd-card-run");
+            run.append(act("play", "fa-play", "Play"));
+            if (youTube && together.queueYouTube && (!together.canQueueYouTube || together.canQueueYouTube())) run.append(act("queue", "fa-plus", "Add to queue"));
+            wrap.append(card, acts, run);
+            return wrap;
         }));
     };
+    // (a recent YouTube video or playlist, as Saved keeps it)
+    const savedItemOfEntry = entry => entry.type === "playlist" && entry.list
+        ? { kind: "playlist", list: entry.list, id: entry.id, title: entry.title || entry.videoTitle, channel: entry.channel, count: entry.count }
+        : entry.type === "video" && entry.id ? { kind: "video", id: entry.id, title: entry.title, channel: entry.channel, duration: entry.duration || null, live: !!entry.live } : null;
     recentRow.addEventListener("click", e => {
-        const card = e.target.closest(".cmd-card");
-        if (card) runItem(items[+card.dataset.i]);
+        const button = e.target.closest(".cmd-card-act");
+        const wrap = e.target.closest(".cmd-card-wrap");
+        const item = wrap && items[+wrap.dataset.i];
+        if (!item) return;
+        if (!button) return runItem(item);
+        e.stopPropagation();
+        const entry = item.entry || {};
+        const name = button.dataset.act;
+        if (name === "play") return runItem(item);
+        if (name === "fav") {
+            const saved = CineSaved.toggle(savedItemOfEntry(entry));
+            if (saved !== null) showNote(saved ? "Saved - it's on the home page's Saved" : "Taken out of Saved");
+            return;
+        }
+        if (name === "queue") {
+            const ref = entry.type === "playlist" ? { id: entry.id || null, list: entry.list, start: 0 } : { id: entry.id, list: null, start: 0 };
+            const meta = entry.type === "playlist" ? { listTitle: entry.title, channel: entry.channel, count: entry.count } : { title: entry.title, channel: entry.channel };
+            const refused = together.queueYouTube(ref, meta);
+            // (the queue says so itself)
+            if (refused) showNote(refused, true);
+            return;
+        }
+        if (name === "forget" && entry.k) {
+            // (gone from the row at once; the rest stay where they are)
+            wrap.classList.add("leaving");
+            setTimeout(() => {
+                CineHistory.remove(entry.k);
+                freshChoice = false;
+                renderList();
+            }, 180);
+        }
     });
     // (a mouse wheel scrolls the row across)
     recentRow.addEventListener("wheel", e => {

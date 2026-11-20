@@ -6,6 +6,22 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-21
+
+### Search
+- A recent video in the search box has its buttons on its picture: a heart (keep it in Saved),
+  × (take it out of Recently played - the others stay put), and Play / Add to queue along its
+  bottom. They show when it's pointed at or chosen with the arrow keys, always on a touch screen;
+  a saved heart always shows. Add to queue works on your own (your queue) and in a room (for
+  whoever may add to it); a video from this device has Play and ×
+- No blue frame around the search boxes while typing in them (the keyboard focus ring is for
+  buttons and links; the boxes show they're in use with their own border)
+
+### Fixed
+- Fullscreen with the room's panel open and the call pinned to the side: the video shrank to a
+  small box (its own picture's size) between everyone's videos above it and the call's buttons
+  below it. It fills the space between them again, as it does in a window
+
 ## [1.6.10] - 2026-11-21
 
 ### Queue

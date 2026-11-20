@@ -103,9 +103,10 @@ html {
   color: #ffffff;
 }
 
-/* Unified accessible keyboard focus rings: on what can be pressed or typed in (not the video,
-   the player or a panel, which take focus to get the keys) */
-:is(a, button, input, select, textarea, summary, [role="button"], [role="switch"], [role="tab"], [role="menuitem"], [role="radio"]):focus-visible {
+/* Unified accessible keyboard focus rings: on what can be pressed (not the video, the player or a
+   panel, which take focus to get the keys; nor a text box - typing in one would frame it, and the
+   search boxes show they're in use with their own border) */
+:is(a, button, select, summary, [role="button"], [role="switch"], [role="tab"], [role="menuitem"], [role="radio"], input:is([type="checkbox"], [type="radio"], [type="range"])):focus-visible {
   outline: 2px solid #3e97fd;
   outline-offset: 2px;
 }
@@ -11682,7 +11683,12 @@ body > .room-toasts {
   margin: var(--rail-gap) 0;
 }
 
+/* (fullscreen too: the room's fullscreen rule - the video filling what the panel leaves, width
+   auto - would shrink it here to its own picture's size, between the videos and the dock) */
 .player-page.call-dock-rail > .container.fullscreen {
+  flex: none;
+  width: 100%;
+  max-width: var(--rail-player-w);
   height: auto;
   border-radius: 12px;
 }
@@ -15259,3 +15265,149 @@ body > .notice-layer {
   }
 }
 /* =================== /QUEUE: HEARTS =================== */
+
+/* =================== SEARCH: A RECENT VIDEO'S BUTTONS (script.js) =================== */
+/* On its picture: a heart (keep it in Saved) at the top left, × (out of Recently played) at the
+   top right, and Play / Add to queue along its bottom - when it's pointed at or chosen with the
+   arrows, always on a touch screen (a saved heart always) */
+.cmd-card-wrap {
+  --card-w: 160px;
+  position: relative;
+  flex: 0 0 var(--card-w);
+  scroll-snap-align: start;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.cmd-card-wrap > .cmd-card {
+  width: 100%;
+}
+
+.cmd-card-wrap.leaving {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.cmd-card-acts {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.cmd-card-acts .cmd-card-act.forget {
+  margin-left: auto;
+}
+
+.cmd-card-acts .cmd-card-act.fav {
+  order: -1;
+  margin-left: 0;
+}
+
+.cmd-card-acts .cmd-card-act.fav + .cmd-card-act,
+.cmd-card-acts .cmd-card-act.fav ~ .cmd-card-act.forget {
+  margin-left: auto;
+}
+
+/* (along the picture's bottom: its height is the card's width at 16:9) */
+.cmd-card-run {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--card-w) * 9 / 16 - 40px);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.cmd-card-act {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.cmd-card-run .cmd-card-act {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.cmd-card-run .cmd-card-act.play {
+  background: #3e97fd;
+}
+
+.cmd-card-wrap:hover .cmd-card-act,
+.cmd-card-wrap:has(.cmd-card.chosen) .cmd-card-act,
+.cmd-card-wrap:focus-within .cmd-card-act,
+.cmd-card-act.fav.on {
+  opacity: 1;
+  transform: none;
+}
+
+.cmd-card-act:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.cmd-card-run .cmd-card-act.play:hover {
+  background: #2289ff;
+}
+
+.cmd-card-act.forget:hover {
+  background: rgba(229, 72, 77, 0.9);
+}
+
+.cmd-card-act.fav.on i {
+  color: #ff4f8b;
+}
+
+.cmd-card-act:active {
+  transform: scale(0.9);
+}
+
+/* (the picture dims a little behind its buttons) */
+.cmd-card-wrap:hover .cmd-card-thumb::after,
+.cmd-card-wrap:has(.cmd-card.chosen) .cmd-card-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0.25), transparent 40%, rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+
+@media (hover: none) {
+  .cmd-card-act {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .cmd-card-wrap {
+    --card-w: 140px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmd-card-wrap,
+  .cmd-card-act {
+    transition: none;
+  }
+}
+/* =================== /SEARCH: A RECENT VIDEO'S BUTTONS =================== */
