@@ -200,7 +200,8 @@
     let reopening = null;
     let homeBarDismissed = false;
     const createIntro = createText.textContent;
-    const uprightTouch = matchMedia("(pointer: coarse) and (orientation: portrait)");
+    // (a phone held upright, or a window made as narrow as one)
+    const uprightTouch = matchMedia("(pointer: coarse) and (orientation: portrait), (max-width: 600px) and (orientation: portrait)");
     const isUprightPhone = () => uprightTouch.matches || playerPage.classList.contains("title-below") || (playerPage.classList.contains("room-open") && matchMedia("(max-width: 900px) and (orientation: portrait)").matches);
 
     // ---------- Small helpers
@@ -383,10 +384,40 @@
     const knockToasts = new Map();
     const placeToasts = () => {
         const host = playerPage.hidden ? document.body : playerPage;
-        if (toasts.parentNode === host) return;
-        toasts.replaceChildren(...knockToasts.values());
-        host.append(toasts);
+        if (toasts.parentNode !== host) {
+            toasts.replaceChildren(...knockToasts.values());
+            host.append(toasts);
+        }
+        placeToastBox();
     };
+
+    // Where they show in the player: never over the room's panel, the call's column or its bar.
+    // Phones: centred on the video, just below its top bar (the panel is below the video held
+    // upright, beside it held sideways). Computers: the bottom left, clear of a column pinned
+    // left of the video. (style.css places them from these numbers.)
+    const toastPhone = matchMedia("(pointer: coarse) and (max-width: 900px), screen and (max-width: 600px)");
+    const placeToastBox = () => {
+        const inPlayer = toasts.parentNode === playerPage && !playerPage.hidden;
+        const box = inPlayer ? container.getBoundingClientRect() : null;
+        toasts.classList.toggle("placed", !!(box && box.width));
+        if (!box || !box.width) return;
+        const style = toasts.style;
+        if (toastPhone.matches) {
+            const bar = container.querySelector(".top-bar");
+            const barBox = bar && bar.getBoundingClientRect();
+            const below = barBox && barBox.height && barBox.bottom <= box.top + box.height / 2 ? barBox.bottom : box.top;
+            style.setProperty("--toast-x", `${Math.round(box.left + box.width / 2)}px`);
+            style.setProperty("--toast-y", `${Math.round(Math.max(below + 6, 8))}px`);
+            style.setProperty("--toast-w", `${Math.round(Math.max(200, box.width - 24))}px`);
+        } else {
+            style.setProperty("--toast-left", `${Math.round(Math.max(24, box.left + 12))}px`);
+        }
+    };
+    window.addEventListener("resize", () => toasts.parentNode === playerPage && placeToastBox());
+    toastPhone.addEventListener("change", placeToastBox);
+    // (the panel opening or closing, the call docking, fullscreen: the video moves)
+    new MutationObserver(() => toasts.parentNode === playerPage && toasts.childElementCount && placeToastBox())
+        .observe(playerPage, { attributes: true, attributeFilter: ["class"] });
 
     const toast = (text, name = null, avatar = "", onClick = null) => {
         placeToasts();
@@ -1739,7 +1770,8 @@
     // `dockW`: the docked column's width (px) dragged to by its long edge (none: its own)
     // `unitFloat`: on a phone, floating instead of docked
     // Computers: `docked` false floats it; docked, `dockPos` is where - "bottom" (the dock over the
-    // bottom of the video, the usual), "side" (pinned left of the video) or "top" (above it)
+    // bottom of the video, the usual) or "side" (pinned left of the video; with the room's panel
+    // open, the videos go above the panel and the buttons below the video: "rail")
     const call = { x: 0, y: 0, pos: null, collapsed: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: true, dock: null, dockPos: "bottom", dockable: true, dockW: null, unitFloat: false };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
@@ -1750,7 +1782,9 @@
             // (from before the dock: it starts in the dock once)
             if (saved.v === 2) {
                 call.docked = saved.docked !== false;
-                if (["bottom", "side", "top"].includes(saved.dockPos)) call.dockPos = saved.dockPos;
+                if (["bottom", "side"].includes(saved.dockPos)) call.dockPos = saved.dockPos;
+                // (pinned above the video, which is gone: pinned left)
+                else if (saved.dockPos === "top") call.dockPos = "side";
             }
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
             if (saved.sizes && typeof saved.sizes === "object") ["landscape", "portrait"].forEach(key => {
@@ -1786,11 +1820,10 @@
     const callFoldBtn = callButton("room-call-fold", "Minimize");
     callFoldBtn.firstChild.className = "fa-solid fa-minus";
     // Computers: one Layout button for where the call goes - a window floating over the video, a
-    // sidebar on its left, or a strip above it (phones have their own call bar: below)
+    // column pinned at the side (phones have their own call bar: below)
     const CALL_LAYOUTS = [
         { mode: "bottom", icon: "fa-arrows-down-to-line", text: "Dock on the video" },
-        { mode: "side", icon: "fa-table-columns", text: "Pin to the left" },
-        { mode: "top", icon: "fa-window-maximize", text: "Pin above the video" },
+        { mode: "side", icon: "fa-table-columns", text: "Pin to the side" },
         { mode: "float", icon: "fa-window-restore", text: "Floating window" }
     ];
     const callLayoutBtn = callButton("room-call-layout", "Call layout");
@@ -1810,12 +1843,18 @@
         return button;
     });
     const callLayout = () => call.docked ? call.dockPos : "float";
+    // (a computer's floating window: its pill of buttons stays while one of its menus is open)
+    const keepPill = () => {
+        if (callWin.classList.contains("unit")) return;
+        callWin.classList.toggle("bar-open", !callLayoutMenu.hidden || !callLeaveMenu.hidden);
+    };
     // (below the button; above it when there's no room below)
     const showCallLayout = open => {
         callLayoutMenu.hidden = !open;
         callLayoutBtn.setAttribute("aria-expanded", String(open));
-        // (the dock stays up while it's open)
+        // (the dock, or the floating window's pill, stays up while it's open)
         setTimeout(() => placeBottomDock());
+        keepPill();
         if (!open) return;
         callLayoutMenu.classList.remove("up");
         const box = callLayoutBtn.getBoundingClientRect();
@@ -1873,6 +1912,7 @@
         callLeaveMenu.hidden = !open;
         callLeaveBtn.setAttribute("aria-expanded", String(open));
         setTimeout(() => placeBottomDock());
+        keepPill();
     };
     const callLeaveOption = (className, icon, text, target) => {
         const button = el("button", `room-leave-opt ${className}`);
@@ -1926,7 +1966,8 @@
     unitFloatBtn.append(el("i"));
     roomFoot.insertBefore(unitPeopleBtn, leaveWrap);
     roomFoot.insertBefore(unitFloatBtn, leaveWrap);
-    const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px)");
+    // (also a computer's window made as narrow as a phone: the phone's call window)
+    const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px), (orientation: portrait) and (max-width: 600px)");
     const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
     const unitMode = () => !!room && (phoneUpright.matches || phoneSideways.matches);
     footInCall = () => unitMode() ? callWin : null;
@@ -2023,42 +2064,60 @@
             return sum + child.offsetWidth + parseFloat(own.marginLeft) + parseFloat(own.marginRight);
         }, parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + Math.max(0, shown.length - 1) * (parseFloat(style.columnGap) || 0)) + 2;
     };
-    // (a phone's small floating window, just the videos: its call bar is a pill outside it)
-    const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W
-        : callWin.classList.contains("mini") ? 96 : Math.max(150, Math.ceil(footWidth()));
+    // The smallest it can be resized to: everyone's video stays big enough to see, and the buttons
+    // on your own video inside it. (Floating with everyone's video - "mini" - its buttons are a pill
+    // outside it; otherwise as wide as its bar.)
+    const callMinW = () => {
+        const mini = callWin.classList.contains("mini");
+        if (!callWin.classList.contains("unit")) return mini ? 160 : CALL_MIN_W;
+        return mini ? 112 : Math.max(150, Math.ceil(footWidth()));
+    };
     const CALL_MIN_H = 88;
-    const DOCK_MIN_W = 140;
+    const callMinH = () => !callWin.classList.contains("mini") ? CALL_MIN_H : callWin.classList.contains("unit") ? 100 : 120;
+    // (pinned left: wide enough for its buttons on two rows)
+    const DOCK_MIN_W = 180;
     const dockMaxW = () => Math.max(DOCK_MIN_W, Math.min(560, playerPage.getBoundingClientRect().width * 0.45));
     const within = (value, min, max) => Math.max(min, Math.min(value, max));
     const callOrient = page => page.width >= page.height ? "landscape" : "portrait";
     // Around the pictures: its sides and bottom, its border, and the title bar (on a phone, the
     // call bar below them) - as it is now, while the pictures show
     const callChrome = () => {
+        // (just the videos: its padding and border; the buttons are a pill outside it)
+        if (callWin.classList.contains("mini")) return { x: 10, y: 10 };
         if (!callWin.hidden && callGrid.offsetHeight && callGrid.offsetWidth) {
             return { x: callWin.offsetWidth - callGrid.offsetWidth, y: callWin.offsetHeight - callGrid.offsetHeight };
         }
         return callWin.classList.contains("unit") ? { x: 18, y: (roomFoot.offsetHeight || 56) + 10 }
             : { x: CALL_PAD * 2 + 2, y: (callBar.offsetHeight || 30) + CALL_PAD + 2 };
     };
+    // The shape of everyone's cameras (width / height): a phone's upright is tall, a laptop's wide.
+    // From the videos themselves (each tile learns its own), 4:3 until one says.
+    const callRatio = () => {
+        const ratios = [...call.tiles.values()].filter(tile => tile.ratio && tile.el.classList.contains("camera")).map(tile => tile.ratio);
+        return ratios.length ? ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length : 4 / 3;
+    };
     // The size that fits everyone: one under another when the screen is wider than tall (a
-    // computer, a phone held sideways), side by side when it's taller (a phone held upright)
+    // computer, a phone held sideways), side by side when it's taller (a phone held upright). Each
+    // picture in its camera's shape, about as large as a 4:3 one would be.
     const fittingCallSize = (page, count, landscape) => {
-        // (a computer's: wide enough for its whole title bar on one line)
-        const tile = !isTouch ? 232 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
-        const tall = tile * 3 / 4;
+        const base = !isTouch && !callWin.classList.contains("unit") ? 232 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
+        const ratio = callRatio();
+        const tall = Math.sqrt(base * base * 3 / 4 / ratio);
+        const tile = tall * ratio;
         const chrome = callChrome();
         return landscape
             ? { w: tile + chrome.x, h: count * tall + (count - 1) * CALL_GAP + chrome.y }
             : { w: count * tile + (count - 1) * CALL_GAP + chrome.x, h: tall + chrome.y };
     };
-    // How many across: whatever makes everyone's picture largest (as a 4:3 picture) in this shape
+    // How many across: whatever makes everyone's picture largest (in their cameras' shape) here
     const fitCall = (count, width, height) => {
+        const ratio = callRatio();
         let best = { cols: 1, rows: count, size: -1 };
         for (let cols = 1; cols <= count; cols++) {
             const rows = Math.ceil(count / cols);
             const across = (width - (cols - 1) * CALL_GAP) / cols;
             const down = (height - (rows - 1) * CALL_GAP) / rows;
-            const size = Math.min(across, down * 4 / 3);
+            const size = Math.min(across, down * ratio);
             if (size > best.size + 0.5) best = { cols, rows, size };
         }
         return best;
@@ -2084,7 +2143,7 @@
         const size = call.sizes[orient] || fittingCallSize(page, count, orient === "landscape");
         const minW = callMinW();
         const width = Math.round(within(size.w, minW, Math.max(minW, page.width - 16)));
-        const height = Math.round(within(size.h, CALL_MIN_H, Math.max(CALL_MIN_H, page.height - 16)));
+        const height = Math.round(within(size.h, callMinH(), Math.max(callMinH(), page.height - 16)));
         callWin.style.width = `${width}px`;
         callWin.style.height = `${height}px`;
         const chrome = callChrome();
@@ -2141,7 +2200,7 @@
         if (call.pos) {
             x = call.pos.x * (page.width - width);
             y = call.pos.y * (page.height - height);
-        } else if (callWin.classList.contains("mini")) {
+        } else if (callWin.classList.contains("mini") && callWin.classList.contains("unit")) {
             // (a phone's small window: the bottom right corner, like picture in picture)
             x = page.width - width - 12;
             y = page.height - height - 16;
@@ -2208,9 +2267,9 @@
             w = within(s.w - dx, minW, s.x + s.w - margin);
             x = s.x + s.w - w;
         }
-        if (s.edge.includes("s")) h = within(s.h + dy, CALL_MIN_H, page.height - margin - s.y);
+        if (s.edge.includes("s")) h = within(s.h + dy, callMinH(), page.height - margin - s.y);
         if (s.edge.includes("n")) {
-            h = within(s.h - dy, CALL_MIN_H, s.y + s.h - margin);
+            h = within(s.h - dy, callMinH(), s.y + s.h - margin);
             y = s.y + s.h - h;
         }
         resizeCall(x, y, w, h);
@@ -2220,6 +2279,7 @@
         call.sizing = null;
         callWin.classList.remove("resizing");
         keepCallPlace();
+        placeDeskPill();
     };
     [...callEdges, callResize].forEach(handle => {
         handle.addEventListener("pointerdown", e => startCallResize(e, handle));
@@ -2236,7 +2296,7 @@
         const page = playerPage.getBoundingClientRect();
         const times = e.shiftKey ? 3 : 1;
         const w = within(callWin.offsetWidth + step[0] * times, callMinW(), page.width - 8 - call.x);
-        const h = within(callWin.offsetHeight + step[1] * times, CALL_MIN_H, page.height - 8 - call.y);
+        const h = within(callWin.offsetHeight + step[1] * times, callMinH(), page.height - 8 - call.y);
         resizeCall(call.x, call.y, w, h);
         keepCallPlace();
     });
@@ -2265,7 +2325,7 @@
         const pinch = call.pinch;
         const page = playerPage.getBoundingClientRect();
         const most = Math.min((page.width - 16) / pinch.w, (page.height - 16) / pinch.h);
-        const least = Math.max(callMinW() / pinch.w, CALL_MIN_H / pinch.h);
+        const least = Math.max(callMinW() / pinch.w, callMinH() / pinch.h);
         const s = within(scale, Math.min(least, most), Math.max(least, most));
         const w = pinch.w * s;
         const h = pinch.h * s;
@@ -2343,6 +2403,7 @@
         call.drag = null;
         if (!drag.live) return;
         callWin.classList.remove("dragging");
+        placeDeskPill();
         // A tap (not a drag) on a phone's small floating window: its call bar shows, or hides
         if (e.type === "pointerup" && callWin.classList.contains("mini") && !roomFoot.contains(drag.target)
             && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 8) showUnitBar(!callWin.classList.contains("bar-open"));
@@ -2366,17 +2427,26 @@
     // just the videos. A tap on it shows its call bar as a pill below it (above it, low on the
     // screen) for a few seconds; minimized, or with nobody's video yet, it's the bar itself.
     let unitBarTimer = null;
+    // The pill below the window (above it when it's low on the screen), kept on the screen: moved
+    // across when the window is near an edge
+    const placePill = () => {
+        const pill = callWin.classList.contains("unit") ? roomFoot : callBar;
+        const box = callWin.getBoundingClientRect();
+        const page = playerPage.getBoundingClientRect();
+        const tall = (pill.offsetHeight || 50) + 16;
+        callWin.classList.toggle("bar-up", box.bottom + tall > page.bottom && box.top - tall > page.top);
+        const wide = pill.offsetWidth;
+        const left = box.left + box.width / 2 - wide / 2;
+        const fits = Math.max(page.left + 8, Math.min(left, page.right - 8 - wide));
+        callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
+    };
+    // (a computer's: placed as it's pointed at, and as it's dragged or resized)
+    const placeDeskPill = () => callWin.classList.contains("mini") && !callWin.classList.contains("unit") && placePill();
+    callWin.addEventListener("pointerenter", e => e.pointerType !== "touch" && placeDeskPill());
     const showUnitBar = open => {
         clearTimeout(unitBarTimer);
         if (open) {
-            const box = callWin.getBoundingClientRect();
-            const page = playerPage.getBoundingClientRect();
-            callWin.classList.toggle("bar-up", box.bottom + 70 > page.bottom && box.top - 70 > page.top);
-            // (kept on the screen: moved across when the window is near an edge)
-            const wide = roomFoot.offsetWidth;
-            const left = box.left + box.width / 2 - wide / 2;
-            const fits = Math.max(page.left + 8, Math.min(left, page.right - 8 - wide));
-            callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
+            placePill();
             unitBarTimer = setTimeout(function hide() {
                 if (leavePopover && !leavePopover.hidden) unitBarTimer = setTimeout(hide, 2000);
                 else showUnitBar(false);
@@ -2392,11 +2462,17 @@
         const unit = callWin.classList.contains("unit");
         const folded = call.collapsed && (!call.dock || unit);
         const alone = callWin.classList.contains("no-people");
-        const mini = unit && !call.dock && !call.collapsed && !alone;
+        // Floating with everyone's video (phones and computers): just the videos; the buttons are
+        // a pill outside it - a tap shows it on a phone, pointing at it on a computer
+        const mini = !call.dock && !call.collapsed && !alone;
         if (mini !== callWin.classList.contains("mini")) {
             callWin.classList.toggle("mini", mini);
             showUnitBar(false);
         }
+        // Your camera on and your video showing: your mic and camera buttons are on your video
+        // (pointed at, on a computer; always, on a touch screen), not in the bar
+        const ownOnVideo = camEnabled && !alone && (call.dock === "bottom" ? callWin.classList.contains("has-video") && !call.collapsed : !folded);
+        callWin.classList.toggle("own-ctl", ownOnVideo);
         unitPeopleBtn.disabled = alone;
         unitChevron.className = `fa-solid ${call.collapsed ? "fa-chevron-up" : "fa-chevron-down"} room-unit-chevron`;
         unitPeopleBtn.title = alone ? "Just you: turn your camera on to see yourself" : call.collapsed ? "Show everyone's video" : "Fold everyone's video away";
@@ -2432,7 +2508,7 @@
         callLayoutBtn.setAttribute("aria-label", `Call layout: ${current.text}`);
         layoutOptions.forEach(option => {
             option.setAttribute("aria-checked", String(option.dataset.mode === layout));
-            option.hidden = (option.dataset.mode === "side" || option.dataset.mode === "top") && !call.dockable && option.dataset.mode !== layout;
+            option.hidden = option.dataset.mode === "side" && !call.dockable && option.dataset.mode !== layout;
         });
         callWin.dataset.layout = layout;
         if (unit) showCallLayout(false);
@@ -2532,9 +2608,12 @@
             if (!unit) {
                 // Computers: the dock over the bottom of the video, or pinned left of it or above
                 // it (where the page has room for that, and there's someone to show: else the dock)
-                const pinned = (call.dockPos === "side" || call.dockPos === "top") && call.dockable
-                    && !callWin.classList.contains("no-people");
-                if (wanted && !callWin.hidden && !playerPage.hidden) dock = pinned ? call.dockPos : "bottom";
+                // Pinned, with the room's panel open: every bit of the screen used - the video in the
+                // middle, everyone's video in a row above the panel, the buttons as a dock below the
+                // video ("rail"); with the panel closed, a column left of the video ("side")
+                const pinned = call.dockPos === "side" && call.dockable && !callWin.classList.contains("no-people");
+                const panelOpen = !panel.hidden && playerPage.classList.contains("room-open");
+                if (wanted && !callWin.hidden && !playerPage.hidden) dock = !pinned ? "bottom" : panelOpen ? "rail" : "side";
             } else if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
                 // Phones: a strip at the bottom held upright, a column on the left held sideways
                 dock = upright ? "strip" : "side";
@@ -2544,6 +2623,8 @@
             callWin.classList.toggle("side", dock === "side");
             callWin.classList.toggle("top", dock === "top");
             callWin.classList.toggle("strip", dock === "strip");
+            callWin.classList.toggle("rail", dock === "rail");
+            playerPage.classList.toggle("call-dock-rail", dock === "rail");
             playerPage.classList.toggle("call-dock-side", dock === "side");
             playerPage.classList.toggle("call-dock-top", dock === "top");
             playerPage.classList.toggle("call-dock-below", dock === "strip");
@@ -2773,6 +2854,13 @@
         };
     };
 
+    const setTileRatio = (tile, ratio) => {
+        tile.ratio = ratio;
+        if (ratio) tile.el.style.setProperty("--ar", ratio.toFixed(4));
+        else tile.el.style.removeProperty("--ar");
+        tile.el.classList.toggle("portrait", !!ratio && ratio < 1);
+    };
+
     const renderCameras = () => {
         const people = callPeople();
         // On a phone: the call bar in it, and it's there all through a room
@@ -2813,7 +2901,18 @@
                 mic.append(el("i"));
                 const name = el("figcaption", "room-call-name");
                 figure.append(video, face, mic, name);
-                tile = { el: figure, video, face, mic, name, track: null, look: "" };
+                tile = { el: figure, video, face, mic, name, track: null, look: "", ratio: 0 };
+                // The camera's shape (a phone's upright is tall, a laptop's wide): the tile takes it
+                // where it's sized by its height (strips), and the window's size fits it
+                const own = tile;
+                const fitTile = () => {
+                    const ratio = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 0;
+                    if (Math.abs(own.ratio - ratio) < 0.01) return;
+                    setTileRatio(own, ratio);
+                    layoutCall();
+                };
+                video.addEventListener("loadedmetadata", fitTile);
+                video.addEventListener("resize", fitTile);
                 // Your own: hover overlay with mic, camera, and camera switching controls
                 if (person.me) {
                     // Hover overlay: mic, cam, flip — shown on hover, hidden otherwise
@@ -2863,7 +2962,9 @@
             tile.mic.classList.toggle("off", !person.mic);
             tile.mic.firstChild.className = `fa-solid ${person.mic ? "fa-microphone" : "fa-microphone-slash"}`;
             tile.mic.title = person.mic ? "Mic on" : "Muted";
-            tile.el.title = `${label} · ${person.mic ? "mic on" : "muted"}${person.track ? "" : " · camera off"}`;
+            // (your own: no tooltip over your buttons)
+            if (person.me) tile.el.removeAttribute("title");
+            else tile.el.title = `${label} · ${person.mic ? "mic on" : "muted"}${person.track ? "" : " · camera off"}`;
             if (syncHoverControls) syncHoverControls();
             // Their avatar while their camera is off
             const look = `${person.name}|${person.avatar || ""}`;
@@ -2875,6 +2976,7 @@
                 tile.track = person.track;
                 tile.video.srcObject = person.track ? new MediaStream([person.track]) : null;
                 if (person.track) tile.video.play().catch(() => {});
+                else setTileRatio(tile, 0);
             }
         });
         // In order (moved only when it changed, so nothing playing is interrupted)
@@ -5411,6 +5513,8 @@
     soloRoomCard.append(soloRoomText, soloRoomBtn);
     queueTab.append(soloRoomCard);
 
+    // (the queue's search, set up further down; the queue may be drawn before that)
+    let filterQueueHook = () => {};
     const renderQueue = () => {
         const queue = room ? (room.file && room.file.yt && room.queue || { index: 0, items: [] }) : soloQueue;
         const edit = room ? canShareYouTube() : true;
@@ -5482,6 +5586,8 @@
             }
             return li;
         }));
+        // (searching the queue: still only what matches)
+        filterQueueHook();
         // Keep the current video in view when it changes
         const now = items[queue.index];
         if (now && scrolledTo !== now.k) {
@@ -5549,6 +5655,51 @@
         else sendQueueOp({ op, k });
     });
 
+    // ---------- The queue's search box: typing finds videos in the queue (the rest step aside, and
+    // how many match shows); Enter searches YouTube for it, and a pasted link is added
+    const queueFilterNote = el("div", "room-queue-filter");
+    queueFilterNote.hidden = true;
+    const queueFilterText = el("span");
+    const queueFilterSearch = el("button", "room-link-btn room-queue-filter-yt");
+    queueFilterSearch.type = "button";
+    queueFilterNote.append(queueFilterText, queueFilterSearch);
+    queueList.after(queueFilterNote);
+    queueFilterSearch.addEventListener("click", () => {
+        const val = queueAddInput.value.trim();
+        if (val) openSearch(val);
+    });
+    const filterQueue = () => {
+        if (!queueAddInput) return;
+        const value = queueAddInput.value.trim();
+        const words = value && !parseYouTube(value) ? value.toLowerCase().split(/\s+/).filter(Boolean) : [];
+        const rows = [...queueList.children];
+        let found = 0;
+        rows.forEach(row => {
+            const title = (row.querySelector(".room-queue-info b") || {}).textContent || "";
+            const hit = words.every(word => title.toLowerCase().includes(word));
+            row.hidden = !hit;
+            if (hit) found++;
+            // (not dragged while searched: what shows isn't the whole queue)
+            if (row.dataset.drag === undefined) row.dataset.drag = row.draggable ? "1" : "";
+            row.draggable = !words.length && !!row.dataset.drag;
+        });
+        const filtering = words.length > 0;
+        queueList.classList.toggle("filtered", filtering);
+        queueFilterNote.hidden = !filtering;
+        if (filtering) {
+            queueFilterText.textContent = !rows.length ? "Nothing in the queue yet"
+                : found ? `${found} of ${rows.length} in the queue` : "Nothing in the queue matches";
+            queueFilterSearch.replaceChildren(el("i", "fa-brands fa-youtube"), ` Search YouTube for “${value}”`);
+            queueEmpty.hidden = true;
+        } else queueEmpty.hidden = !!rows.length;
+    };
+    filterQueueHook = filterQueue;
+    if (queueAddInput) {
+        queueAddInput.placeholder = "Search the queue, or paste a YouTube link";
+        queueAddInput.setAttribute("aria-label", "Search the queue, or paste a YouTube link to add it");
+        queueAddInput.addEventListener("input", filterQueue);
+    }
+
     if (queueAddForm && queueAddInput) {
         queueAddForm.addEventListener("submit", e => {
             e.preventDefault();
@@ -5557,8 +5708,10 @@
             const ref = parseYouTube(val);
             if (ref) {
                 const refused = together.queueYouTube(ref);
-                if (!refused) queueAddInput.value = "";
-                else showQueueHint(refused);
+                if (!refused) {
+                    queueAddInput.value = "";
+                    filterQueue();
+                } else showQueueHint(refused);
             } else {
                 openSearch(val);
             }

@@ -4,6 +4,53 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.5] - 2026-11-20
+
+### Player
+- A browser window made as narrow as a phone (600 px or less) takes the phone's layout, whatever
+  the device: the title and details below the video, the phone's controls (settings sheet, Stop
+  along the bottom), the search as a full sheet, the room's panel as a sheet below, and the call
+  as the phone's call bar and small floating window. Widened again, it goes back to the computer's
+- Computers: speed and subtitles moved from the control bar into the More menu (its first
+  sections: speed presets and a custom speed; subtitles Off / On / Load file…). `C` and
+  Shift + < / > still work; the menu scrolls when the player is short
+- Phones: the Stop button moved from beside play / pause in the middle of the picture to the
+  buttons along the bottom, before picture in picture
+- Search (Ctrl+K) no longer shows a vertical scrollbar (it still scrolls)
+- Room notices on phones have their own look and place: small rounded notices centred on the
+  video just below its top bar, sliding down into place (at most three at once; people asking to
+  join always stay), never over the room's panel, the call's column or its bar, upright or
+  sideways. Computers keep the bottom left, moved clear of a call column pinned left of the video
+
+### Search and queue
+- Search (Ctrl+K): instead of a long list of everything watched before, the last 8 videos played
+  show as a row of pictures, scrolling across, each with its title and where it's from below and
+  how far it got along the bottom of its picture. Typing narrows the row; arrow keys and Enter
+  still choose
+- The Queue tab's search box searches the queue: typing shows only the videos whose titles match
+  (with how many), and offers to search YouTube for it; Enter still searches YouTube, and a pasted
+  link is still added to the queue
+
+### Video call
+- Computers: "Pin above the video" is gone (anyone who had it is pinned to the side instead); the
+  layouts are Dock on the video, Pin to the side and Floating window
+- Pinned to the side with the room's panel open, nothing is left empty: the video in the middle,
+  as large as it fits; everyone's video in a row above the panel (scrolling across when there are
+  many), the panel as it is below it; and the call's buttons as a dock centred just below the
+  video. With the panel closed, it's the column left of the video again
+- Your camera on: your mic, camera and camera-switch buttons are on your own video (pointed at on
+  a computer, always there on a touch screen) and leave the dock and call bar while it shows
+- Computers: floating, the call window is just everyone's video; pointed at, its buttons show as a
+  pill below it (above it when it's low on the screen), kept on the screen, like on a phone
+- Phones: the floating window resizes from any edge or corner with a finger, to any shape (corner
+  marks show while its bar is up); two fingers still pinch it
+- Each camera keeps its own shape (a phone's upright is tall, a laptop's wide): the window starts
+  in that shape, strips and the dock size tiles to it, and a window reshaped by hand shows the
+  whole picture instead of cropping it
+- Minimum sizes: floating 160 x 120 on a computer (112 x 100 on a phone), pinned left at least
+  180 px wide; the buttons on your video shrink with small tiles, so nothing spills out
+- The resize corner no longer draws diagonal lines (it still resizes; the pointer shows it)
+
 ## [1.6.4] - 2026-11-20
 
 ### Video call: a dock on computers, a picture in picture window on phones

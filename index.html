@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.6.4">
+  <meta name="version" content="1.6.5">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.6.4",
+      "softwareVersion": "1.6.5",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -390,7 +390,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.6.4</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.6.5</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -545,7 +545,7 @@
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
             <dt><kbd>Q</kbd></dt><dd>Queue panel: show / hide</dd>
             <dt><kbd>R</kbd></dt><dd>Room panel: show / hide (outside a room: Watch together)</dd>
-            <dt><kbd>D</kbd></dt><dd>Video call window: dock it (sidebar or strip above the video) / float it again</dd>
+            <dt><kbd>D</kbd></dt><dd>Video call window: dock it (on the video, or pinned to the side) / float it again</dd>
             <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
             <dt><kbd>Ctrl</kbd>+<kbd>K</kbd><kbd>/</kbd></dt><dd>Search YouTube, paste a link, or run a command (a time like 1:23, a speed like 1.5x)</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
@@ -713,33 +713,37 @@
 
         <li class="options right">
           <button class="open-file" title="Open another video or audio file"><i class="fa-solid fa-folder-open"></i></button>
-          <button class="subtitles" title="Load subtitles from an .srt / .vtt file (C)"><i class="fa-regular fa-closed-captioning"></i></button>
+          <!-- Subtitles and speed are in More (C and Shift + < / > still work); these stay for the
+               keyboard and the phone's settings sheet, out of sight -->
+          <button class="subtitles" title="Load subtitles from an .srt / .vtt file (C)" hidden><i class="fa-regular fa-closed-captioning"></i></button>
+          <button class="playback-speed" title="Playback speed (Shift + &lt; / &gt;)" hidden><i class="fa-solid fa-gauge-high"></i></button>
 
-          <!-- Playback Speed Menu -->
-          <div class="popup-menu-wrapper playback-content">
-            <button class="playback-speed" title="Playback speed (Shift + &lt; / &gt;)"><i class="fa-solid fa-gauge-high"></i></button>
-            <div class="popup-menu speed-options">
-              <div class="menu-header"><span>Speed</span><span class="speed-current">Normal</span></div>
-              <ul class="speed-presets">
-                <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li>
-                <li data-speed="0.75" title="Play at 0.75x speed">0.75x</li>
-                <li data-speed="1" title="Play at normal speed" class="active">Normal</li>
-                <li data-speed="1.25" title="Play at 1.25x speed">1.25x</li>
-                <li data-speed="1.5" title="Play at 1.5x speed">1.5x</li>
-                <li data-speed="2" title="Play at 2x speed">2x</li>
-              </ul>
-              <div class="speed-custom">
-                <span>Custom</span>
-                <input type="range" class="speed-slider" min="0.25" max="4" step="0.05" value="1" title="Drag to choose any speed from 0.25x to 4x">
-                <input type="number" class="speed-input" min="0.25" max="4" step="0.05" value="1" title="Type a speed from 0.25 to 4, then press Enter" aria-label="Custom speed">
-              </div>
-            </div>
-          </div>
-
-          <!-- More: the picture's shape and a volume boost -->
+          <!-- More: speed, subtitles, the picture's shape, ambient mode, a volume boost, shortcuts -->
           <div class="popup-menu-wrapper more-content">
-            <button class="more-btn" title="More: picture shape, ambient mode, volume boost, keyboard shortcuts" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <button class="more-btn" title="More: speed, subtitles, picture, ambient mode, volume boost, keyboard shortcuts" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             <div class="popup-menu more-options">
+              <div class="speed-options">
+                <div class="menu-header"><span>Speed</span><span class="speed-current">Normal</span></div>
+                <ul class="speed-presets">
+                  <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li>
+                  <li data-speed="0.75" title="Play at 0.75x speed">0.75x</li>
+                  <li data-speed="1" title="Play at normal speed" class="active">Normal</li>
+                  <li data-speed="1.25" title="Play at 1.25x speed">1.25x</li>
+                  <li data-speed="1.5" title="Play at 1.5x speed">1.5x</li>
+                  <li data-speed="2" title="Play at 2x speed">2x</li>
+                </ul>
+                <div class="speed-custom">
+                  <span>Custom</span>
+                  <input type="range" class="speed-slider" min="0.25" max="4" step="0.05" value="1" title="Drag to choose any speed from 0.25x to 4x">
+                  <input type="number" class="speed-input" min="0.25" max="4" step="0.05" value="1" title="Type a speed from 0.25 to 4, then press Enter" aria-label="Custom speed">
+                </div>
+              </div>
+              <div class="menu-header"><span>Subtitles</span><span class="subs-current">Off</span></div>
+              <ul class="option-chips subs-options">
+                <li data-subs="off" title="Hide the subtitles (C)">Off</li>
+                <li data-subs="on" title="Show the subtitles (C)">On</li>
+                <li data-subs="load" title="Load subtitles from an .srt / .vtt file"><i class="fa-solid fa-file-arrow-up"></i> Load file…</li>
+              </ul>
               <div class="menu-header"><span>Picture</span><span class="aspect-current">Fit</span></div>
               <ul class="option-chips aspect-options">
                 <li data-aspect="fit" title="The whole picture, with black bars where it doesn't match the screen">Fit</li>

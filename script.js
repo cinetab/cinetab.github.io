@@ -289,7 +289,8 @@ const syncMetaTitle = () => {
 new MutationObserver(syncMetaTitle).observe(videoTitle, { childList: true, characterData: true, subtree: true });
 syncMetaTitle();
 metaTitle.addEventListener("click", () => renameTitle(metaTitle));
-const uprightPhone = matchMedia("(pointer: coarse) and (orientation: portrait)");
+// (a phone held upright, or a window made as narrow as one: the phone's layout)
+const uprightPhone = matchMedia("(pointer: coarse) and (orientation: portrait), (max-width: 600px) and (orientation: portrait)");
 const placeTitle = () => playerPage.classList.toggle("title-below", uprightPhone.matches &&
     (!(document.fullscreenElement || document.webkitFullscreenElement) || playerPage.classList.contains("room-open")));
 placeTitle();
@@ -1048,11 +1049,16 @@ window.addEventListener("beforeunload", savePosition);
 // Popup menus (speed, More): one at a time, closed by a click elsewhere or Esc
 const moreBtn = container.querySelector(".more-btn"),
 moreOptions = container.querySelector(".more-options");
-const popupMenus = [speedOptions, moreOptions];
+// (speed is a section of More: speedOptions isn't a menu of its own any more)
+const popupMenus = [moreOptions];
 const togglePopup = menu => {
     const open = !menu.classList.contains("show");
     popupMenus.forEach(other => other.classList.toggle("show", other === menu && open));
-    if (open && menu === moreOptions) renderMoreOptions();
+    if (open && menu === moreOptions) {
+        // (as tall as the player leaves room for above the control bar; it scrolls past that)
+        moreOptions.style.maxHeight = `${Math.max(180, Math.min(600, container.clientHeight - 84))}px`;
+        renderMoreOptions();
+    }
 };
 const playerSheet = container.querySelector(".player-sheet");
 const closePopups = () => {
@@ -1313,6 +1319,16 @@ mainVideo.addEventListener("volumechange", syncBoostVolume);
 // The menu reflects what applies right now: YouTube's own player keeps its shape and volume
 function renderMoreOptions() {
     const youtube = container.classList.contains("youtube");
+    // Subtitles: on or off (a file loaded, YouTube's or the host's), or a file to load
+    const subsOn = subtitlesBtn.classList.contains("active");
+    const hasSubs = youtube || !!together.stream || mainVideo.textTracks.length > 0;
+    moreOptions.querySelectorAll(".subs-options li").forEach(chip => {
+        const kind = chip.dataset.subs;
+        chip.hidden = kind === "load" ? youtube && !together.stream : !hasSubs;
+        chip.classList.toggle("active", kind === "on" ? subsOn : kind === "off" ? hasSubs && !subsOn : false);
+    });
+    const subsCurrent = moreOptions.querySelector(".subs-current");
+    if (subsCurrent) subsCurrent.textContent = subsOn ? "On" : hasSubs ? "Off" : "None";
     // YouTube's player fills the picture, so it can be Fit or Fill (not the other shapes)
     aspectChips.forEach(chip => chip.hidden = youtube && !["fit", "fill"].includes(chip.dataset.aspect));
     moreOptions.querySelector(".aspect-options").classList.remove("disabled");
@@ -1324,6 +1340,18 @@ function renderMoreOptions() {
     if (!playerSheet.hidden) renderSheet();
 }
 renderMoreOptions();
+moreOptions.querySelector(".subs-options")?.addEventListener("click", e => {
+    const chip = e.target.closest("li[data-subs]");
+    if (!chip) return;
+    if (chip.dataset.subs === "load") {
+        closePopups();
+        return subtitleInput.click();
+    }
+    if ((chip.dataset.subs === "on") !== subtitlesBtn.classList.contains("active")) toggleSubtitles();
+    renderMoreOptions();
+    // (YouTube's and the host's answer a moment later)
+    setTimeout(renderMoreOptions, 400);
+});
 
 // ---------- Settings sheet (phones and tablets): speed, picture, boost, subtitles and files
 // in one place, like YouTube's. Each choice is the same as the desktop menus' (it clicks them),
@@ -1952,6 +1980,22 @@ document.addEventListener("fullscreenchange", endFloatFullscreen);
 document.addEventListener("webkitfullscreenchange", endFloatFullscreen);
 
 pipBtn.addEventListener("click", toggleCustomPiP);
+
+// Phones and tablets: Stop isn't beside play / pause in the middle of the picture; it's with the
+// buttons along the bottom, before picture in picture. Computers: beside play / pause.
+{
+    const stopBtn = container.querySelector(".player-stop-btn");
+    const playBtn = container.querySelector(".options.center .play-pause");
+    const coarse = matchMedia("(pointer: coarse), (max-width: 600px)");
+    const placeStop = () => {
+        if (!stopBtn || !playBtn) return;
+        if (coarse.matches) {
+            if (stopBtn.nextElementSibling !== pipBtn) pipBtn.before(stopBtn);
+        } else if (playBtn.nextElementSibling !== stopBtn) playBtn.after(stopBtn);
+    };
+    placeStop();
+    coarse.addEventListener("change", placeStop);
+}
 // (also the call window's button, room.js)
 together.pip = toggleCustomPiP;
 
@@ -2902,8 +2946,16 @@ const cmdPalette = (() => {
     const list = make("ul", "cmd-list");
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", "Commands");
+    // Recently played: the last 8, a row of pictures with their titles below, scrolling across
+    const recentBox = make("section", "cmd-recent");
+    recentBox.hidden = true;
+    recentBox.append(make("p", "cmd-recent-title", "Recently played"));
+    const recentRow = make("div", "cmd-recent-row");
+    recentRow.setAttribute("role", "listbox");
+    recentRow.setAttribute("aria-label", "Recently played");
+    recentBox.append(recentRow);
     const resultsHost = make("div", "yt-results cmd-results");
-    body.append(note, link, list, resultsHost);
+    body.append(note, link, list, recentBox, resultsHost);
     const foot = make("div", "cmd-foot");
     foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> close</span>";
     box.append(form, body, foot);
@@ -2920,7 +2972,7 @@ const cmdPalette = (() => {
     const recentVideos = () => {
         if (!window.CineHistory) return [];
         const list = CineHistory.list() || [];
-        return list.slice(0, 10).map(entry => {
+        return list.slice(0, 8).map(entry => {
             const isYt = entry.type === "video" || entry.type === "playlist";
             const title = entry.title || entry.name || (isYt ? "YouTube video" : "Video file");
             const icon = entry.type === "playlist" ? "fa-list" : isYt ? "fa-brands fa-youtube" : "fa-film";
@@ -2933,12 +2985,15 @@ const cmdPalette = (() => {
             if (entry.time && entry.time > 5) {
                 meta += ` · ${formatTime(entry.time)}`;
             }
+            const thumbId = isYt ? entry.id || null : null;
             return {
                 label: title,
                 meta,
                 icon,
                 recent: true,
                 entry,
+                thumb: thumbId ? `https://i.ytimg.com/vi/${thumbId}/mqdefault.jpg` : "",
+                progress: entry.time > 5 && entry.duration > 0 ? Math.min(1, entry.time / entry.duration) : 0,
                 run: async () => {
                     close();
                     if (entry.type === "file") {
@@ -3038,24 +3093,27 @@ const cmdPalette = (() => {
         } else {
             const words = query.toLowerCase().split(/\s+/).filter(Boolean);
             const search = youtube() ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
-            const matchingRecent = allRecent.filter(item => words.every(word => item.label.toLowerCase().includes(word)));
-            items = [...search, ...matchingRecent].slice(0, 10);
+            const matchingRecent = allRecent.filter(item => words.every(word => `${item.label} ${item.meta}`.toLowerCase().includes(word)));
+            items = [...search, ...matchingRecent];
         }
         if (freshChoice) chosen = preferred;
         freshChoice = false;
         chosen = Math.min(chosen, Math.max(0, items.length - 1));
-        if (!items.length) {
-            if (!query) {
+        renderRecent();
+        const rows = items.map((item, i) => [item, i]).filter(([item]) => !item.recent);
+        if (!rows.length) {
+            if (!query && !items.length) {
                 list.innerHTML = `<li class="cmd-empty"><i class="fa-solid fa-clock-rotate-left"></i><span>No recent videos</span><small>Search YouTube or paste a link above</small></li>`;
                 list.hidden = false;
                 return;
             }
             list.replaceChildren();
             list.hidden = true;
+            markChosen();
             return;
         }
-        list.replaceChildren(...items.map((item, i) => {
-            const li = make("li", `cmd-item${item.danger ? " danger" : ""}${item.search ? " search" : ""}${item.recent ? " recent" : ""}`);
+        list.replaceChildren(...rows.map(([item, i]) => {
+            const li = make("li", `cmd-item${item.danger ? " danger" : ""}${item.search ? " search" : ""}`);
             li.setAttribute("role", "option");
             li.id = `cmd-item-${i}`;
             li.dataset.i = i;
@@ -3074,11 +3132,58 @@ const cmdPalette = (() => {
         list.hidden = false;
         markChosen();
     };
+    // The recent ones: a card each - the video's picture (a film for a file from this device) with
+    // how far it got along its bottom, its title below, and where it's from
+    const renderRecent = () => {
+        const cards = items.map((item, i) => [item, i]).filter(([item]) => item.recent);
+        recentBox.hidden = !cards.length;
+        recentRow.replaceChildren(...cards.map(([item, i]) => {
+            const card = make("button", "cmd-card");
+            card.type = "button";
+            card.setAttribute("role", "option");
+            card.id = `cmd-item-${i}`;
+            card.dataset.i = i;
+            card.title = item.label;
+            const thumb = make("span", `cmd-card-thumb${item.thumb ? "" : " blank"}`);
+            if (item.thumb) {
+                const img = make("img");
+                img.src = item.thumb;
+                img.alt = "";
+                img.loading = "lazy";
+                img.decoding = "async";
+                img.addEventListener("error", () => {
+                    img.remove();
+                    thumb.classList.add("blank");
+                });
+                thumb.append(img);
+            }
+            thumb.append(make("i", `${/^fa-(brands|regular)/.test(item.icon) ? "" : "fa-solid "}${item.icon} cmd-card-icon`));
+            if (item.progress) {
+                const bar = make("span", "cmd-card-progress");
+                const fill = make("i");
+                fill.style.width = `${Math.round(item.progress * 100)}%`;
+                bar.append(fill);
+                thumb.append(bar);
+            }
+            card.append(thumb, make("span", "cmd-card-title", item.label), make("span", "cmd-card-meta", item.meta));
+            return card;
+        }));
+    };
+    recentRow.addEventListener("click", e => {
+        const card = e.target.closest(".cmd-card");
+        if (card) runItem(items[+card.dataset.i]);
+    });
+    // (a mouse wheel scrolls the row across)
+    recentRow.addEventListener("wheel", e => {
+        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || recentRow.scrollWidth <= recentRow.clientWidth) return;
+        e.preventDefault();
+        recentRow.scrollLeft += e.deltaY;
+    }, { passive: false });
     const markChosen = () => {
-        [...list.children].forEach((li, i) => {
-            const on = i === chosen;
-            li.classList.toggle("chosen", on);
-            li.setAttribute("aria-selected", String(on));
+        body.querySelectorAll(".cmd-item[data-i], .cmd-card[data-i]").forEach(node => {
+            const on = +node.dataset.i === chosen;
+            node.classList.toggle("chosen", on);
+            node.setAttribute("aria-selected", String(on));
         });
         if (items.length) input.setAttribute("aria-activedescendant", `cmd-item-${chosen}`);
         else input.removeAttribute("aria-activedescendant");
@@ -3128,7 +3233,8 @@ const cmdPalette = (() => {
         results = CineYouTube.createResults({
             host: resultsHost,
             input,
-            suggest: true,
+            // (what was watched before: the Recently played row, not a long list)
+            suggest: false,
             compact: true,
             actions: resultActions,
             onPick: (ref, where, item) => pick(ref, where, item.kind === "playlist"
@@ -3228,6 +3334,7 @@ const cmdPalette = (() => {
             items = [];
             list.replaceChildren();
             list.hidden = true;
+            recentBox.hidden = true;
             return;
         }
         renderList();
@@ -3243,7 +3350,7 @@ const cmdPalette = (() => {
             e.preventDefault();
             chosen = (chosen + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
             markChosen();
-            list.children[chosen]?.scrollIntoView({ block: "nearest" });
+            body.querySelector(`#cmd-item-${chosen}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
         }
     });
     form.addEventListener("submit", e => {
