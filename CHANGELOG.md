@@ -4,6 +4,36 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.6] - 2026-11-20
+
+### Video call window
+- Mic and camera buttons right in the call window (a row below everyone, and inside the pill when
+  it's folded up), so they can be turned on or off without opening the room's panel; they stay in
+  step with the panel's own buttons
+- Dock it as a panel (the new button in its title bar), and float it again the same way:
+  computers and phones held sideways get a column on the left of the video, everyone one under
+  another, scrolling up and down (Wider / Narrower); phones held upright get a strip below the
+  video's details or the room's chat, just above the call bar, everyone side by side, scrolling
+  across. Remembered. A phone held upright in fullscreen floats it, so the video keeps the screen
+
+### Room panel
+- People and Invite are one tab: who's in the room, then the QR code, code, password and invite
+  link below them (a new host starts there)
+- Searching YouTube has its own Search tab (the YouTube button in Now playing opens it), and the
+  Queue tab is just the queue, with Find more videos under it. Picking videos in Search no longer
+  jumps away to the queue when the first one starts
+- A YouTube link pasted in Search shows a card with its picture, title and what it is (a video,
+  a playlist, a Mix / radio, a time to start from), with Play now and Add to queue. A video in a
+  playlist or a Mix can go with the rest of its list, or on its own. Enter on a link no longer
+  queues it straight away; Enter on words searches
+- Play now on a video in a playlist (with something already playing) starts at that video, not
+  the playlist's first one; Add to queue adds the list from that video on
+- A Mix YouTube won't open in an embedded player (when its first video can't be embedded): the
+  video is still added, and the chat says why and that Autoplay carries on like a radio
+- Phones held upright: while Search shows results or suggestions, the room's panel grows into a
+  sheet up to the top of the screen, and the keyboard closes once a search starts, so the
+  results have room to scroll; clearing the search puts it back
+
 ## [1.5.5] - 2026-11-20
 
 ### Video call window
@@ -600,6 +630,10 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.5.6]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.6
+[1.5.5]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.5
+[1.5.4]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.4
+[1.5.3]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.3
 [1.5.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.2
 [1.5.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.1
 [1.5.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.0

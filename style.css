@@ -4908,6 +4908,61 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.18);
 }
 
+/* Your mic and camera (room.js): a row below everyone, or inside the pill once folded up */
+.room-call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.room-call-bar .room-call-controls {
+  gap: 6px;
+  padding: 0;
+}
+
+.room-call-controls .room-call-btn {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.room-call-bar .room-call-controls .room-call-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+}
+
+.room-call-controls .room-call-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.room-call-controls .room-call-btn.active {
+  background: #3e97fd;
+}
+
+.room-call-controls .room-call-btn.active:hover {
+  background: #2f86ea;
+}
+
+.room-call-controls .room-call-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.room-call.big .room-call-controls .room-call-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.room-call.big.collapsed .room-call-controls .room-call-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+}
+
 .room-call-grid {
   display: grid;
   grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
@@ -5465,29 +5520,151 @@ body > .room-toasts {
   color: #ff8a8a;
 }
 
+/* A pasted link (room.js): its picture, what it is, its title, then Play now / Add to queue */
+.room-link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(62, 151, 253, 0.35);
+  border-radius: 12px;
+  background: rgba(62, 151, 253, 0.07);
+}
+
+.room-link-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.room-link-thumb {
+  position: relative;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  font-size: 20px;
+  color: #ff4d4d;
+  background: #101015;
+}
+
+.room-link-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.room-link-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.room-link-kind {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6fb0ff;
+}
+
+.room-link-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.room-link-title.loading {
+  font-weight: 400;
+  color: #8f8f9e;
+}
+
+.room-link-whole {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #d6d6e2;
+  cursor: pointer;
+}
+
+.room-link-whole input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #3e97fd;
+}
+
+.room-link-actions .room-small-btn {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+/* Phones held upright: while Search shows results or suggestions, the room's panel is a sheet over
+   the video up to the top of the screen, so the results have room above the keyboard (room.js) */
+.player-page.now-below.search-expanded .room-panel {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 75;
+  background: #17171c;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.65);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The Search tab: before searching, a line on what it does under the box */
+.room-search-intro {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8f8f9e;
+}
+
+.room-search-intro i {
+  margin-right: 4px;
+  color: #ff4d4d;
+}
+
 /* Searching: the results take the whole tab and are all that scrolls (one scroll, so going back
-   up always works); the buttons, hint and queue step aside until the search is cleared */
-.room-tab-queue.searching {
+   up always works); the buttons, hint and intro step aside until the search is cleared */
+.room-tab-search.searching {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding-bottom: 6px;
 }
 
-.room-tab-queue.searching .room-queue-form {
+.room-tab-search.searching .room-queue-form {
   flex: 1;
   min-height: 0;
   margin-bottom: 0;
 }
 
-.room-tab-queue.searching :is(.room-queue-actions, .room-queue-hint, .room-queue-title, .room-queue) {
+.room-tab-search.searching :is(.room-link-card, .room-queue-hint, .room-search-intro) {
   display: none;
 }
 
-.room-panel .room-tab-queue.searching .room-queue-results {
+.room-panel .room-tab-search.searching .room-queue-results {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+}
+
+.room-tab-queue .room-queue-more {
+  margin-top: 12px;
 }
 
 .room-tab-queue.drop-link .room-queue {
@@ -6091,7 +6268,13 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Invite */
+/* Invite: under the people in the room, set apart by a line */
+.room-invite {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .room-qr {
   width: 176px;
   margin: 4px auto 0;
@@ -7542,6 +7725,163 @@ body > .room-toasts {
   /* The title between them, close to the picture */
   .player-page.room-open:is(:fullscreen, :-webkit-full-screen) > .player-meta:not(.empty) {
     padding: 2px 8px;
+  }
+}
+
+/* =================== CALL WINDOW, DOCKED AS A PANEL =================== */
+/* Docked (room.js): in the page's layout instead of floating over the picture. Beside the video
+   (.side: computers, phones held sideways), a column on its left with everyone one under another,
+   scrolling up and down; under it (.strip: phones held upright), a strip below the video's
+   details or the room's chat, just above the call bar, everyone side by side, scrolling across. */
+.room-call.docked {
+  position: relative;
+  left: auto;
+  top: auto;
+  z-index: auto;
+  transform: none !important;
+  flex-shrink: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #17171c;
+  box-shadow: none;
+  cursor: default;
+  touch-action: auto;
+  transition: background 1.2s ease;
+}
+
+/* Ambient mode: frosted glass, like the room's panel */
+.player-page.ambient-on .room-call.docked {
+  background: rgba(23, 23, 28, 0.62);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.room-call.docked .room-call-grip,
+.room-call.docked .room-call-resize {
+  display: none;
+}
+
+/* Docked, the tiles are large enough for names to stay */
+.room-call.docked.quiet .room-call-name {
+  opacity: 1;
+}
+
+/* Beside the video: the page gets a little space around, like with the room's panel open */
+.player-page.call-dock-side {
+  gap: 12px;
+  padding: 12px;
+}
+
+.player-page.call-dock-side .container {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+}
+
+.player-page.call-dock-side .container.fullscreen {
+  max-width: none;
+  height: 100%;
+  border-radius: 12px;
+}
+
+.room-call.docked.side {
+  --dock-w: 200px;
+  --tile: calc(var(--dock-w) - 16px);
+  order: -1;
+  align-self: stretch;
+  width: var(--dock-w);
+}
+
+.room-call.docked.side.big {
+  --dock-w: 280px;
+}
+
+.room-call.docked.side .room-call-grid {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+/* Under the video: a strip that scrolls across, tiles snapping into place */
+.room-call.docked.strip {
+  --tile: var(--strip-tile);
+  --strip-tile: 112px;
+  order: 1;
+  align-self: stretch;
+  width: auto;
+  margin: 0 12px 10px;
+}
+
+.room-call.docked.strip.big {
+  --strip-tile: 150px;
+}
+
+.player-page.room-open > .room-call.docked.strip {
+  margin-top: 8px;
+}
+
+.player-page:is(:fullscreen, :-webkit-full-screen) > .room-call.docked.strip {
+  margin: 0;
+}
+
+.room-call.docked.strip .room-call-grid {
+  max-height: none;
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: var(--strip-tile);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+
+.room-call.docked.strip .room-call-tile {
+  scroll-snap-align: start;
+}
+
+.room-call.docked.strip.big .room-call-controls .room-call-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+}
+
+/* The call bar (you, mic, camera, leave) stays last, below the strip */
+.player-page.call-dock-below > .room-foot {
+  order: 2;
+}
+
+/* Phones held sideways: a narrower column, and the page's usual 6px spacing */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .player-page.call-dock-side {
+    gap: 6px;
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+  .player-page.call-dock-side .container,
+  .player-page.call-dock-side .container.fullscreen {
+    flex: 1 1 0;
+    width: auto;
+    height: 100%;
+    border-radius: 12px;
+  }
+  .room-call.docked.side {
+    --dock-w: min(132px, 20vw);
+  }
+  .room-call.docked.side.big {
+    --dock-w: min(190px, 28vw);
+  }
+}
+
+/* Narrow phones held upright: a little smaller tiles, so more people fit across */
+@media (max-width: 380px) {
+  .room-call.docked.strip {
+    --strip-tile: 96px;
+  }
+  .room-call.docked.strip.big {
+    --strip-tile: 132px;
   }
 }
 

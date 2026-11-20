@@ -121,12 +121,15 @@
     ytHint = ytForm.querySelector(".room-yt-hint"),
     ytMount = document.querySelector(".yt-mount"),
     queueTabBtn = panel.querySelector('.room-tab-btn[data-tab="queue"]'),
+    searchTabBtn = panel.querySelector('.room-tab-btn[data-tab="search"]'),
     queueTitle = panel.querySelector(".room-queue-title"),
     queueTab = panel.querySelector(".room-tab-queue"),
-    queueForm = queueTab.querySelector(".room-queue-form"),
-    queueInput = queueTab.querySelector(".room-queue-input"),
-    queuePasteBtn = queueTab.querySelector(".room-queue-paste"),
-    queueHint = queueTab.querySelector(".room-queue-hint"),
+    queueMoreBtn = queueTab.querySelector(".room-queue-more"),
+    searchTab = panel.querySelector(".room-tab-search"),
+    queueForm = searchTab.querySelector(".room-queue-form"),
+    queueInput = searchTab.querySelector(".room-queue-input"),
+    queuePasteBtn = searchTab.querySelector(".room-queue-paste"),
+    queueHint = searchTab.querySelector(".room-queue-hint"),
     queueCount = queueTab.querySelector(".room-queue-count"),
     queueList = queueTab.querySelector(".room-queue"),
     prevTrackBtn = document.querySelector(".container .prev-track"),
@@ -191,6 +194,9 @@
     let micStream = null;
     let micEnabled = false;
     let micBusy = false;
+    // The mic and camera buttons: the side panel's, and the call window's (added with it below)
+    const micButtons = [micBtn];
+    const camButtons = [camBtn];
     const remoteVoiceAudio = new Map();
     let reopening = null;
     let homeBarDismissed = false;
@@ -477,8 +483,6 @@
         activeTab = tab;
         // For the panel's layout (e.g. no Previous / Next beside the queue, which has them)
         panel.dataset.tab = tab;
-        // The Queue tab, opened to search before anything plays on YouTube, goes when it's left
-        if (tab !== "queue" && room && !(room.file && room.file.yt)) queueTabBtn.hidden = true;
         tabButtons.forEach(button => {
             button.classList.toggle("active", button.dataset.tab === tab);
             button.setAttribute("aria-selected", button.dataset.tab === tab);
@@ -881,8 +885,8 @@
         together.active = () => !!room;
         together.onFile = room.role === "host" ? onHostFile : onGuestFile;
         renderNow();
-        // A new host starts on the invite details, a guest on the chat
-        showTab(room.role === "host" ? "invite" : "chat");
+        // A new host starts on People (who's in, and the invite details below), a guest on the chat
+        showTab(room.role === "host" ? "people" : "chat");
         showPanel(true);
         renderState();
     };
@@ -909,17 +913,17 @@
         nowList.hidden = true;
         closeYouTubeForm();
         queueTabBtn.hidden = true;
+        searchTabBtn.hidden = true;
         prevTrackBtn.hidden = nextTrackBtn.hidden = true;
         queueList.replaceChildren();
-        if (activeTab === "queue") showTab("chat");
+        if (activeTab === "queue" || activeTab === "search") showTab("chat");
     };
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
-    panel.querySelector(".room-invite-more").addEventListener("click", () => showTab("invite"));
     hidePanelBtn.addEventListener("click", () => showPanel(false));
 
     // ---------- Swipes on a phone or tablet: left and right on the panel go to the next or previous
-    // tab (Chat, Queue, People, Invite, Settings); down closes it, like a bottom sheet, on a phone
+    // tab (Chat, Search, Queue, People, Settings); down closes it, like a bottom sheet, on a phone
     // held upright (from its tabs, or anywhere once what's under the finger is scrolled to the top);
     // up on the title bar under the video opens it again. Only once the finger has clearly picked
     // a direction, so taps, scrolling and typing work as before.
@@ -1372,14 +1376,15 @@
         }
     };
 
-    const renderMic = () => {
-        micBtn.classList.toggle("active", micEnabled);
-        micBtn.setAttribute("aria-pressed", String(micEnabled));
-        micBtn.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
-        micBtn.setAttribute("aria-label", micEnabled ? "Microphone on" : "Microphone off");
-        micBtn.querySelector("i").className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
-        micBtn.querySelector("span").textContent = micEnabled ? "Mic on" : "Mic off";
-    };
+    const renderMic = () => micButtons.forEach(button => {
+        button.classList.toggle("active", micEnabled);
+        button.setAttribute("aria-pressed", String(micEnabled));
+        button.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
+        button.setAttribute("aria-label", micEnabled ? "Microphone on" : "Microphone off");
+        button.querySelector("i").className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
+        const label = button.querySelector("span");
+        if (label) label.textContent = micEnabled ? "Mic on" : "Mic off";
+    });
 
     const syncMicrophonePeer = peer => {
         if (!peer?.voiceSender) return;
@@ -1450,7 +1455,7 @@
     const enableMicrophone = async () => {
         if (micBusy || micEnabled || !room) return;
         micBusy = true;
-        micBtn.disabled = true;
+        micButtons.forEach(button => button.disabled = true);
         // Straight from the click: asking for a permission needs one
         watchScreenLock();
         try {
@@ -1473,7 +1478,7 @@
             toast(e.name === "NotAllowedError" ? "Microphone permission was denied" : "Couldn't access the microphone");
         } finally {
             micBusy = false;
-            micBtn.disabled = false;
+            micButtons.forEach(button => button.disabled = false);
         }
     };
 
@@ -1487,7 +1492,8 @@
         toast("Microphone off");
     };
 
-    micBtn.addEventListener("click", () => micEnabled ? disableMicrophone() : enableMicrophone());
+    const toggleMicrophone = () => micEnabled ? disableMicrophone() : enableMicrophone();
+    micBtn.addEventListener("click", toggleMicrophone);
     renderMic();
 
     // ---------- Cameras, like a meeting: everyone whose camera is on is seen by everyone, in the
@@ -1545,19 +1551,26 @@
     // their camera, or their avatar while it's off, with their name and whether their mic is on.
     // It can fold up to its title bar, and be small or large; where it was left, folded and size
     // are remembered (where as a share of the screen, so it fits a phone turned sideways too).
+    // It can also be docked as a panel instead of floating over the picture: a column on the left
+    // of the video (computers, phones held sideways), everyone one under another and scrolling up
+    // and down; or, on a phone held upright, a strip under the video's details (or the room's
+    // chat), just above the call bar, everyone side by side and scrolling across.
     const CALL_KEY = "cinetab:call";
     // `tile`: a tile's width pinched to on a touch screen (px), or null for the small / large one
-    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), tile: null, touches: new Map(), pinch: null };
+    // `docked`: chosen to be a panel; `dock`: how it's docked now ("side", "strip", or null while
+    // floating; a phone held upright in fullscreen, with the room's panel closed, floats it)
+    const call = { x: 0, y: 0, pos: null, collapsed: false, big: false, drag: null, tiles: new Map(), tile: null, touches: new Map(), pinch: null, docked: false, dock: null, dockable: true };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
             if (finite(saved.x, 0, 1) && finite(saved.y, 0, 1)) call.pos = { x: saved.x, y: saved.y };
             call.collapsed = saved.collapsed === true;
             call.big = saved.big === true;
+            call.docked = saved.docked === true;
             if (finite(saved.tile, 40, 600)) call.tile = saved.tile;
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, ...(call.tile ? { tile: call.tile } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, big: call.big, docked: call.docked, ...(call.tile ? { tile: call.tile } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1572,13 +1585,14 @@
         button.append(el("i"));
         return button;
     };
+    const callDockBtn = callButton("room-call-dock", "Dock as a panel");
     const callSizeBtn = callButton("room-call-size", "Larger");
     const callFoldBtn = callButton("room-call-fold", "Fold up");
     // Folded up: a camera with a live dot in front of the title, so the small pill stands out
     const callLive = el("span", "room-call-live");
     callLive.setAttribute("aria-hidden", "true");
     callLive.append(el("i", "fa-solid fa-video"));
-    callBar.append(el("i", "fa-solid fa-grip-vertical room-call-grip"), callLive, callTitle, callSizeBtn, callFoldBtn);
+    callBar.append(el("i", "fa-solid fa-grip-vertical room-call-grip"), callLive, callTitle, callDockBtn, callSizeBtn, callFoldBtn);
     const callGrid = el("div", "room-call-grid");
     // With a mouse: a grip in the bottom right corner, dragged to make it larger or smaller (arrow
     // keys too, once it has focus); on a touch screen, two fingers do it (below)
@@ -1586,14 +1600,25 @@
     callResize.type = "button";
     callResize.title = "Drag to resize";
     callResize.setAttribute("aria-label", "Resize (drag, or arrow keys)");
-    callWin.append(callBar, callGrid, callResize);
+    // Your mic and camera, so they can be turned on or off without opening the room's panel: a
+    // row below everyone while it's open, and in its title bar once folded up (renderCallButtons)
+    const callMicBtn = callButton("room-call-media room-call-mic-btn", "Turn microphone on");
+    const callCamBtn = callButton("room-call-media room-call-cam-btn", "Turn camera on");
+    callMicBtn.addEventListener("click", toggleMicrophone);
+    micButtons.push(callMicBtn);
+    camButtons.push(callCamBtn);
+    renderMic();
+    const callControls = el("div", "room-call-controls");
+    callControls.append(callMicBtn, callCamBtn);
+    callWin.append(callBar, callGrid, callControls, callResize);
     playerPage.append(callWin);
 
     // Where it is: where it was left (as a share of the room it has to move in), or at first the
     // top right of the picture, below its title bar
     const placeCall = () => {
-        // (while it's pinched or resized, it stays where the gesture holds it; placed again after)
-        if (callWin.hidden || call.pinch || call.sizing) return;
+        // (while it's pinched or resized, it stays where the gesture holds it; placed again after;
+        // docked, the page's layout places it)
+        if (callWin.hidden || call.pinch || call.sizing || call.dock) return;
         const page = playerPage.getBoundingClientRect();
         const width = callWin.offsetWidth;
         const height = callWin.offsetHeight;
@@ -1631,7 +1656,7 @@
     };
     // The pinched size, within what fits now (a phone turned, more people in the window)
     const applyTile = () => {
-        if (!call.tile) return callWin.style.removeProperty("--tile");
+        if (!call.tile || call.dock) return callWin.style.removeProperty("--tile");
         callWin.style.setProperty("--tile", `${Math.round(Math.max(TILE_MIN, Math.min(call.tile, tileMax())))}px`);
     };
     const pinchGap = () => {
@@ -1673,7 +1698,7 @@
     // The grip: the tile grows by however far it's dragged, across or down (whichever is more),
     // shared between the columns and rows; the top left corner stays put
     callResize.addEventListener("pointerdown", e => {
-        if (e.button > 0 || call.collapsed) return;
+        if (e.button > 0 || call.collapsed || call.dock) return;
         e.preventDefault();
         e.stopPropagation();
         callResize.setPointerCapture(e.pointerId);
@@ -1707,8 +1732,10 @@
         keepCallPlace();
     });
 
-    // Dragged by any part of it but its buttons, with a mouse or a finger
+    // Dragged by any part of it but its buttons, with a mouse or a finger (docked, it stays put
+    // and a finger scrolls it)
     callWin.addEventListener("pointerdown", e => {
+        if (call.dock) return;
         if (e.pointerType === "touch") {
             call.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
             // A second finger: a pinch instead of a drag (not while it's folded up to its title)
@@ -1765,15 +1792,27 @@
     callWin.addEventListener("pointercancel", endCallDrag);
 
     const renderCallButtons = () => {
-        callWin.classList.toggle("collapsed", call.collapsed);
+        // Docked, it doesn't fold up (it can float again, and fold up there)
+        const folded = call.collapsed && !call.dock;
+        callWin.classList.toggle("collapsed", folded);
         callWin.classList.toggle("big", call.big);
+        callFoldBtn.hidden = !!call.dock;
+        callDockBtn.hidden = folded || (!call.dock && !call.dockable);
+        callDockBtn.firstChild.className = `fa-solid ${call.dock ? "fa-up-right-from-square" : "fa-table-columns"}`;
+        callDockBtn.title = call.dock ? "Float over the video" : "Dock as a panel beside the video";
+        callDockBtn.setAttribute("aria-label", callDockBtn.title);
+        callDockBtn.setAttribute("aria-pressed", String(!!call.dock));
         callFoldBtn.firstChild.className = `fa-solid ${call.collapsed ? "fa-chevron-down" : "fa-minus"}`;
         callFoldBtn.title = call.collapsed ? "Show everyone" : "Fold up";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
-        callSizeBtn.hidden = call.collapsed;
+        callSizeBtn.hidden = folded;
+        // Folded up (or a strip under the video): the mic and camera go into the title bar, before
+        // its buttons
+        if (folded || call.dock === "strip") callBar.insertBefore(callControls, callDockBtn);
+        else callWin.insertBefore(callControls, callResize);
         callSizeBtn.firstChild.className = `fa-solid ${call.big ? "fa-down-left-and-up-right-to-center" : "fa-up-right-and-down-left-from-center"}`;
-        callSizeBtn.title = call.big ? "Smaller" : "Larger";
+        callSizeBtn.title = call.dock === "side" ? (call.big ? "Narrower" : "Wider") : call.big ? "Smaller" : "Larger";
         callSizeBtn.setAttribute("aria-label", callSizeBtn.title);
     };
     // The small window shows names for a few seconds (when it appears, someone joins or leaves, or
@@ -1801,6 +1840,38 @@
         renderCallButtons();
         saveCall();
         placeCall();
+    });
+
+    // Docked or floating, by the page's layout: beside the video when the player and the room's
+    // panel sit side by side, under it when they're stacked (a phone held upright). A phone held
+    // upright with the video filling the screen has no room for it, so it floats there.
+    const uprightTouch = matchMedia("(pointer: coarse) and (orientation: portrait)");
+    const placeDock = () => {
+        const column = getComputedStyle(playerPage).flexDirection === "column";
+        call.dockable = column || !uprightTouch.matches;
+        const dock = call.docked && !callWin.hidden && !playerPage.hidden && call.dockable ? (column ? "strip" : "side") : null;
+        callWin.classList.toggle("docked", !!dock);
+        callWin.classList.toggle("side", dock === "side");
+        callWin.classList.toggle("strip", dock === "strip");
+        playerPage.classList.toggle("call-dock-side", dock === "side");
+        playerPage.classList.toggle("call-dock-below", dock === "strip");
+        const was = call.dock;
+        call.dock = dock;
+        renderCallButtons();
+        if (was !== dock) {
+            applyTile();
+            placeCall();
+        }
+    };
+    window.addEventListener("resize", placeDock);
+    // (the room's panel opening or closing, the title moving below the picture, fullscreen)
+    new MutationObserver(placeDock).observe(playerPage, { attributes: true, attributeFilter: ["class", "hidden"] });
+    callDockBtn.addEventListener("click", () => {
+        call.docked = !call.dock;
+        // Into the panel open, with everyone shown
+        if (call.docked) call.collapsed = false;
+        saveCall();
+        placeDock();
     });
     renderCallButtons();
 
@@ -1904,6 +1975,7 @@
         const order = people.map(person => call.tiles.get(person.key).el);
         if (order.length !== callGrid.children.length || order.some((item, i) => callGrid.children[i] !== item)) callGrid.replaceChildren(...order);
         callWin.style.setProperty("--cols", callCols(people.length));
+        placeDock();
         applyTile();
         placeCall();
     };
@@ -1947,14 +2019,15 @@
         else syncCameraGuest();
     };
 
-    const renderCam = () => {
-        camBtn.classList.toggle("active", camEnabled);
-        camBtn.setAttribute("aria-pressed", String(camEnabled));
-        camBtn.title = camEnabled ? "Turn camera off" : "Turn camera on";
-        camBtn.setAttribute("aria-label", camEnabled ? "Camera on" : "Camera off");
-        camBtn.querySelector("i").className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
-        camBtn.querySelector("span").textContent = camEnabled ? "Cam on" : "Cam off";
-    };
+    const renderCam = () => camButtons.forEach(button => {
+        button.classList.toggle("active", camEnabled);
+        button.setAttribute("aria-pressed", String(camEnabled));
+        button.title = camEnabled ? "Turn camera off" : "Turn camera on";
+        button.setAttribute("aria-label", camEnabled ? "Camera on" : "Camera off");
+        button.querySelector("i").className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
+        const label = button.querySelector("span");
+        if (label) label.textContent = camEnabled ? "Cam on" : "Cam off";
+    });
 
     const enableCamera = async () => {
         if (camBusy || camEnabled || !room) return;
@@ -1962,7 +2035,7 @@
             return toast("Cameras need a direct connection to the host; you're connected through the room's relay");
         }
         camBusy = true;
-        camBtn.disabled = true;
+        camButtons.forEach(button => button.disabled = true);
         try {
             camStream = await navigator.mediaDevices.getUserMedia(cameraConstraints(camFacing));
             watchCamera();
@@ -1980,7 +2053,7 @@
             toast(e.name === "NotAllowedError" ? "Camera permission was denied" : "Couldn't access the camera");
         } finally {
             camBusy = false;
-            camBtn.disabled = false;
+            camButtons.forEach(button => button.disabled = false);
         }
     };
 
@@ -2049,7 +2122,7 @@
         if (!quiet) toast("Camera off");
     };
 
-    camBtn.addEventListener("click", () => camEnabled ? disableCamera() : enableCamera());
+    camButtons.forEach(button => button.addEventListener("click", () => camEnabled ? disableCamera() : enableCamera()));
     renderCam();
 
     const wirePeer = (peer, onMessage, onGone, allowParts) => {
@@ -3618,6 +3691,12 @@
 
     // A YouTube link from `by` (the host or a guest). `where`: "end" of the queue, "play" (right
     // after the current video, and straight away), or "now" (a new queue; also when nothing's on)
+    // A video's playlist or Mix that couldn't be read: YouTube doesn't open some Mixes (and private
+    // playlists) in an embedded player, so the video goes on its own
+    const listMissed = ref => /^RD/.test(ref.list)
+        ? `YouTube didn't open this video's Mix here, so just the video was added.${autoplayOn() ? " Autoplay carries on with videos like it." : " Turn on Autoplay to carry on with videos like it, like a radio."}`
+        : "Couldn't open the video's playlist (it may be private), so just the video was added.";
+
     const setYouTube = async (by, ref, where = "now") => {
         const sharer = { id: by.id, name: by.name };
         if (!room.yt) where = "now";
@@ -3630,6 +3709,7 @@
             if (!room || room.role !== "host" || room.ytToken !== token) return;
             if (!ids) {
                 if (!ref.id) notice(`Couldn't open the YouTube playlist ${sharer.name} shared. It may be private, or YouTube didn't answer.`);
+                else notice(listMissed(ref));
                 return;
             }
             if (!ref.id) return startYouTube(ids.map(id => queueItem(id, sharer)), 0);
@@ -3649,9 +3729,14 @@
         // Into the queue of what's on
         const y = room.yt;
         let ids = ref.list ? await resolvePlaylist(ref.list) : null;
+        const missed = !ids && !!ref.id && !!ref.list;
         if (!ids && ref.id) ids = [ref.id];
         if (!room || room.role !== "host" || room.yt !== y) return;
+        if (missed) notice(listMissed(ref));
         if (!ids) return notice(`Couldn't open the YouTube playlist ${sharer.name} added. It may be private, or YouTube didn't answer.`);
+        // A video in a playlist or a Mix: the list from that video on (it plays first)
+        if (ref.id && ids.includes(ref.id)) ids = ids.slice(ids.indexOf(ref.id));
+        else if (ref.id && ref.list) ids = [ref.id, ...ids];
         // User is adding video(s): remove any unplayed autoplay items after current video so user's video is next
         const autoAt = y.queue.findIndex((item, i) => i > y.index && item.auto);
         if (autoAt >= 0) y.queue.splice(autoAt);
@@ -3660,7 +3745,7 @@
         const items = ids.slice(0, space).map(id => queueItem(id, sharer));
         const at = where === "end" ? y.queue.length : y.index + 1;
         y.queue.splice(at, 0, ...items);
-        if (where === "play") playQueued(at, items.length === 1 ? ref.start : 0);
+        if (where === "play") playQueued(at, items[0].id === ref.id ? ref.start : 0);
         else {
             notice(items.length > 1 ? `${sharer.name} added ${items.length} videos to the queue` : `${sharer.name} added a video to the queue`);
             shareFile();
@@ -4253,6 +4338,9 @@
         // YouTube links: for anyone who may share videos (no Chrome or Edge needed)
         nowYtBtn.hidden = !allowed;
         if (!allowed) closeYouTubeForm();
+        // Searching YouTube has its own tab, for the same people
+        searchTabBtn.hidden = !allowed;
+        if (!allowed && activeTab === "search") showTab("chat");
         // A playlist or queue: which video, and the previous / next one for everyone
         const control = host || room.settings.control;
         const hasNext = youtube ? (file.yt.index + 1 < file.yt.count || autoplayOn()) : false;
@@ -4275,12 +4363,13 @@
             nowPrevBtn.disabled = !control || !hasPrev;
             nowNextBtn.disabled = !control || !hasNext;
         }
-        // The YouTube queue gets its own tab while YouTube is on, and opens when it starts
-        // (and stays open while someone searches there before anything plays)
-        queueTabBtn.hidden = !youtube && activeTab !== "queue";
+        // The YouTube queue gets its own tab while YouTube is on, and opens when it starts (unless
+        // someone is in the middle of chatting or picking more videos in Search)
+        queueTabBtn.hidden = !youtube;
+        queueMoreBtn.hidden = !allowed;
         if (youtube && !room.queueShown) {
             room.queueShown = true;
-            if (document.activeElement !== chatInput) {
+            if (document.activeElement !== chatInput && activeTab !== "search") {
                 showPanel(true);
                 showTab("queue");
             }
@@ -4307,15 +4396,18 @@
         ytHint.classList.toggle("error", error);
     };
 
-    // YouTube's button opens the Queue tab's search: one place to find, play and queue videos
-    nowYtBtn.addEventListener("click", () => {
+    // YouTube's button (and Find more videos, under the queue) opens the Search tab: one place to
+    // find, play and queue videos
+    const openSearch = () => {
         if (!canShareYouTube()) return;
         closeYouTubeForm();
-        queueTabBtn.hidden = false;
+        searchTabBtn.hidden = false;
         showPanel(true);
-        showTab("queue");
+        showTab("search");
         queueInput.focus();
-    });
+    };
+    nowYtBtn.addEventListener("click", openSearch);
+    queueMoreBtn.addEventListener("click", openSearch);
     ytInput.addEventListener("keydown", e => {
         if (e.key !== "Escape") return;
         e.stopPropagation();
@@ -4382,6 +4474,8 @@
     const showQueueHint = (text = queueHintText, error = false) => {
         queueHint.textContent = text;
         queueHint.classList.toggle("error", error);
+        // (a link dropped on the queue: its hint is in Search, so a problem shows as a toast)
+        if (error && activeTab !== "search") toast(text);
     };
 
     const renderQueue = () => {
@@ -4480,7 +4574,9 @@
             showQueueHint(refused, true);
             return false;
         }
-        showQueueHint(ref.list && !ref.id ? "Adding the playlist…" : where === "play" ? "Playing it now…" : "Added to the queue.");
+        const starting = !(room.file && room.file.yt);
+        showQueueHint(starting || where === "play" ? (ref.list ? "Opening it for everyone…" : "Playing it now for everyone…")
+            : ref.list ? "Adding the videos to the queue…" : "Added to the queue.");
         setTimeout(() => queueHint.textContent !== queueHintText && !queueHint.classList.contains("error") && showQueueHint(), 3000);
         return true;
     };
@@ -4494,7 +4590,7 @@
         return addRefToQueue(ref, where);
     };
 
-    // Search results in the queue tab: play one now, or add it to the queue
+    // Search results in the Search tab: play one now, or add it to the queue
     const queueResults = window.CineYouTube && queueForm.querySelector(".yt-results") && CineYouTube.createResults({
         host: queueForm.querySelector(".yt-results"),
         input: queueInput,
@@ -4503,29 +4599,114 @@
         actions: [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }],
         onPick: (ref, where) => addRefToQueue(ref, where)
     });
-    // While results show, they take the whole tab and are all that scrolls (the buttons, hint and
-    // queue step aside until the search is cleared), so a phone's short panel has room for them
+    // While results show, they take the whole tab and are all that scrolls (the link card, hint and
+    // intro step aside until the search is cleared). On a phone held upright the panel is short
+    // (under the video and its title, and the keyboard takes half the screen), so while the Search
+    // tab shows results or suggestions it grows into a sheet over the video, up to the top of the
+    // screen; clearing the search, another tab or closing the panel puts it back.
     const queueResultsBox = queueForm.querySelector(".yt-results");
-    if (queueResultsBox) {
-        const searching = () => queueTab.classList.toggle("searching", !queueResultsBox.hidden);
-        new MutationObserver(searching).observe(queueResultsBox, { attributes: true, attributeFilter: ["hidden"] });
-        searching();
-    }
+    const searching = () => {
+        const on = !!queueResultsBox && !queueResultsBox.hidden;
+        searchTab.classList.toggle("searching", on);
+        playerPage.classList.toggle("search-expanded", on && !!room && !panel.hidden && !searchTab.hidden);
+    };
+    if (queueResultsBox) new MutationObserver(searching).observe(queueResultsBox, { attributes: true, attributeFilter: ["hidden"] });
+    new MutationObserver(searching).observe(searchTab, { attributes: true, attributeFilter: ["hidden"] });
+    new MutationObserver(searching).observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+    searching();
+
+    // ---------- A pasted link: what it is, and Play now / Add to queue. A video, a playlist, or a
+    // video in a playlist or a Mix (YouTube's radio: a list starting "RD"), which can go with the
+    // rest of its list or alone.
+    const linkCard = searchTab.querySelector(".room-link-card");
+    const linkThumb = linkCard.querySelector(".room-link-thumb");
+    const linkKind = linkCard.querySelector(".room-link-kind");
+    const linkTitle = linkCard.querySelector(".room-link-title");
+    const linkWhole = linkCard.querySelector(".room-link-whole");
+    const linkWholeBox = linkWhole.querySelector("input");
+    const link = { ref: null, key: "" };
+    const isMix = list => /^RD/.test(list || "");
+    const startAt = seconds => {
+        const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, sec = String(seconds % 60).padStart(2, "0");
+        return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+    };
+    const renderLinkCard = () => {
+        const value = queueInput.value.trim();
+        const ref = value && !/\s/.test(value) ? parseYouTube(value) : null;
+        link.ref = ref;
+        linkCard.hidden = !ref;
+        if (!ref) return link.key = "";
+        const key = `${ref.id}|${ref.list}|${ref.start}`;
+        if (key === link.key) return;
+        link.key = key;
+        const mix = isMix(ref.list);
+        const kind = !ref.list ? "YouTube video" : !ref.id ? (mix ? "YouTube Mix (radio)" : "YouTube playlist")
+            : mix ? "Video, with its Mix (radio)" : "Video in a playlist";
+        linkKind.replaceChildren(el("i", `fa-solid ${!ref.list ? "fa-play" : mix ? "fa-tower-broadcast" : "fa-list"}`), ` ${kind}${ref.start ? ` · from ${startAt(ref.start)}` : ""}`);
+        linkWhole.hidden = !(ref.id && ref.list);
+        linkWholeBox.checked = true;
+        linkWhole.querySelector("span").textContent = mix ? "With the rest of the Mix after it" : "With the rest of the playlist from it";
+        // Its picture and title (YouTube's oEmbed; a Mix often has none)
+        linkThumb.replaceChildren();
+        if (ref.id) {
+            const img = el("img");
+            img.src = `https://i.ytimg.com/vi/${ref.id}/mqdefault.jpg`;
+            img.alt = "";
+            img.referrerPolicy = "no-referrer";
+            linkThumb.append(img);
+        } else linkThumb.append(el("i", `fa-solid ${mix ? "fa-tower-broadcast" : "fa-list"}`));
+        const fallback = !ref.list || ref.id ? "YouTube video" : mix ? "YouTube Mix" : "YouTube playlist";
+        linkTitle.textContent = "Loading…";
+        linkTitle.classList.add("loading");
+        const page = ref.id ? `https://www.youtube.com/watch?v=${ref.id}` : `https://www.youtube.com/playlist?list=${ref.list}`;
+        fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(page)}`)
+            .then(response => response.ok ? response.json() : null)
+            .catch(() => null)
+            .then(data => {
+                if (link.key !== key) return;
+                linkTitle.classList.remove("loading");
+                linkTitle.textContent = data && clean(data.title, 200) || fallback;
+                linkTitle.title = linkTitle.textContent;
+                if (!ref.id && data && typeof data.thumbnail_url === "string" && /^https:\/\/i\d?\.ytimg\.com\//.test(data.thumbnail_url)) {
+                    const img = el("img");
+                    img.src = data.thumbnail_url;
+                    img.alt = "";
+                    img.referrerPolicy = "no-referrer";
+                    linkThumb.replaceChildren(img);
+                }
+            });
+    };
+    linkCard.addEventListener("click", e => {
+        const button = e.target.closest("button[data-where]");
+        if (!button || !link.ref) return;
+        const ref = { ...link.ref };
+        // Just the video, without the rest of its list
+        if (ref.id && ref.list && !linkWholeBox.checked) ref.list = null;
+        if (addRefToQueue(ref, button.dataset.where)) {
+            queueInput.value = "";
+            renderLinkCard();
+        }
+    });
 
     queueForm.addEventListener("submit", e => {
         e.preventDefault();
-        const where = e.submitter && e.submitter.value === "play" ? "play" : "end";
-        // Words instead of a link: search YouTube for them
-        if (queueResults && queueInput.value.trim() && !parseYouTube(queueInput.value)) {
-            showQueueHint();
-            return queueResults.run(queueInput.value);
+        const value = queueInput.value.trim();
+        if (!value) return queueInput.focus();
+        // A link: the card under the box asks what to do with it
+        if (parseYouTube(value) && !/\s/.test(value)) {
+            renderLinkCard();
+            return showQueueHint();
         }
-        if (addToQueue(queueInput.value, where)) {
-            queueInput.value = "";
-            if (queueResults) queueResults.clear();
-        }
+        // Words: search YouTube for them (on a phone the keyboard goes, so the results have room)
+        if (!queueResults) return showQueueHint("Searching YouTube isn't available here. Paste a link instead.", true);
+        showQueueHint();
+        queueResults.run(value);
+        if (isTouch) queueInput.blur();
     });
-    queueInput.addEventListener("input", () => queueHint.classList.contains("error") && showQueueHint());
+    queueInput.addEventListener("input", () => {
+        if (queueHint.classList.contains("error")) showQueueHint();
+        renderLinkCard();
+    });
     queueInput.addEventListener("keydown", e => e.key === "Escape" && (e.stopPropagation(), queueInput.blur()));
 
     // Paste: the link copied from YouTube's page
@@ -4533,7 +4714,9 @@
         try {
             const text = (await navigator.clipboard.readText()).trim();
             queueInput.value = text;
-            if (parseYouTube(text)) showQueueHint("Add it to the queue, or play it now.");
+            if (queueResults) queueResults.clear();
+            renderLinkCard();
+            if (parseYouTube(text)) showQueueHint();
             else showQueueHint("What you copied isn't a YouTube link.", true);
         } catch (error) {
             showQueueHint("This browser didn't allow reading what you copied. Paste the link with Ctrl+V (or a long press).", true);
@@ -4617,7 +4800,7 @@
         leftForYouTube = false;
         if (!room || together.stream !== ytControls || !canShareYouTube()) return;
         showPanel(true);
-        showTab("queue");
+        showTab("search");
         showQueueHint("Back from YouTube? Copy the video's link there, then paste it here (or press the paste button) to add it to the queue.");
         queueInput.focus();
     });

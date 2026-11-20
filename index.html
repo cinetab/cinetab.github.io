@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.5.5">
+  <meta name="version" content="1.5.6">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.5.5",
+      "softwareVersion": "1.5.6",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -374,7 +374,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.5.5</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.5.6</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -818,9 +818,9 @@
     <div class="room-tabbar">
       <nav class="room-tabs" role="tablist" aria-label="Room">
         <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
+        <button class="room-tab-btn" role="tab" data-tab="search" title="Search YouTube or paste a link, to play or queue for everyone" hidden><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
         <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
-        <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
-        <button class="room-tab-btn" role="tab" data-tab="invite" title="Invite people with a link, QR code, or code and password"><i class="fa-solid fa-user-plus"></i><span>Invite</span></button>
+        <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room, and inviting more people"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
       </nav>
     </div>
@@ -840,47 +840,62 @@
       </form>
     </section>
 
-    <!-- YouTube queue: add links (a playlist adds all its videos), reorder, play one now -->
-    <section class="room-tab room-tab-queue" data-tab="queue" role="tabpanel" hidden>
+    <!-- Search: find a YouTube video, or paste a link (a playlist adds all its videos), to play now or queue -->
+    <section class="room-tab room-tab-search" data-tab="search" role="tabpanel" hidden>
       <form class="room-queue-form" novalidate>
         <div class="room-queue-row">
           <input class="room-queue-input" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Search YouTube or paste a link" aria-label="Search YouTube, or a YouTube link to add">
           <button type="button" class="room-icon-btn room-queue-paste" title="Paste the link you copied" aria-label="Paste the link you copied"><i class="fa-regular fa-paste"></i></button>
+          <button type="submit" class="room-icon-btn room-search-go" title="Search YouTube (Enter)" aria-label="Search YouTube"><i class="fa-solid fa-magnifying-glass"></i></button>
         </div>
-        <div class="room-queue-row room-queue-actions">
-          <button type="submit" class="room-small-btn primary" value="end"><i class="fa-solid fa-plus"></i> Add to queue</button>
-          <button type="submit" class="room-small-btn" value="play"><i class="fa-solid fa-play"></i> Play now</button>
+        <!-- A pasted link: what it is (a video, a playlist, a Mix), and play it now or queue it (room.js) -->
+        <div class="room-link-card" hidden>
+          <div class="room-link-main">
+            <span class="room-link-thumb"></span>
+            <span class="room-link-info"><small class="room-link-kind"></small><b class="room-link-title"></b></span>
+          </div>
+          <label class="room-link-whole" hidden><input type="checkbox" checked> <span></span></label>
+          <div class="room-queue-row room-link-actions">
+            <button type="button" class="room-small-btn primary" data-where="play"><i class="fa-solid fa-play"></i> Play now</button>
+            <button type="button" class="room-small-btn" data-where="end"><i class="fa-solid fa-plus"></i> Add to queue</button>
+          </div>
         </div>
         <small class="room-queue-hint"></small>
         <div class="yt-results room-queue-results" hidden></div>
       </form>
+      <p class="room-search-intro"><i class="fa-brands fa-youtube"></i> Type words to search YouTube, or paste a link to a video, a playlist or a Mix (radio), public or unlisted. Play it now or add it to the queue; everyone watches it together, in sync.</p>
+    </section>
+
+    <!-- The YouTube queue: reorder, play one now, remove; drop a link on it to add one -->
+    <section class="room-tab room-tab-queue" data-tab="queue" role="tabpanel" hidden>
       <p class="room-section-title room-queue-title">Queue <span class="room-queue-count"></span></p>
       <ol class="room-queue"></ol>
+      <button type="button" class="room-wide-btn secondary room-queue-more"><i class="fa-solid fa-magnifying-glass"></i> Find more videos</button>
     </section>
 
-    <section class="room-tab" data-tab="people" role="tabpanel" hidden>
+    <!-- People: who's in the room, then everything to invite more -->
+    <section class="room-tab room-tab-people" data-tab="people" role="tabpanel" hidden>
       <p class="room-section-title">In the room <span class="room-count"></span></p>
       <ul class="room-people"></ul>
-      <button class="room-wide-btn secondary room-invite-more"><i class="fa-solid fa-user-plus"></i> Invite people</button>
-    </section>
-
-    <section class="room-tab" data-tab="invite" role="tabpanel" hidden>
-      <div class="room-qr"></div>
-      <p class="room-qr-hint">Scan with a phone camera to join</p>
-      <div class="room-secret-row">
-        <span class="room-secret-text"><span class="room-label">Room code</span><code class="room-code"></code></span>
-        <button class="room-icon-btn" data-copy="code" title="Copy the room code"><i class="fa-regular fa-copy"></i></button>
+      <div class="room-invite">
+        <p class="room-section-title">Invite people</p>
+        <div class="room-qr"></div>
+        <p class="room-qr-hint">Scan with a phone camera to join</p>
+        <div class="room-secret-row">
+          <span class="room-secret-text"><span class="room-label">Room code</span><code class="room-code"></code></span>
+          <button class="room-icon-btn" data-copy="code" title="Copy the room code"><i class="fa-regular fa-copy"></i></button>
+        </div>
+        <div class="room-secret-row">
+          <span class="room-secret-text"><span class="room-label">Password</span><code class="room-password"></code></span>
+          <button class="room-icon-btn" data-copy="password" title="Copy the password"><i class="fa-regular fa-copy"></i></button>
+        </div>
+        <label class="room-switch">
+          <input type="checkbox" class="room-link-password" checked>
+          <span><b>Password in the link and QR code</b><small>Off: people type the password themselves</small></span>
+        </label>
+        <button class="room-wide-btn room-copy-link" title="Copy a link that opens this room"><i class="fa-solid fa-link"></i> Copy invite link</button>
+        <p class="room-hint">Share these only with people you want in the room. The host lets each person in.</p>
       </div>
-      <div class="room-secret-row">
-        <span class="room-secret-text"><span class="room-label">Password</span><code class="room-password"></code></span>
-        <button class="room-icon-btn" data-copy="password" title="Copy the password"><i class="fa-regular fa-copy"></i></button>
-      </div>
-      <label class="room-switch">
-        <input type="checkbox" class="room-link-password" checked>
-        <span><b>Password in the link and QR code</b><small>Off: people type the password themselves</small></span>
-      </label>
-      <button class="room-wide-btn room-copy-link" title="Copy a link that opens this room"><i class="fa-solid fa-link"></i> Copy invite link</button>
-      <p class="room-hint">Share these only with people you want in the room. The host lets each person in.</p>
     </section>
 
     <section class="room-tab" data-tab="settings" role="tabpanel" hidden>
