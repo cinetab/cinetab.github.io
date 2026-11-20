@@ -862,6 +862,7 @@
             const ids = playlist();
             if (!ids || playlistIndex() >= ids.length - 1) {
                 save(true);
+                if (together.playNextSoloQueue && together.playNextSoloQueue()) return;
                 // Autoplay: on with the YouTube Mix of the video that ended
                 if (!(autoplay && !solo.wantAfter && autoplayAfter(currentId()))) solo.intent = false;
             }
@@ -1087,6 +1088,7 @@
         } else save();
         const token = ++solo.token;
         solo.active = true;
+        if (window.updatePlayerStop) window.updatePlayerStop();
         solo.ref = { id: ref.id || null, list: ref.list || null, start: ref.start || 0 };
         solo.meta = { ...meta };
         solo.intent = true;
@@ -1190,6 +1192,7 @@
         currentVidTime.innerText = videoDuration.innerText = formatTime(0);
         showPlaying(false);
         uploadOverlay.classList.remove("hidden");
+        if (window.updatePlayerStop) window.updatePlayerStop();
     }
 
     // ---------- Autoplay

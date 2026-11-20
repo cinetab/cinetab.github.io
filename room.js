@@ -123,10 +123,13 @@
     queueTabBtn = panel.querySelector('.room-tab-btn[data-tab="queue"]'),
     queueTitle = panel.querySelector(".room-queue-title"),
     queueTab = panel.querySelector(".room-tab-queue"),
+    queueAddForm = queueTab.querySelector(".queue-add-form"),
+    queueAddInput = queueTab.querySelector(".queue-add-input"),
     queueMoreBtn = queueTab.querySelector(".room-queue-more"),
     queueEmpty = queueTab.querySelector(".room-queue-empty"),
     queueCount = queueTab.querySelector(".room-queue-count"),
     queueList = queueTab.querySelector(".room-queue"),
+    playerStopBtns = document.querySelectorAll(".player-stop-btn, .player-top-stop"),
     prevTrackBtn = document.querySelector(".container .prev-track"),
     nextTrackBtn = document.querySelector(".container .next-track"),
     settingInputs = hostSettings.querySelectorAll("[data-setting]"),
@@ -147,6 +150,7 @@
     leaveLabel = leaveBtn.querySelector("span"),
     micBtn = panel.querySelector(".room-mic-btn"),
     camBtn = panel.querySelector(".room-cam-btn"),
+    flipBtn = panel.querySelector(".room-flip-btn"),
     profileSheet = panel.querySelector(".room-sheet"),
     shareLabel = shareHelpBtn.querySelector("span"),
     badge = el("b", "room-badge");
@@ -1723,15 +1727,20 @@
     const callLive = el("span", "room-call-live");
     callLive.setAttribute("aria-hidden", "true");
     callLive.append(el("i", "fa-solid fa-video"));
-    // Your mic and camera, so they can be turned on or off without opening the room's panel
+    // Your mic, camera, and camera switching controls
     const callMicBtn = callButton("room-call-media room-call-mic-btn", "Turn microphone on");
     const callCamBtn = callButton("room-call-media room-call-cam-btn", "Turn camera on");
+    const callFlipBtn = callButton("room-call-media room-call-flip-btn", "Switch camera (front / back)");
+    callFlipBtn.firstChild.className = "fa-solid fa-camera-rotate";
+    callFlipBtn.hidden = true;
+    callFlipBtn.addEventListener("click", flipCamera);
+    if (flipBtn) flipBtn.addEventListener("click", flipCamera);
     callMicBtn.addEventListener("click", toggleMicrophone);
     micButtons.push(callMicBtn);
     camButtons.push(callCamBtn);
     renderMic();
     const callControls = el("div", "room-call-controls");
-    callControls.append(callMicBtn, callCamBtn);
+    callControls.append(callMicBtn, callCamBtn, callFlipBtn);
     // Leave: just leave, or end the room (the call bar's own choices)
     const callLeaveBtn = callButton("room-call-leave", "Leave or end the room");
     callLeaveBtn.firstChild.className = "fa-solid fa-phone-slash";
@@ -2362,6 +2371,9 @@
 
     // Keep hover overlay buttons on the own tile in sync with mic/cam state
     syncHoverControls = () => {
+        const canFlip = camEnabled && (isTouch || camCount > 1 || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches));
+        if (flipBtn) flipBtn.hidden = !canFlip;
+        if (callFlipBtn) callFlipBtn.hidden = !canFlip;
         call.tiles.forEach(tile => {
             if (tile.hoverMic) {
                 tile.hoverMic.firstChild.className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
@@ -2378,7 +2390,6 @@
                 tile.hoverCam.setAttribute("aria-label", tile.hoverCam.title);
             }
             if (tile.hoverFlip) {
-                const canFlip = camEnabled && (isTouch || camCount > 1) && (camCount !== 1);
                 tile.hoverFlip.hidden = !canFlip;
             }
         });
@@ -2606,17 +2617,11 @@
                     tile.hoverCam = hoverCam;
                     tile.hoverFlip = hoverFlip;
 
-                    // Touch support: tap tile to reveal controls temporarily
-                    let hoverTimer = null;
-                    figure.addEventListener("pointerdown", e => {
-                        if (e.target.closest(".room-call-hover-btn")) return;
-                        figure.classList.toggle("hover-active");
-                        clearTimeout(hoverTimer);
-                        if (figure.classList.contains("hover-active")) {
-                            hoverTimer = setTimeout(() => figure.classList.remove("hover-active"), 3500);
-                        }
-                    });
-                    figure.addEventListener("pointerenter", () => figure.classList.remove("hover-active"));
+                    // Desktop hover: pointer enter/leave. On mobile/touch devices, controls are in the control bar instead of covering the video
+                    if (!isTouch && !(window.matchMedia && window.matchMedia("(pointer: coarse)").matches)) {
+                        figure.addEventListener("pointerenter", () => figure.classList.add("hover-active"));
+                        figure.addEventListener("pointerleave", () => figure.classList.remove("hover-active"));
+                    }
                 }
                 call.tiles.set(person.key, tile);
             }
@@ -5018,6 +5023,7 @@
         nowStopBtn.hidden = !on || !(allowed || mine);
         nowStopBtn.title = mine && !youtube ? "Stop sharing your video" : "Stop video for everyone";
         nowStopBtn.setAttribute("aria-label", nowStopBtn.title);
+        updateStopButtons(!nowStopBtn.hidden, nowStopBtn.title);
         // YouTube links: for anyone who may share videos (no Chrome or Edge needed)
         nowYtBtn.hidden = !allowed;
         if (!allowed) closeYouTubeForm();
@@ -5045,7 +5051,7 @@
         }
         // The queue's tab is always there; it opens when YouTube starts (unless someone is in the
         // middle of chatting or picking more videos in the search)
-        queueMoreBtn.hidden = !allowed;
+        queueMoreBtn.hidden = room ? !allowed : false;
         if (youtube && !room.queueShown) {
             room.queueShown = true;
             if (document.activeElement !== chatInput && !(together.searchOpen && together.searchOpen())) {
@@ -5075,13 +5081,13 @@
 
     // YouTube's button (and Find more videos, under the queue) opens the player's search (script.js):
     // one place to find, play and queue videos
-    const openSearch = () => {
-        if (!canShareYouTube()) return;
+    const openSearch = (query) => {
+        if (room && !canShareYouTube()) return;
         closeYouTubeForm();
-        if (together.openSearch) together.openSearch();
+        if (together.openSearch) together.openSearch(query);
     };
-    nowYtBtn.addEventListener("click", openSearch);
-    queueMoreBtn.addEventListener("click", openSearch);
+    nowYtBtn.addEventListener("click", () => openSearch());
+    queueMoreBtn.addEventListener("click", () => openSearch());
     ytInput.addEventListener("keydown", e => {
         if (e.key !== "Escape") return;
         e.stopPropagation();
@@ -5146,7 +5152,26 @@
 
     // (a link dropped on the queue: how that went)
     const showQueueHint = text => text && toast(text);
-    const soloQueue = { index: 0, items: [] };
+    const SOLO_QUEUE_KEY = "cinetab:solo-queue";
+    const loadSoloQueue = () => {
+        try {
+            const raw = localStorage.getItem(SOLO_QUEUE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && Array.isArray(parsed.items)) {
+                    parsed.index = Math.max(0, Math.min(parsed.index || 0, Math.max(0, parsed.items.length - 1)));
+                    return parsed;
+                }
+            }
+        } catch (e) {}
+        return { index: 0, items: [] };
+    };
+    const saveSoloQueue = () => {
+        try {
+            localStorage.setItem(SOLO_QUEUE_KEY, JSON.stringify(soloQueue));
+        } catch (e) {}
+    };
+    const soloQueue = loadSoloQueue();
 
     // Card encouraging room creation when viewing queue solo
     const soloRoomCard = el("div", "queue-solo-card");
@@ -5171,6 +5196,7 @@
             : edit
             ? "Search YouTube or paste a link, then Add to queue: everyone watches the videos in turn."
             : `YouTube videos ${room.hostName || "the host"} and others line up show here.`;
+        queueMoreBtn.hidden = room ? !edit : false;
         queueMoreBtn.querySelector("span").textContent = items.length ? "Find more videos" : "Find videos";
         // No "Queue" heading over an empty queue (searching before anything plays)
         queueTitle.hidden = !items.length;
@@ -5205,7 +5231,7 @@
             const info = el("span", "room-queue-info");
             const title = el("b", null, item.title || "YouTube video");
             title.title = item.title || item.id;
-            info.append(title, el("small", null, current ? "Now playing" : `Added by ${item.by}`));
+            info.append(title, el("small", null, current ? "Now playing" : `Added by ${item.by || "You"}`));
             li.append(cover, info);
             if (edit) {
                 const actions = el("span", "room-queue-actions");
@@ -5219,7 +5245,7 @@
                     button.append(el("i", `fa-solid ${icon}`));
                     return button;
                 };
-                if (!current) actions.append(action("play", "fa-play", "Play this now, for everyone"));
+                if (!current) actions.append(action("play", "fa-play", "Play this now"));
                 actions.append(
                     action("up", "fa-arrow-up", "Move up", i === 0),
                     action("down", "fa-arrow-down", "Move down", i === items.length - 1),
@@ -5235,6 +5261,16 @@
             queueList.dataset.current = now.k;
             const row = queueList.children[queue.index];
             if (row && activeTab === "queue") row.scrollIntoView({ block: "nearest" });
+        }
+        if (!room && items.length && window.together && together.solo && together.solo.active) {
+            const hasNext = queue.index + 1 < items.length;
+            const hasPrev = queue.index > 0;
+            nextTrackBtn.hidden = false;
+            nextTrackBtn.disabled = !hasNext;
+            nextTrackBtn.title = hasNext ? "Next video in queue (Shift + N)" : "Next video";
+            prevTrackBtn.hidden = false;
+            prevTrackBtn.disabled = !hasPrev;
+            prevTrackBtn.title = hasPrev ? "Previous video in queue (Shift + P)" : "Previous video";
         }
     };
 
@@ -5257,6 +5293,7 @@
                 if (target && target.id && window.CineYouTube) {
                     soloQueue.index = at;
                     CineYouTube.play({ id: target.id }, { title: target.title });
+                    saveSoloQueue();
                     renderQueue();
                 }
             } else if (op === "up" && at > 0) {
@@ -5264,16 +5301,19 @@
                 soloQueue.items.splice(at - 1, 0, item);
                 if (soloQueue.index === at) soloQueue.index = at - 1;
                 else if (soloQueue.index === at - 1) soloQueue.index = at;
+                saveSoloQueue();
                 renderQueue();
             } else if (op === "down" && at < soloQueue.items.length - 1) {
                 const [item] = soloQueue.items.splice(at, 1);
                 soloQueue.items.splice(at + 1, 0, item);
                 if (soloQueue.index === at) soloQueue.index = at + 1;
                 else if (soloQueue.index === at + 1) soloQueue.index = at;
+                saveSoloQueue();
                 renderQueue();
             } else if (op === "remove") {
                 soloQueue.items.splice(at, 1);
                 if (soloQueue.index >= soloQueue.items.length) soloQueue.index = Math.max(0, soloQueue.items.length - 1);
+                saveSoloQueue();
                 renderQueue();
             }
             return;
@@ -5281,6 +5321,22 @@
         if (op === "up" || op === "down") sendQueueOp({ op: "move", k, to: at + (op === "up" ? -1 : 1) });
         else sendQueueOp({ op, k });
     });
+
+    if (queueAddForm && queueAddInput) {
+        queueAddForm.addEventListener("submit", e => {
+            e.preventDefault();
+            const val = queueAddInput.value.trim();
+            if (!val) return;
+            const ref = parseYouTube(val);
+            if (ref) {
+                const refused = together.queueYouTube(ref);
+                if (!refused) queueAddInput.value = "";
+                else showQueueHint(refused);
+            } else {
+                openSearch(val);
+            }
+        });
+    }
 
     // Adding a video or playlist: to the end of the queue, or to play right away
     const addRefToQueue = (ref, where) => {
@@ -5312,16 +5368,27 @@
     together.canQueueYouTube = () => room ? canShareYouTube() : true;
     together.queueYouTube = (ref, meta = {}) => {
         if (room) return shareYouTubeRef(ref, "end");
-        if (!ref || !ref.id) return false;
-        soloQueue.items.push({
+        if (!ref || !ref.id) return "That isn't a link to a YouTube video.";
+        const item = {
             k: Math.random().toString(36).slice(2),
             id: ref.id,
-            title: meta.title || "YouTube video",
+            title: meta.title || meta.listTitle || "YouTube video",
             by: "You"
-        });
+        };
+        soloQueue.items.push(item);
+        saveSoloQueue();
         renderQueue();
         toast("Added to queue");
-        return true;
+        if (!meta.title && window.CineYouTube && CineYouTube.details) {
+            CineYouTube.details(ref.id).then(info => {
+                if (info && info.title) {
+                    item.title = info.title;
+                    saveSoloQueue();
+                    renderQueue();
+                }
+            }).catch(() => {});
+        }
+        return null;
     };
     together.roomCommands = () => {
         if (!room) return [];
@@ -5397,12 +5464,24 @@
             return;
         }
         const spot = dropSpot(e);
-        const from = room && room.queue ? room.queue.items.findIndex(item => item.k === draggedK) : -1;
+        const from = room && room.queue ? room.queue.items.findIndex(item => item.k === draggedK)
+            : soloQueue.items.findIndex(item => item.k === draggedK);
         clearDrop();
         if (!spot || from < 0) return;
         let to = +spot.row.dataset.i + (spot.after ? 1 : 0);
         if (from < to) to--;
-        if (to !== from) sendQueueOp({ op: "move", k: draggedK, to });
+        if (to === from) return;
+        if (!room) {
+            const [item] = soloQueue.items.splice(from, 1);
+            soloQueue.items.splice(to, 0, item);
+            if (soloQueue.index === from) soloQueue.index = to;
+            else if (from < soloQueue.index && to >= soloQueue.index) soloQueue.index--;
+            else if (from > soloQueue.index && to <= soloQueue.index) soloQueue.index++;
+            saveSoloQueue();
+            renderQueue();
+            return;
+        }
+        sendQueueOp({ op: "move", k: draggedK, to });
     });
 
     // YouTube's own links in its player ("More videos", the title) open YouTube in a new tab, and
@@ -5423,6 +5502,62 @@
         together.openSearch("", "Back from YouTube? Copy the video's link there, then paste it here to play it or add it to the queue.");
     });
 
+    const playNextSoloQueue = () => {
+        if (room || !soloQueue.items.length) return false;
+        if (soloQueue.index + 1 < soloQueue.items.length) {
+            soloQueue.index++;
+            const target = soloQueue.items[soloQueue.index];
+            if (target && target.id && window.CineYouTube) {
+                CineYouTube.play({ id: target.id }, { title: target.title });
+                saveSoloQueue();
+                renderQueue();
+                return true;
+            }
+        }
+        return false;
+    };
+    const playPrevSoloQueue = () => {
+        if (room || !soloQueue.items.length) return false;
+        if (soloQueue.index > 0) {
+            soloQueue.index--;
+            const target = soloQueue.items[soloQueue.index];
+            if (target && target.id && window.CineYouTube) {
+                CineYouTube.play({ id: target.id }, { title: target.title });
+                saveSoloQueue();
+                renderQueue();
+                return true;
+            }
+        }
+        return false;
+    };
+    together.playNextSoloQueue = playNextSoloQueue;
+    together.playPrevSoloQueue = playPrevSoloQueue;
+
+    const updateStopButtons = (visible, title = "Stop video") => {
+        playerStopBtns.forEach(btn => {
+            btn.hidden = !visible;
+            if (title) {
+                btn.title = title;
+                btn.setAttribute("aria-label", title);
+            }
+        });
+    };
+    together.updateStop = (hasMedia) => {
+        if (room) {
+            const file = room.file;
+            const sharing = room.role !== "host" && room.presenting;
+            const mine = sharing || (!!file && file.from === room.id);
+            const on = !!file || !!sharing;
+            const youtube = !sharing && file && file.yt;
+            const allowed = room.role === "host" || room.settings.media === true;
+            const stopAllowed = on && (allowed || mine);
+            const stopTitle = mine && !youtube ? "Stop sharing your video" : "Stop video for everyone";
+            updateStopButtons(stopAllowed, stopTitle);
+        } else {
+            updateStopButtons(!!hasMedia, "Stop video");
+        }
+    };
+
     // A playlist's previous / next video, for everyone
     const stepPlaylist = step => {
         if (!room) return;
@@ -5432,12 +5567,22 @@
     };
     nowPrevBtn.addEventListener("click", () => stepPlaylist(-1));
     nowNextBtn.addEventListener("click", () => stepPlaylist(1));
-    prevTrackBtn.addEventListener("click", () => stepPlaylist(-1));
-    nextTrackBtn.addEventListener("click", () => stepPlaylist(1));
+    prevTrackBtn.addEventListener("click", () => {
+        if (!room) return together.step(-1);
+        stepPlaylist(-1);
+    });
+    nextTrackBtn.addEventListener("click", () => {
+        if (!room) return together.step(1);
+        stepPlaylist(1);
+    });
     // Shift + N / P (see script.js)
     together.step = step => {
-        // Outside a room: a YouTube playlist watched alone (youtube.js)
-        if (!room) return together.solo && together.solo.step(step);
+        // Outside a room: a YouTube playlist watched alone (youtube.js) or solo queue
+        if (!room) {
+            if (step > 0 && playNextSoloQueue()) return;
+            if (step < 0 && playPrevSoloQueue()) return;
+            return together.solo && together.solo.step(step);
+        }
         const file = room && room.file;
         if (!file || !file.yt || file.yt.count < 2) return;
         const index = file.yt.index + step;
@@ -5446,9 +5591,12 @@
         showFeedback(step > 0 ? "fa-forward-step" : "fa-backward-step", step > 0 ? "Next video" : "Previous video");
     };
 
-    nowShareBtn.addEventListener("click", shareVideo);
-    nowStopBtn.addEventListener("click", () => {
-        if (!room) return;
+    const stopVideo = () => {
+        if (!room) {
+            if (window.unloadPlayer) window.unloadPlayer();
+            updateStopButtons(false);
+            return;
+        }
         if (room.role === "guest" && room.presenting) {
             stopPresenting(true);
             if (room.file && room.file.from === room.id) room.file = null;
@@ -5458,7 +5606,13 @@
         if (!file || !confirm(`Stop “${file.title}” for everyone?`)) return;
         if (room.role === "host") removeMedia({ id: room.id, name: room.name });
         else send(room.peer, { t: "remove" });
-    });
+    };
+
+    nowShareBtn.addEventListener("click", shareVideo);
+    nowStopBtn.addEventListener("click", stopVideo);
+    together.stopVideo = stopVideo;
+
+    renderQueue();
 
     // ---------- Clock: the host's time on this computer
 
@@ -6255,7 +6409,8 @@
     // it for everyone
     const sayBye = (ending = false) => {
         if (!room) return;
-        if (room.role === "host") room.peers.forEach(peer => send(peer, ending ? { t: "bye", by: room.name } : { t: "bye", next: true }));
+        const isEnding = ending === true;
+        if (room.role === "host") room.peers.forEach(peer => send(peer, isEnding ? { t: "bye", by: room.name } : { t: "bye", next: true }));
         else send(room.peer, { t: "bye" });
     };
 
@@ -6324,7 +6479,7 @@
         if (room) {
             if (end && room.role === "guest") send(room.peer, { t: "end", by: room.name, owner: room.ownerSecret || undefined });
             if (end) forgetRoom(room.code, false);
-            sayBye(end);
+            sayBye(end === true);
             teardown();
         }
         if (!home) return closeDialog();
@@ -6377,7 +6532,7 @@
         e.preventDefault();
         e.returnValue = "";
     });
-    window.addEventListener("pagehide", sayBye);
+    window.addEventListener("pagehide", () => sayBye(false));
 
     // ---------- Remembered rooms (in this browser only) and the home page bar
 

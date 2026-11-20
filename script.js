@@ -33,6 +33,8 @@ subtitlesBtn = container.querySelector(".subtitles"),
 helpOverlay = document.querySelector("#help-overlay"),
 shareHelpBtn = container.querySelector(".share-help-btn"),
 playerQueueBtn = container.querySelector(".player-queue-btn"),
+playerStopBtn = container.querySelector(".player-stop-btn"),
+playerTopStopBtn = container.querySelector(".player-top-stop"),
 closeHelpBtn = document.querySelector("#close-help-btn"),
 homePage = document.querySelector(".home"),
 playerPage = document.querySelector(".player-page"),
@@ -202,8 +204,8 @@ const goHome = () => {
     history.back();
 };
 if (homePage) {
-    playerHomeBtn.addEventListener("click", goHome);
-    playerBackBtn.addEventListener("click", goHome);
+    if (playerHomeBtn) playerHomeBtn.addEventListener("click", goHome);
+    if (playerBackBtn) playerBackBtn.addEventListener("click", goHome);
 }
 
 // The file picker. Where the browser can (Chrome and Edge on computers) it's the File System
@@ -480,6 +482,7 @@ const prepareFor = (name, size) => {
     videoTitle.title = `${name}\nClick to rename`;
     uploadOverlay.classList.add("hidden");
     errorOverlay.classList.add("hidden");
+    updatePlayerStop();
 };
 
 // On phones, opening a file is already a user gesture: use it to create an app-like
@@ -903,12 +906,36 @@ const releaseMedia = () => {
     progressBar.style.width = "0%";
     currentVidTime.innerText = videoDuration.innerText = formatTime(0);
     showPlaying(false);
+    updatePlayerStop();
 };
 
 const unloadPlayer = () => {
+    if (together.solo && together.solo.active) {
+        together.solo.stop();
+    }
     releaseMedia();
     uploadOverlay.classList.remove("hidden");
+    updatePlayerStop();
 };
+window.unloadPlayer = unloadPlayer;
+
+const updatePlayerStop = () => {
+    const isSoloActive = !!(together.solo && (typeof together.solo.active === "function" ? together.solo.active() : together.solo.active));
+    const hasMedia = !uploadOverlay.classList.contains("hidden") && (!!currentFile || isSoloActive);
+    if (together.updateStop) together.updateStop(hasMedia);
+    else {
+        if (playerStopBtn) playerStopBtn.hidden = !hasMedia;
+        if (playerTopStopBtn) playerTopStopBtn.hidden = !hasMedia;
+    }
+};
+window.updatePlayerStop = updatePlayerStop;
+
+const onStopClick = () => {
+    if (together.stopVideo) together.stopVideo();
+    else unloadPlayer();
+};
+if (playerStopBtn) playerStopBtn.addEventListener("click", onStopClick);
+if (playerTopStopBtn) playerTopStopBtn.addEventListener("click", onStopClick);
 
 const playSaved = async key => {
     const saved = await Converter.openSaved(key);
@@ -2875,7 +2902,7 @@ const cmdPalette = (() => {
     const resultsHost = make("div", "yt-results cmd-results");
     body.append(note, link, list, resultsHost);
     const foot = make("div", "cmd-foot");
-    foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> run or search</span><span><kbd>Esc</kbd> close</span>";
+    foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> close</span>";
     box.append(form, body, foot);
     overlay.append(box);
     playerPage.append(overlay);
@@ -2884,6 +2911,57 @@ const cmdPalette = (() => {
         note.textContent = text;
         note.hidden = !text;
         note.classList.toggle("error", error);
+    };
+
+    // ---------- Recent videos from history
+    const recentVideos = () => {
+        if (!window.CineHistory) return [];
+        const list = CineHistory.list() || [];
+        return list.slice(0, 10).map(entry => {
+            const isYt = entry.type === "video" || entry.type === "playlist";
+            const title = entry.title || entry.name || (isYt ? "YouTube video" : "Video file");
+            const icon = entry.type === "playlist" ? "fa-list" : isYt ? "fa-brands fa-youtube" : "fa-film";
+            let meta = "";
+            if (isYt) {
+                meta = entry.channel || (entry.type === "playlist" ? "Playlist" : "YouTube");
+            } else {
+                meta = entry.size ? `Local file · ${formatBytes(entry.size)}` : "Local file";
+            }
+            if (entry.time && entry.time > 5) {
+                meta += ` · ${formatTime(entry.time)}`;
+            }
+            return {
+                label: title,
+                meta,
+                icon,
+                recent: true,
+                entry,
+                run: async () => {
+                    close();
+                    if (entry.type === "file") {
+                        if (window.CineHistory && CineHistory.handles) {
+                            const handle = await CineHistory.getHandle(entry.k);
+                            if (handle) {
+                                try {
+                                    let permission = await handle.queryPermission({ mode: "read" });
+                                    if (permission !== "granted") permission = await handle.requestPermission({ mode: "read" });
+                                    if (permission === "granted") {
+                                        const file = await handle.getFile();
+                                        return loadVideoFile(file, handle);
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        fileInput.click();
+                    } else if (isYt) {
+                        pick({ id: entry.id || null, list: entry.list || null, start: entry.time || 0 }, "play", {
+                            title: entry.title,
+                            channel: entry.channel
+                        });
+                    }
+                }
+            };
+        });
     };
 
     // ---------- The player's commands, as things are now (and the room's, from room.js)
@@ -2911,7 +2989,7 @@ const cmdPalette = (() => {
             { label: inRoom ? "The room's panel" : "Watch together", icon: "fa-users", keys: ["R"], words: "watch together room friends party panel chat invite", top: !inRoom, run: () => shareHelpBtn.click() },
             ...(together.roomCommands ? together.roomCommands().map((command, i) => ({ ...command, top: i < 3 })) : []),
             { label: "Keyboard shortcuts", icon: "fa-keyboard", keys: ["?"], words: "keyboard shortcuts keys help", run: toggleShortcuts },
-            { label: "Back to home", icon: "fa-house", words: "home back dashboard exit", run: () => playerBackBtn.click() }
+            { label: "Back to home", icon: "fa-house", words: "home back dashboard exit", run: () => (playerHomeBtn || playerBackBtn).click() }
         ].filter(Boolean);
     };
 
@@ -2940,10 +3018,9 @@ const cmdPalette = (() => {
         return out;
     };
 
-    // ---------- The list: commands that match, and "Search YouTube for …"
+    // ---------- The list: only recent videos and search (commands work when entered, but do not show)
     let items = [];
     let chosen = 0;
-    // (typing: the choice goes back to the first, or to what's typed as a command)
     let freshChoice = true;
     const matches = (command, words) => {
         const hay = `${command.label} ${command.words || ""}`.toLowerCase();
@@ -2951,37 +3028,47 @@ const cmdPalette = (() => {
     };
     const renderList = () => {
         const query = input.value.trim();
-        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-        const all = playerCommands();
-        // Searching YouTube first, then what's typed as a command of its own (a time, a speed: the
-        // one Enter runs, when there is one), then the commands that match
+        const allRecent = recentVideos();
         let preferred = 0;
-        if (!query) items = all.filter(command => command.top);
-        else {
-            // (a speed typed: not the speeds listed as well)
-            const typed = typedCommands(query);
-            const typedSpeed = typed.some(command => command.speed);
+        if (!query) {
+            items = allRecent;
+        } else {
+            const words = query.toLowerCase().split(/\s+/).filter(Boolean);
             const search = youtube() ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
-            items = [...search, ...typed, ...all.filter(command => !(typedSpeed && command.speed) && matches(command, words))].slice(0, 8);
-            if (typed.length) preferred = search.length;
+            const matchingRecent = allRecent.filter(item => words.every(word => item.label.toLowerCase().includes(word)));
+            items = [...search, ...matchingRecent].slice(0, 10);
         }
         if (freshChoice) chosen = preferred;
         freshChoice = false;
         chosen = Math.min(chosen, Math.max(0, items.length - 1));
+        if (!items.length) {
+            if (!query) {
+                list.innerHTML = `<li class="cmd-empty"><i class="fa-solid fa-clock-rotate-left"></i><span>No recent videos</span><small>Search YouTube or paste a link above</small></li>`;
+                list.hidden = false;
+                return;
+            }
+            list.replaceChildren();
+            list.hidden = true;
+            return;
+        }
         list.replaceChildren(...items.map((item, i) => {
-            const li = make("li", `cmd-item${item.danger ? " danger" : ""}${item.search ? " search" : ""}`);
+            const li = make("li", `cmd-item${item.danger ? " danger" : ""}${item.search ? " search" : ""}${item.recent ? " recent" : ""}`);
             li.setAttribute("role", "option");
             li.id = `cmd-item-${i}`;
             li.dataset.i = i;
-            li.append(make("i", `${/^fa-(brands|regular)/.test(item.icon) ? "" : "fa-solid "}${item.icon} cmd-item-icon`), make("span", "cmd-item-label", item.label));
-            if (item.keys && !isTouch) {
-                const keys = make("span", "cmd-item-keys");
-                item.keys.forEach(key => keys.append(make("kbd", null, key)));
-                li.append(keys);
+            li.append(make("i", `${/^fa-(brands|regular)/.test(item.icon) ? "" : "fa-solid "}${item.icon} cmd-item-icon`));
+            const info = make("span", "cmd-item-info");
+            const label = make("span", "cmd-item-label", item.label);
+            label.title = item.label;
+            info.append(label);
+            if (item.meta) {
+                const meta = make("span", "cmd-item-meta", item.meta);
+                info.append(meta);
             }
+            li.append(info);
             return li;
         }));
-        list.hidden = !items.length;
+        list.hidden = false;
         markChosen();
     };
     const markChosen = () => {
@@ -3012,16 +3099,16 @@ const cmdPalette = (() => {
     });
 
     // ---------- YouTube: results, and a pasted link (play, or in a room play now / add to queue)
-    const roomQueue = () => together.active() && !!together.canQueueYouTube && together.canQueueYouTube();
+    const roomQueue = () => !!together.canQueueYouTube && together.canQueueYouTube();
     const resultActions = [];
     const setResultActions = () => resultActions.splice(0, resultActions.length, ...(roomQueue()
         ? [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }]
         : [{ key: "play", label: "Play", icon: "fa-play" }]));
     setResultActions();
-    // Play: here (on your own), or for everyone in a room; Add to queue (a room): stays open for more
+    // Play: here (on your own), or for everyone in a room; Add to queue: stays open for more
     const pick = (ref, where, meta = {}) => {
         if (where === "end") {
-            const refused = together.queueYouTube(ref);
+            const refused = together.queueYouTube(ref, meta);
             if (refused) return showNote(refused, true);
             showNote(ref.list ? "Adding the videos to the queue…" : "Added to the queue. Add more, or close.");
             return;
@@ -3120,7 +3207,8 @@ const cmdPalette = (() => {
         const ref = button && linkRef();
         if (!ref) return;
         if (button.dataset.where === "end") {
-            pick(ref, "end");
+            const meta = { title: linkTitle.textContent !== "Loading…" ? linkTitle.textContent : "" };
+            pick(ref, "end", meta);
             input.value = "";
             renderAll();
             return input.focus();
@@ -3162,7 +3250,27 @@ const cmdPalette = (() => {
         const value = input.value.trim();
         if (!value) return;
         if (items[chosen]) return runItem(items[chosen]);
-        if (!youtube()) showNote("No command like that. Searching YouTube needs the website (with an internet connection).", true);
+
+        // "remove all commands, it would work, but will not show":
+        // 1. Typed commands (time: 1:23, speed: 1.5x, percent: 50%)
+        const typed = typedCommands(value);
+        if (typed.length) {
+            close();
+            return typed[0].run();
+        }
+
+        // 2. Keyword commands (play, pause, stop, fullscreen, subtitles, mute, etc.)
+        const words = value.toLowerCase().split(/\s+/).filter(Boolean);
+        const all = playerCommands();
+        const matched = all.find(command => matches(command, words));
+        if (matched) {
+            close();
+            return matched.run();
+        }
+
+        // 3. Otherwise search YouTube
+        if (youtube()) return searchYouTube(value);
+        showNote("No video or command matched. Searching YouTube needs the website (with an internet connection).", true);
     });
     pasteBtn.addEventListener("click", async () => {
         try {
@@ -3186,7 +3294,7 @@ const cmdPalette = (() => {
             setResultActions();
             overlay.hidden = false;
             searchBtn.setAttribute("aria-expanded", "true");
-            input.placeholder = youtube() ? "Search YouTube, paste a link, or type a command" : "Type a command (a time like 1:23, a speed like 1.5x)";
+            input.placeholder = youtube() ? "Search YouTube, paste a link, or pick recent…" : "Paste a link or pick a recent video…";
             if (results) results.clear();
             linkState.key = "";
         }

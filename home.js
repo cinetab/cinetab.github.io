@@ -65,6 +65,47 @@
         window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
     }
 
+    // =================== FAQ TOGGLE & NAVIGATION ===================
+
+    const faqDrawer = home.querySelector("#faq-drawer");
+    const faqToggleBtn = home.querySelector("#faq-toggle-btn");
+    if (faqDrawer && faqToggleBtn) {
+        const btnText = faqToggleBtn.querySelector(".faq-btn-text");
+        const openFaq = (scroll = false) => {
+            faqDrawer.hidden = false;
+            faqToggleBtn.setAttribute("aria-expanded", "true");
+            if (btnText) btnText.textContent = "Hide questions";
+            if (scroll) {
+                const faqSec = home.querySelector("#faq");
+                if (faqSec) faqSec.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        };
+        const closeFaq = () => {
+            faqDrawer.hidden = true;
+            faqToggleBtn.setAttribute("aria-expanded", "false");
+            if (btnText) btnText.textContent = "Browse all questions (17)";
+        };
+        const toggleFaq = () => {
+            if (faqDrawer.hidden) openFaq();
+            else closeFaq();
+        };
+
+        faqToggleBtn.addEventListener("click", toggleFaq);
+
+        // Auto-open FAQ when an anchor link targeting #faq is clicked (e.g. top nav)
+        document.addEventListener("click", e => {
+            const link = e.target.closest('a[href="#faq"]');
+            if (link) {
+                openFaq(true);
+            }
+        });
+
+        // Also check if page was loaded with #faq in the hash
+        if (location.hash === "#faq") {
+            openFaq(true);
+        }
+    }
+
     // =================== DASHBOARD ===================
 
     const dashboard = home.querySelector("#dashboard");

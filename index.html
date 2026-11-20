@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.6.1">
+  <meta name="version" content="1.6.2">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.6.1",
+      "softwareVersion": "1.6.2",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -79,6 +79,10 @@
 }
   </script>
   <!-- ============ /SEO ============ -->
+  <!-- Google Fonts: Inter (UI/Body) & Poppins (Headings/Display) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -109,16 +113,18 @@
 
     <section class="hero">
       <div class="hero-text">
-        <span class="eyebrow"><i class="fa-solid fa-lock"></i> Free &middot; Private &middot; No sign-up</span>
-        <h1>Movie night on <span class="gradient-text">any video call.</span></h1>
-        <p class="lead">CineTab plays a movie from your own computer right in this browser tab. Share the tab with audio in Google Meet, Zoom or Teams, or invite friends to a private CineTab room where everyone watches in sync and chats.</p>
+        <span class="eyebrow"><i class="fa-solid fa-shield-halved"></i> 100% Private &middot; Peer-to-Peer &middot; No Sign-Up</span>
+        <h1>Watch movies together <span class="gradient-text">in perfect sync.</span></h1>
+        <p class="lead">Play any video from your computer or YouTube in sync with friends on any video call or in private rooms. No uploads, no accounts &mdash; simple and instant.</p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
-          <button class="btn btn-ghost btn-lg room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join a room</button>
-          <a class="btn btn-ghost btn-lg hero-yt" href="#dashboard" title="Search YouTube and watch a video or playlist here, alone or together"><i class="fa-brands fa-youtube"></i> Search YouTube</a>
+          <button class="btn btn-ghost btn-lg room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create room</button>
+          <button class="btn btn-ghost btn-lg room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join room</button>
         </div>
-        <p class="hero-note">Best in Chrome or Edge on desktop. Your video is never uploaded to any server.</p>
-        <p class="hero-note offline-note" data-online-only><i class="fa-solid fa-download"></i> Prefer no website at all? <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file you can open from your computer, even without internet">Download the player as one file</a> and open it from your computer.</p>
+        <div class="hero-notes">
+          <p class="hero-note"><i class="fa-solid fa-lock"></i> Your files are never uploaded &middot; Best in Chrome &amp; Edge</p>
+          <p class="hero-note offline-note" data-online-only><i class="fa-solid fa-download"></i> <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download CineTab as a single HTML file you can open from your computer">Download standalone offline player</a></p>
+        </div>
       </div>
 
       <div class="hero-visual">
@@ -213,151 +219,160 @@
     </section>
 
     <section class="section" id="how">
-      <h2 class="section-title">Two ways to watch together</h2>
-      <div class="ways">
-        <article class="way">
-          <span class="way-badge">New</span>
-          <h3><i class="fa-solid fa-door-open"></i> In a CineTab room</h3>
-          <p class="way-sub">No meeting needed. Friends join from their browser with a link, a QR code, or the room code and password.</p>
-          <ol class="way-steps">
-            <li><b>Create a room</b> and open a movie. Pick it from your computer or drag it onto the page.</li>
-            <li><b>Invite friends.</b> Send the link or show the QR code, and let them in as they arrive.</li>
-            <li><b>Press play.</b> Everyone watches your movie in sync, or their own copy of it, and chats beside the video.</li>
-          </ol>
-          <div class="way-actions">
-            <button class="btn btn-primary btn-sm room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create a room</button>
-            <button class="btn btn-ghost btn-sm room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join a room</button>
-          </div>
-        </article>
-        <article class="way">
-          <h3><i class="fa-solid fa-video"></i> On Google Meet, Zoom or Teams</h3>
-          <p class="way-sub">Already on a call? Share the CineTab tab with its sound.</p>
-          <ol class="way-steps">
-            <li><b>Choose a movie.</b> Pick a video from your computer or drag it onto the page. It opens instantly.</li>
-            <li><b>Share this tab.</b> In your meeting choose <b>Share screen &rarr; Chrome Tab</b>, select CineTab and switch on <b>Also share tab audio</b>.</li>
-            <li><b>Press play.</b> Everyone sees and hears the movie. Go fullscreen with <kbd>F</kbd> and turn on subtitles with <kbd>C</kbd>.</li>
-          </ol>
-          <div class="way-actions">
-            <button class="btn btn-ghost btn-sm choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
-          </div>
-        </article>
+      <div class="section-header">
+        <h2 class="section-title">How it works</h2>
+        <p class="section-sub">Three simple steps to watch anything together &mdash; in CineTab rooms or on your favorite call.</p>
+      </div>
+      <div class="how-steps">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-icon"><i class="fa-solid fa-folder-open"></i></div>
+          <h3>Pick your video</h3>
+          <p>Drop any movie from your computer or search YouTube. Formats like MKV, AVI or DTS convert automatically in your browser.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-icon"><i class="fa-solid fa-users"></i></div>
+          <h3>Share or invite</h3>
+          <p>Create a private room with one link, or share your CineTab browser tab with audio on Google Meet, Zoom, or Teams.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-icon"><i class="fa-solid fa-play"></i></div>
+          <h3>Watch in sync</h3>
+          <p>Everyone stays in frame-accurate sync with real-time video chat, text messages, subtitles, and individual volume controls.</p>
+        </div>
+      </div>
+      <div class="how-quick-actions">
+        <button class="btn btn-primary choose-video" title="Pick a video from your computer"><i class="fa-solid fa-folder-open"></i> Open a movie</button>
+        <button class="btn btn-ghost room-create-open" title="Start a private room"><i class="fa-solid fa-plus"></i> Create room</button>
+        <button class="btn btn-ghost room-join-open" title="Join a friend's room"><i class="fa-solid fa-right-to-bracket"></i> Join room</button>
       </div>
     </section>
 
     <section class="section" id="features">
-      <h2 class="section-title">Everything a movie night needs</h2>
+      <div class="section-header">
+        <h2 class="section-title">Built for seamless movie nights</h2>
+        <p class="section-sub">Everything you need for watching alone or together &mdash; without bloat or tracking.</p>
+      </div>
       <div class="features">
         <article class="feature">
-          <i class="fa-solid fa-shield-halved"></i>
-          <h3>Never uploaded</h3>
-          <p>The file plays straight from your disk. No uploads, no accounts, no tracking.</p>
+          <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <h3>100% Private &amp; Local</h3>
+          <p>Your movie plays straight from your disk. No file uploads, no server logs, no accounts, and no tracking.</p>
         </article>
         <article class="feature">
-          <i class="fa-solid fa-photo-film"></i>
-          <h3>Plays almost anything</h3>
-          <p>MP4, MKV, AVI, WMV, TS, FLV, DTS and Dolby sound, MP3, FLAC&hellip; Formats your browser can't handle are converted on your computer.</p>
+          <div class="feature-icon"><i class="fa-solid fa-photo-film"></i></div>
+          <h3>Plays All Formats</h3>
+          <p>MP4, MKV, AVI, WMV, DTS &amp; Dolby sound. Unsupported browser formats convert automatically on your computer.</p>
         </article>
         <article class="feature">
-          <i class="fa-regular fa-closed-captioning"></i>
-          <h3>Subtitles</h3>
-          <p>Drop an .srt or .vtt file on the player, or use the ones inside your MKV. Toggle with one key.</p>
+          <div class="feature-icon"><i class="fa-solid fa-users"></i></div>
+          <h3>Encrypted Sync Rooms</h3>
+          <p>Peer-to-peer WebRTC rooms with video calls, synchronized playback, and instant live chat.</p>
         </article>
         <article class="feature">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-          <h3>Picks up where you left</h3>
-          <p>Reopen the same movie and it resumes from the exact moment you stopped.</p>
-        </article>
-        <article class="feature">
-          <i class="fa-solid fa-comments"></i>
-          <h3>Private watch rooms</h3>
-          <p>Invite friends with a code or QR code, stream your movie to them or play in sync, and chat. Peer-to-peer and encrypted.</p>
-        </article>
-        <article class="feature">
-          <i class="fa-solid fa-gauge-high"></i>
-          <h3>Preview, speed &amp; PiP</h3>
-          <p>Hover the timeline to preview a scene, change speed, or pop the movie out when watching solo. Keyboard shortcuts for everything.</p>
+          <div class="feature-icon"><i class="fa-solid fa-sliders"></i></div>
+          <h3>Subtitles &amp; Rich Player</h3>
+          <p>Load .srt/.vtt subtitles, timeline scene previews, playback speed controls, PiP, and full keyboard shortcuts.</p>
         </article>
       </div>
     </section>
 
     <section class="section" id="faq">
-      <h2 class="section-title">Questions</h2>
-      <div class="faq">
-        <details>
-          <summary>How do I share a video with sound on Google Meet?</summary>
-          <p>Open your video in CineTab in Chrome or Edge. In Google Meet click <b>Share screen</b>, choose <b>Chrome Tab</b> (or <b>A tab</b>), pick the CineTab tab and switch on <b>Also share tab audio</b>, then press play. Sharing a tab sends smooth video and the movie's sound; sharing a window or your whole screen doesn't send tab audio.</p>
-        </details>
-        <details>
-          <summary>Can I watch a movie together on Zoom or Microsoft Teams?</summary>
-          <p>Yes. In Zoom click <b>Share</b>, pick the browser tab with CineTab and tick <b>Share sound</b>. In Teams choose <b>Share</b>, select the CineTab tab or browser window and turn on <b>Include sound</b>. Everyone on the call watches and hears the movie playing on your computer.</p>
-        </details>
-        <details>
-          <summary>Can I play a video from my computer in a browser tab?</summary>
-          <p>That's exactly what CineTab does. Pick or drag in any video or music file and it plays right in the tab: MP4, MKV, MOV, WebM, AVI, WMV, FLV, TS, MP3, FLAC and more, with subtitles, playback speed and fullscreen. The file stays on your computer.</p>
-        </details>
-        <details>
-          <summary>How do I watch together without a video call?</summary>
-          <p>Use a CineTab room. Click <b>Watch together &rarr; Create a room</b>, open a movie and invite friends with the link, the QR code, or the room code and password. You let each person in, then everyone watches your movie streamed from your browser, perfectly in step with you, and can chat beside the video. A friend who has the same movie can play their own copy instead; CineTab keeps it in sync with yours.</p>
-        </details>
-        <details>
-          <summary>Are CineTab rooms private and secure?</summary>
-          <p>Yes. Browsers in a room connect directly to the host's browser (peer-to-peer) and WebRTC encrypts the video, sound and chat end to end. To find each other, browsers swap connection details through a public relay, encrypted with a key made from the room code and password, so the relay can't read them and never sees the password. Nothing is stored anywhere: when the room ends, the chat is gone. You let each person in, can remove anyone and can lock the room. As on any video call, the host and guests can see each other's IP address; guests can't see other guests' addresses.</p>
-        </details>
-        <details>
-          <summary>How many people can join a room?</summary>
-          <p>Up to 12 guests. If you stream your movie, your internet upload is shared between everyone watching the stream, about 2.5&nbsp;Mbit/s each at standard quality, so 3 to 5 viewers is comfortable on most home connections. Guests who play their own copy of the movie use almost no bandwidth. You can lower the stream quality in the room settings.</p>
-        </details>
-        <details>
-          <summary>A friend can't connect to my room.</summary>
-          <p>Check that they typed the code and password exactly and that your CineTab tab is still open. Then use <b>Check my network</b> in the join dialog: it shows what the network allows. Some networks, such as campus, office or hotel Wi-Fi and certain mobile data plans, block direct connections between browsers or keep devices on the same Wi-Fi apart; switching one of you to a different network (for example a phone hotspot) usually fixes it. Streaming needs Chrome or Edge on the host's computer; guests can use Chrome, Edge, Firefox or Safari.</p>
-        </details>
-        <details>
-          <summary>Do my friends need to install anything?</summary>
-          <p>No. On a call, your friends just join the meeting and watch your shared tab. In a CineTab room, they open your invite link in their browser, on a computer or a phone.</p>
-        </details>
-        <details>
-          <summary>Is my movie uploaded anywhere?</summary>
-          <p>Never to a server. CineTab is a static web page &mdash; the browser reads the file from your disk and plays it locally. In a CineTab room, the video is streamed directly from your browser to your friends' browsers, encrypted, and isn't saved on their side. Closing the tab leaves no copy behind.</p>
-        </details>
-        <details>
-          <summary>My friends can see the movie but can't hear it.</summary>
-          <p>Stop sharing and share again, choosing the <b>Chrome Tab</b> option and turning on <b>Also share tab audio</b>. Sharing a window or the entire screen doesn't send tab audio. Tab audio works in Chrome and Edge.</p>
-        </details>
-        <details>
-          <summary>Which video and audio formats work?</summary>
-          <p>Almost all of them. MP4, MKV, MOV, WebM and music files like MP3, M4A, FLAC and WAV play instantly. AVI, WMV, FLV, TS and movies with DTS or Dolby (AC3) sound are converted automatically on your computer the first time &mdash; usually a few minutes for a movie. Old AVI/WMV video that has to be fully re-encoded takes longer.</p>
-        </details>
-        <details>
-          <summary>Where does the conversion happen?</summary>
-          <p>Right in your browser. The first time, CineTab downloads its converter (about 31 MB, ffmpeg built for the web). Your movie is never uploaded. The converted copies of your three most recent files are kept in this browser's storage so they open instantly next time. They're listed near the top of this page, where you can play or delete them.</p>
-        </details>
-        <details data-online-only>
-          <summary>Can I use CineTab without this website or without internet?</summary>
-          <p>Yes. <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file">Download the player as a single HTML file</a>, save it anywhere and double-click it to open it in your browser. It's just the player, without this home page, and everything it needs (icons, fonts, scripts) is inside that one file, so it works with no internet connection. Two differences from the website: the converter for formats like AVI or DTS sound needs internet the first time it's used (to download ffmpeg), and because browsers don't allow file storage for pages opened from disk, converted copies aren't saved between visits and very large movies may not fit in memory while converting.</p>
-        </details>
-        <details>
-          <summary>Can I watch YouTube videos together?</summary>
-          <p>Yes. Search YouTube from the <a href="#dashboard">dashboard</a> (or paste a video or playlist link) and it plays right here with CineTab's controls. Click <b>Watch together</b> in the player to create a room: it carries on with the same video for everyone, each person watching on YouTube's own player, in sync. In the player, the search button at the top right (or <b>Ctrl+K</b>) searches YouTube too, and in a room plays or queues for everyone. Search results come from YouTube through public Piped servers; if they're busy, search on YouTube and paste the link instead.</p>
-        </details>
-        <details>
-          <summary>Can I install CineTab as an app on my phone?</summary>
-          <p>Yes. Tap <b>Install app</b> at the top of this page. On Android (Chrome, Edge, Samsung Internet) it installs straight away; on iPhone and iPad, tap <b>Share</b>, then <b>Add to Home Screen</b>. CineTab then opens full screen from your home screen like any app, and its page loads even on a weak connection.</p>
-        </details>
-        <details>
-          <summary>What does the dashboard remember?</summary>
-          <p>The YouTube videos and playlists you watched and where you were in them, and the names and lengths of the videos you opened from your device. It's kept only in this browser and never sent anywhere; remove one item with its &times;, or everything with <b>Clear</b>. In Chrome and Edge on a computer, a video from your device opens again with one click (the browser asks for permission); elsewhere you pick the file again and it continues where you stopped.</p>
-        </details>
-        <details>
-          <summary>Should I use Picture-in-Picture while sharing?</summary>
-          <p>No &mdash; PiP moves the video out of the tab, so people on the call see an empty player. Use fullscreen instead.</p>
-        </details>
+      <div class="faq-showcase">
+        <div class="faq-showcase-badge"><i class="fa-solid fa-circle-question"></i> Help &amp; FAQ</div>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <p class="section-sub">Quick answers about privacy, sharing tab audio, supported formats, rooms, and offline use.</p>
+        <div class="faq-showcase-action">
+          <button type="button" class="btn btn-primary faq-toggle-btn" id="faq-toggle-btn" aria-expanded="false" aria-controls="faq-drawer">
+            <i class="fa-solid fa-chevron-down faq-btn-icon"></i>
+            <span class="faq-btn-text">Browse all questions (17)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="faq-drawer" id="faq-drawer" hidden>
+        <div class="faq-grid">
+          <details class="faq-item">
+            <summary>How do I share a video with sound on Google Meet?</summary>
+            <p>Open your video in CineTab in Chrome or Edge. In Google Meet click <b>Share screen</b>, choose <b>Chrome Tab</b> (or <b>A tab</b>), pick the CineTab tab and switch on <b>Also share tab audio</b>, then press play. Sharing a tab sends smooth video and the movie's sound; sharing a window or your whole screen doesn't send tab audio.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can I watch a movie together on Zoom or Microsoft Teams?</summary>
+            <p>Yes. In Zoom click <b>Share</b>, pick the browser tab with CineTab and tick <b>Share sound</b>. In Teams choose <b>Share</b>, select the CineTab tab or browser window and turn on <b>Include sound</b>. Everyone on the call watches and hears the movie playing on your computer.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can I play a video from my computer in a browser tab?</summary>
+            <p>That's exactly what CineTab does. Pick or drag in any video or music file and it plays right in the tab: MP4, MKV, MOV, WebM, AVI, WMV, FLV, TS, MP3, FLAC and more, with subtitles, playback speed and fullscreen. The file stays on your computer.</p>
+          </details>
+          <details class="faq-item">
+            <summary>How do I watch together without a video call?</summary>
+            <p>Use a CineTab room. Click <b>Watch together &rarr; Create a room</b>, open a movie and invite friends with the link, the QR code, or the room code and password. You let each person in, then everyone watches your movie streamed from your browser, perfectly in step with you, and can chat beside the video. A friend who has the same movie can play their own copy instead; CineTab keeps it in sync with yours.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Are CineTab rooms private and secure?</summary>
+            <p>Yes. Browsers in a room connect directly to the host's browser (peer-to-peer) and WebRTC encrypts the video, sound and chat end to end. To find each other, browsers swap connection details through a public relay, encrypted with a key made from the room code and password, so the relay can't read them and never sees the password. Nothing is stored anywhere: when the room ends, the chat is gone. You let each person in, can remove anyone and can lock the room. As on any video call, the host and guests can see each other's IP address; guests can't see other guests' addresses.</p>
+          </details>
+          <details class="faq-item">
+            <summary>How many people can join a room?</summary>
+            <p>Up to 12 guests. If you stream your movie, your internet upload is shared between everyone watching the stream, about 2.5&nbsp;Mbit/s each at standard quality, so 3 to 5 viewers is comfortable on most home connections. Guests who play their own copy of the movie use almost no bandwidth. You can lower the stream quality in the room settings.</p>
+          </details>
+          <details class="faq-item">
+            <summary>A friend can't connect to my room.</summary>
+            <p>Check that they typed the code and password exactly and that your CineTab tab is still open. Then use <b>Check my network</b> in the join dialog: it shows what the network allows. Some networks, such as campus, office or hotel Wi-Fi and certain mobile data plans, block direct connections between browsers or keep devices on the same Wi-Fi apart; switching one of you to a different network (for example a phone hotspot) usually fixes it. Streaming needs Chrome or Edge on the host's computer; guests can use Chrome, Edge, Firefox or Safari.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Do my friends need to install anything?</summary>
+            <p>No. On a call, your friends just join the meeting and watch your shared tab. In a CineTab room, they open your invite link in their browser, on a computer or a phone.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Is my movie uploaded anywhere?</summary>
+            <p>Never to a server. CineTab is a static web page &mdash; the browser reads the file from your disk and plays it locally. In a CineTab room, the video is streamed directly from your browser to your friends' browsers, encrypted, and isn't saved on their side. Closing the tab leaves no copy behind.</p>
+          </details>
+          <details class="faq-item">
+            <summary>My friends can see the movie but can't hear it.</summary>
+            <p>Stop sharing and share again, choosing the <b>Chrome Tab</b> option and turning on <b>Also share tab audio</b>. Sharing a window or the entire screen doesn't send tab audio. Tab audio works in Chrome and Edge.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Which video and audio formats work?</summary>
+            <p>Almost all of them. MP4, MKV, MOV, WebM and music files like MP3, M4A, FLAC and WAV play instantly. AVI, WMV, FLV, TS and movies with DTS or Dolby (AC3) sound are converted automatically on your computer the first time &mdash; usually a few minutes for a movie. Old AVI/WMV video that has to be fully re-encoded takes longer.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Where does the conversion happen?</summary>
+            <p>Right in your browser. The first time, CineTab downloads its converter (about 31 MB, ffmpeg built for the web). Your movie is never uploaded. The converted copies of your three most recent files are kept in this browser's storage so they open instantly next time. They're listed near the top of this page, where you can play or delete them.</p>
+          </details>
+          <details class="faq-item" data-online-only>
+            <summary>Can I use CineTab without this website or without internet?</summary>
+            <p>Yes. <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file">Download the player as a single HTML file</a>, save it anywhere and double-click it to open it in your browser. It's just the player, without this home page, and everything it needs (icons, fonts, scripts) is inside that one file, so it works with no internet connection. Two differences from the website: the converter for formats like AVI or DTS sound needs internet the first time it's used (to download ffmpeg), and because browsers don't allow file storage for pages opened from disk, converted copies aren't saved between visits and very large movies may not fit in memory while converting.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can I watch YouTube videos together?</summary>
+            <p>Yes. Search YouTube from the <a href="#dashboard">dashboard</a> (or paste a video or playlist link) and it plays right here with CineTab's controls. Click <b>Watch together</b> in the player to create a room: it carries on with the same video for everyone, each person watching on YouTube's own player, in sync. In the player, the search button at the top right (or <b>Ctrl+K</b>) searches YouTube too, and in a room plays or queues for everyone. Search results come from YouTube through public Piped servers; if they're busy, search on YouTube and paste the link instead.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can I install CineTab as an app on my phone?</summary>
+            <p>Yes. Tap <b>Install app</b> at the top of this page. On Android (Chrome, Edge, Samsung Internet) it installs straight away; on iPhone and iPad, tap <b>Share</b>, then <b>Add to Home Screen</b>. CineTab then opens full screen from your home screen like any app, and its page loads even on a weak connection.</p>
+          </details>
+          <details class="faq-item">
+            <summary>What does the dashboard remember?</summary>
+            <p>The YouTube videos and playlists you watched and where you were in them, and the names and lengths of the videos you opened from your device. It's kept only in this browser and never sent anywhere; remove one item with its &times;, or everything with <b>Clear</b>. In Chrome and Edge on a computer, a video from your device opens again with one click (the browser asks for permission); elsewhere you pick the file again and it continues where you stopped.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Should I use Picture-in-Picture while sharing?</summary>
+            <p>No &mdash; PiP moves the video out of the tab, so people on the call see an empty player. Use fullscreen instead.</p>
+          </details>
+        </div>
       </div>
     </section>
 
     <section class="cta-band">
       <h2>Ready for movie night?</h2>
-      <p>Grab the popcorn, open a movie and invite your friends.</p>
-      <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+      <p>Pick a movie from your device, or start a room and invite your friends.</p>
+      <div class="cta-actions">
+        <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
+        <button class="btn btn-ghost btn-lg room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create room</button>
+      </div>
     </section>
 
     <div class="room-home-bar" hidden>
@@ -375,7 +390,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.6.1</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.6.2</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -419,9 +434,9 @@
     <!-- Top Title Bar (YouTube Style) -->
     <div class="top-bar">
       <div class="video-title-container">
-        <button class="player-back" title="Back to home"><i class="fa-solid fa-arrow-left"></i></button>
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
+        <button type="button" class="player-top-stop" id="player-top-stop" title="Stop video" aria-label="Stop video" hidden><i class="fa-solid fa-stop"></i></button>
         <!-- Phones held upright, in a room: the room's name here, the video's title below it -->
         <span class="top-room-name" hidden></span>
       </div>
@@ -689,6 +704,7 @@
           <button class="prev-track" title="Previous video in the queue (Shift + P)" aria-label="Previous video in the queue" hidden><i class="fa-solid fa-backward-step"></i></button>
           <button class="skip-backward" title="Back 5 seconds (Left arrow)"><i class="fas fa-backward"></i></button>
           <button class="play-pause" title="Play (Space / K)"><i class="fas fa-play"></i></button>
+          <button type="button" class="player-stop-btn" id="player-stop-btn" title="Stop video" aria-label="Stop video" hidden><i class="fa-solid fa-stop"></i></button>
           <button class="skip-forward" title="Forward 5 seconds (Right arrow)"><i class="fas fa-forward"></i></button>
           <button class="next-track" title="Next video in the queue (Shift + N)" aria-label="Next video in the queue" hidden><i class="fa-solid fa-forward-step"></i></button>
         </li>
@@ -848,6 +864,10 @@
 
     <!-- The YouTube queue: reorder, play one now, remove; drop a link on it to add one -->
     <section class="room-tab room-tab-queue" data-tab="queue" role="tabpanel" hidden>
+      <form class="queue-add-form" novalidate>
+        <input type="search" class="queue-add-input" placeholder="Paste YouTube link or search..." aria-label="Paste YouTube link or search">
+        <button type="submit" class="queue-add-btn" title="Add to queue"><i class="fa-solid fa-plus"></i></button>
+      </form>
       <p class="room-section-title room-queue-title">Queue <span class="room-queue-count"></span></p>
       <ol class="room-queue"></ol>
       <!-- Nothing queued (or not YouTube): what the queue is, and how to fill it -->
@@ -916,6 +936,7 @@
       <button class="room-me" title="Change your name or avatar"><span class="room-avatar"></span><span class="room-me-text"><b class="room-me-name"></b><small>Edit profile</small></span></button>
       <button class="room-mic-btn" type="button" title="Turn microphone on" aria-pressed="false"><i class="fa-solid fa-microphone-slash"></i><span>Mic off</span></button>
       <button class="room-mic-btn room-cam-btn" type="button" title="Turn camera on" aria-pressed="false"><i class="fa-solid fa-video-slash"></i><span>Cam off</span></button>
+      <button class="room-mic-btn room-flip-btn" type="button" title="Switch camera (front / back)" aria-label="Switch camera" hidden><i class="fa-solid fa-camera-rotate"></i><span>Flip</span></button>
       <div class="room-leave-wrap">
         <div class="room-leave-popover" hidden>
           <button class="room-leave-opt leave-just" type="button" title="Leave the room (keeps it open for others)"><i class="fa-solid fa-right-from-bracket"></i> <span>Just leave</span></button>

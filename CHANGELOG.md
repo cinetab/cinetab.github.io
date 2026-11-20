@@ -4,6 +4,27 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.2] - 2026-11-20
+
+### Home Page Redesign
+- Simplified, compact layout with concise messaging and streamlined primary call-to-actions (Choose video, Create room, Join room)
+- Modern 3-step "How it works" timeline sequence replacing oversized text columns
+- 4-pillar compact Features grid highlighting Privacy, Formats, Encrypted rooms, and Rich player controls
+- Expandable FAQ Showcase Card: keeps all 17 questions hidden by default inside an animated drawer, revealing them in an organized 2-column grid on click or nav link
+
+### Google Meet Layout & Video Call
+- Own video hover overlay no longer blurs or darkens the background video; camera feed remains 100% sharp and visible with floating Google Meet-style circular buttons
+- Mobile & touch optimization: disabled tile hover overlay to prevent blocking the video; added a dedicated one-tap Flip Camera button to `.room-foot` and `.room-call-controls` next to the Camera button
+- Tiled layout polish with 12px rounded cards, dark slate background, frosted glass name pills, and active speaker outlines
+
+### Player & Room Improvements
+- Modern typography hierarchy with Inter (UI/Body) and Poppins (Headings/Display)
+- Player top-left navigation simplified to a single CineTab logo button to return home
+- Direct Stop Video buttons in the player top bar and center control bar, visible whenever media is active
+- Non-disruptive host browser reload handling (`pagehide` sends `bye` with succession, allowing guests to stay connected uninterrupted)
+- Windows 11 Mica-style backdrop effect for search / command launcher popup, focused on recent videos
+- Repositioned room toast notifications to bottom-left with slide-up animation
+
 ## [1.6.1] - 2026-11-20
 
 ### Video call window
@@ -757,6 +778,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.6.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.2
 [1.6.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.1
 [1.6.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.0
 [1.5.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.9
