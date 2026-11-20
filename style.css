@@ -5308,6 +5308,29 @@ body > .room-toasts {
   overflow: hidden;
 }
 
+.room-toast-action {
+  align-self: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.room-toast-action:hover {
+  background: rgba(255, 75, 75, 0.25);
+  border-color: rgba(255, 75, 75, 0.5);
+  color: #ff8b8b;
+}
+
 @keyframes room-toast-in {
   from { opacity: 0; transform: translateY(16px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -5579,32 +5602,17 @@ body > .room-toasts {
   padding: 0 5px 0 10px;
 }
 
-/* Folded up it's small, so it stands out: a glowing blue pill with a slow pulse around it and a
-   camera with a live dot in front of its title (no pulse for people who asked for less motion) */
 .room-call.collapsed {
-  border: 1.5px solid rgba(62, 151, 253, 0.85);
-  border-radius: 999px;
-  background: linear-gradient(135deg, rgba(36, 64, 120, 0.82), rgba(58, 40, 112, 0.82));
-  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.18), 0 0 22px rgba(62, 151, 253, 0.45), 0 10px 26px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  background: rgba(22, 22, 28, 0.85);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .room-call.collapsed::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: inherit;
-  pointer-events: none;
-  animation: roomCallPulse 2.6s ease-out infinite;
-}
-
-@keyframes roomCallPulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(62, 151, 253, 0.55);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 12px rgba(62, 151, 253, 0);
-  }
+  display: none !important;
 }
 
 .room-call-live {
@@ -12165,6 +12173,10 @@ body > .room-toasts {
    unfolds its videos below it (indented along a line), and folds them again. Like YouTube's app. */
 .room-queue-group {
   list-style: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .room-queue-group[hidden] {
@@ -12172,7 +12184,8 @@ body > .room-toasts {
 }
 
 .room-queue-group-head {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -12185,6 +12198,30 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.room-queue-group-actions {
+  display: none;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.room-queue-group:hover .room-queue-group-actions,
+.room-queue-group:focus-within .room-queue-group-actions {
+  display: flex;
+}
+
+.room-queue-group-actions .room-icon-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+@media (hover: none) {
+  .room-queue-group-actions {
+    display: flex;
+  }
 }
 
 .room-queue-group-head:hover,
@@ -12649,3 +12686,2459 @@ body > .room-toasts {
 .room-queue-item.in-playlist .room-queue-actions {
   right: 8px;
 }
+
+/* =================== VIDEO CALL DOCK UPDATES =================== */
+
+/* Disallow resizing on minimized call bar */
+.room-call:is(.collapsed, :not(.expanded)) :is(.room-call-edge, .room-call-dock-edge, .room-call-resize, .room-call-strip-grip),
+.room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-dock-edge {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.room-call:is(.collapsed, :not(.expanded)) {
+  cursor: default !important;
+}
+
+/* Auto-hide minimized bar when idle */
+.player-page.call-idle .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people),
+.room-call.docked.side.idle:is(.collapsed, :not(.has-video), .no-people) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  margin-left: calc(-1 * var(--dock-w, 200px) - 10px) !important;
+  transform: translateX(-100%) !important;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease !important;
+}
+
+.room-call.bottom.asleep:not(.expanded) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-50%, 14px) scale(0.96) !important;
+  transition: opacity 0.25s ease, transform 0.25s ease !important;
+}
+
+.room-call.collapsed.idle:not(:hover):not(:focus-within) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.25s ease !important;
+}
+
+.room-call.docked.side:hover,
+.room-call.docked.side:focus-within,
+.room-call.bottom:hover,
+.room-call.bottom:focus-within,
+.room-call.collapsed:hover,
+.room-call.collapsed:focus-within {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  margin-left: 0 !important;
+}
+
+.room-call.docked.side:hover,
+.room-call.docked.side:focus-within {
+  transform: none !important;
+}
+
+.room-call.bottom:hover,
+.room-call.bottom:focus-within {
+  transform: translate(-50%, 0) !important;
+}
+
+/* Fullscreen and side panel: buttons aligned center and middled vertically when video is off */
+.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people),
+.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+  height: 100% !important;
+  padding: 12px 6px !important;
+}
+
+.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-grid,
+.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-grid {
+  display: none !important;
+}
+
+.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-foot, .room-call-bar),
+.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-foot, .room-call-bar) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  margin: auto 0 !important;
+  padding: 0 !important;
+  border-top: none !important;
+}
+
+.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-controls,
+.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-controls {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-winbtns,
+.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) .room-call-winbtns {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  padding-top: 10px !important;
+  border-left: none !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.player-page.call-dock-side .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-mic-btn, .room-leave-btn, .room-call-btn, .room-unit-people),
+.player-page:is(:fullscreen, :-webkit-full-screen) .room-call.docked.side:is(.collapsed, :not(.has-video), .no-people) :is(.room-mic-btn, .room-leave-btn, .room-call-btn, .room-unit-people) {
+  margin: 0 auto !important;
+  align-self: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+/* Ensure redundant mobile buttons stay hidden */
+.room-call-unit-min,
+.room-unit-expand {
+  display: none !important;
+}
+
+/* =================== HOME SHELL: A SIDEBAR, SECTIONS, MICA =================== */
+/* The home page as an app: a sidebar (Home, Dashboard, My rooms, Help & FAQ; quick starts) and
+   one section at a time beside it (home.js), on a mica background - soft colour glows that drift
+   slowly behind frosted glass. On a phone the sidebar is a tab bar along the bottom. */
+.home.app-shell {
+  --glass: rgba(24, 24, 34, 0.55);
+  --glass-strong: rgba(20, 20, 30, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.08);
+  --side-w: 248px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #0b0b10;
+}
+
+/* The glows: big soft gradients (no blur filter: cheap to draw), drifting very slowly */
+.home-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-backdrop .glow {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  opacity: 0.9;
+  will-change: transform;
+}
+
+.home-backdrop .g1 {
+  top: -30vmax;
+  left: -15vmax;
+  background: radial-gradient(circle, rgba(62, 151, 253, 0.28), transparent 62%);
+  animation: glowDrift1 38s ease-in-out infinite alternate;
+}
+
+.home-backdrop .g2 {
+  top: -20vmax;
+  right: -25vmax;
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.3), transparent 62%);
+  animation: glowDrift2 46s ease-in-out infinite alternate;
+}
+
+.home-backdrop .g3 {
+  bottom: -35vmax;
+  left: 20vmax;
+  background: radial-gradient(circle, rgba(32, 201, 151, 0.14), transparent 62%);
+  animation: glowDrift3 52s ease-in-out infinite alternate;
+}
+
+@keyframes glowDrift1 {
+  to {
+    transform: translate(12vmax, 8vmax) scale(1.08);
+  }
+}
+
+@keyframes glowDrift2 {
+  to {
+    transform: translate(-10vmax, 12vmax) scale(0.94);
+  }
+}
+
+@keyframes glowDrift3 {
+  to {
+    transform: translate(8vmax, -10vmax) scale(1.1);
+  }
+}
+
+/* ---------- The sidebar: mica glass */
+.home-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 20px 14px 18px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-right: 1px solid var(--glass-line);
+  background: rgba(18, 18, 26, 0.5);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+}
+
+.home-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.side-brand {
+  padding: 2px 10px 6px;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  color: #b4b4c4;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.side-link > i:first-child {
+  width: 20px;
+  font-size: 15px;
+  text-align: center;
+  transition: transform 0.25s var(--ease), color 0.2s ease;
+}
+
+.side-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.side-link:hover > i:first-child {
+  transform: scale(1.1);
+}
+
+.side-link.active {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(62, 151, 253, 0.24), rgba(124, 92, 255, 0.1));
+  box-shadow: inset 0 0 0 1px rgba(62, 151, 253, 0.25);
+}
+
+.side-link.active > i:first-child {
+  color: #8cc2ff;
+}
+
+/* (the active one: its rounded square alone - no bar beside it) */
+.side-link::before {
+  display: none;
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 4px;
+  height: 0;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(#3e97fd, #7c5cff);
+  transform: translateY(-50%);
+  transition: height 0.3s var(--ease);
+}
+
+.side-link.active::before {
+  height: 22px;
+}
+
+.side-link:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+.side-count {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: #d6d6e2;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.side-count[hidden],
+.side-live[hidden] {
+  display: none;
+}
+
+.side-live {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #ff4d5e;
+  box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.6);
+  animation: livePulse 2s ease-out infinite;
+}
+
+.side-live:not([hidden]) + .side-count {
+  margin-left: 6px;
+}
+
+@keyframes livePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgba(255, 77, 94, 0);
+  }
+}
+
+.side-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--glass-line);
+}
+
+.side-label {
+  margin: 0 0 4px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #7c7c8e;
+}
+
+.side-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  color: #d8d8e4;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.side-action > i {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.side-action.choose-video > i {
+  background: linear-gradient(135deg, #3e97fd, #7c5cff);
+  box-shadow: 0 4px 14px rgba(62, 151, 253, 0.35);
+}
+
+.side-action:hover {
+  border-color: var(--glass-line);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.side-action:active {
+  transform: scale(0.98);
+}
+
+.side-foot {
+  margin-top: auto;
+}
+
+.side-privacy {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #8a8a9c;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.side-privacy i {
+  margin-right: 4px;
+  color: #6fd3a3;
+}
+
+/* ---------- The main column */
+.home-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell .home-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  max-width: none;
+  margin: 0;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px 32px;
+  border-bottom: 1px solid transparent;
+  background: rgba(11, 11, 16, 0.4);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.topbar-brand {
+  display: none;
+}
+
+.topbar-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.app-shell .header-actions {
+  margin-left: auto;
+}
+
+/* ---------- One section at a time, rising into place (its parts one after another) */
+.home-view {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 32px 64px;
+}
+
+.home-view[hidden] {
+  display: none;
+}
+
+.home-view.entering > * {
+  animation: viewIn 0.45s var(--ease) both;
+}
+
+.home-view.entering > :nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.home-view.entering > :nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+.home-view.entering > :nth-child(4) {
+  animation-delay: 0.15s;
+}
+
+.home-view.entering > :nth-child(n + 5) {
+  animation-delay: 0.2s;
+}
+
+@keyframes viewIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The sections inside the views: their own spacing, not a long page's */
+.app-shell .section {
+  max-width: none;
+  padding: 14px 0 28px;
+}
+
+.app-shell .section[id] {
+  scroll-margin-top: 84px;
+}
+
+/* ---------- Glass: the panels and cards */
+.app-shell :is(.dash-panel, .saved-panel, .step-card, .feature, .faq-showcase, .faq-item, .cta-band, .rooms-empty) {
+  border: 1px solid var(--glass-line);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+}
+
+.app-shell .cta-band {
+  margin: 8px 0 28px;
+  border-radius: 24px;
+}
+
+/* ---------- Home: the welcome */
+.app-shell .hero {
+  max-width: none;
+  margin: 0;
+  padding: 36px 40px;
+  gap: 40px;
+  border: 1px solid var(--glass-line);
+  border-radius: 26px;
+  background: linear-gradient(135deg, rgba(62, 151, 253, 0.1), rgba(124, 92, 255, 0.08) 50%, rgba(24, 24, 34, 0.5));
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.app-shell .hero h1 {
+  font-size: clamp(30px, 3.6vw, 48px);
+}
+
+.app-shell .hero .lead {
+  font-size: 15.5px;
+}
+
+/* the quick starts */
+.quick-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.quick-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  font: inherit;
+  text-align: left;
+  color: #fff;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  cursor: pointer;
+  transition: transform 0.25s var(--ease), border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.quick-tile::after {
+  content: "";
+  position: absolute;
+  inset: auto -30% -60% auto;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, hsl(var(--hue) 85% 60% / 0.28), transparent 70%);
+  transition: transform 0.4s var(--ease);
+  pointer-events: none;
+}
+
+.quick-tile:hover {
+  transform: translateY(-4px);
+  border-color: hsl(var(--hue) 85% 65% / 0.45);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.quick-tile:hover::after {
+  transform: scale(1.3);
+}
+
+.quick-tile:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.quick-tile:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+.quick-icon {
+  width: 42px;
+  height: 42px;
+  margin-bottom: 10px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(135deg, hsl(var(--hue) 80% 55%), hsl(calc(var(--hue) + 40) 75% 45%));
+  box-shadow: 0 8px 20px hsl(var(--hue) 80% 50% / 0.35);
+}
+
+.quick-tile b {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.quick-tile small {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #a9a9bb;
+}
+
+.home-view.entering .quick-tile {
+  animation: viewIn 0.45s var(--ease) both;
+  animation-delay: calc(0.08s + var(--i, 0) * 0.05s);
+}
+
+/* the strips: carry on watching, your rooms */
+.home-strip {
+  margin-top: 30px;
+}
+
+.home-strip[hidden] {
+  display: none;
+}
+
+.strip-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.strip-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.strip-head h2 i {
+  margin-right: 6px;
+  font-size: 15px;
+  color: #8cc2ff;
+}
+
+.strip-more {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #cfcfdc;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.strip-more:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.strip-more i {
+  font-size: 11px;
+  transition: transform 0.2s var(--ease);
+}
+
+.strip-more:hover i {
+  transform: translateX(3px);
+}
+
+.home-continue {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+/* ---------- Room cards (My rooms, and Home's) */
+.room-cards {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.room-card {
+  --hue: 220;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s ease, border-color 0.25s ease;
+  animation: viewIn 0.45s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 0.05s);
+}
+
+.room-card:hover {
+  transform: translateY(-4px);
+  border-color: hsl(var(--hue) 80% 65% / 0.4);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+}
+
+.room-card.live {
+  border-color: rgba(255, 77, 94, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 77, 94, 0.25), 0 14px 40px rgba(255, 77, 94, 0.12);
+}
+
+.room-card-cover {
+  position: relative;
+  height: 96px;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px 16px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, hsl(calc(var(--hue) + 60) 80% 55% / 0.75), transparent 60%),
+    linear-gradient(135deg, hsl(var(--hue) 70% 42%), hsl(calc(var(--hue) + 30) 65% 28%));
+}
+
+.room-card-initial {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.room-card-role {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.room-card.host .room-card-role i {
+  color: #ffd166;
+}
+
+.room-card-live {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #e5384b;
+  box-shadow: 0 4px 14px rgba(229, 56, 75, 0.45);
+}
+
+.room-card-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: livePulse 1.8s ease-out infinite;
+}
+
+.room-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 14px 16px 4px;
+}
+
+.room-card-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.room-card-meta {
+  font-size: 12px;
+  color: #9a9aac;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-card-people {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  margin-top: 10px;
+}
+
+.room-card-people small {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #b8b8c8;
+}
+
+.room-card-people .room-card-nobody {
+  color: #7e7e90;
+}
+
+.room-card-avatars {
+  display: flex;
+  flex-shrink: 0;
+  padding-left: 8px;
+}
+
+.room-card-avatars > * {
+  width: 30px;
+  height: 30px;
+  margin-left: -8px;
+  border: 2px solid #1b1b25;
+  border-radius: 50%;
+  font-size: 12px;
+  transition: transform 0.2s var(--ease);
+}
+
+.room-card:hover .room-card-avatars > * {
+  transform: translateX(calc(var(--n, 0) * 2px));
+}
+
+.room-card-more {
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.room-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.room-card-open {
+  flex: 1;
+  justify-content: center;
+}
+
+.room-card-forget {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--glass-line);
+  border-radius: 11px;
+  color: #a9a9bb;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.room-card-forget:hover {
+  color: #ff7a85;
+  border-color: rgba(255, 122, 133, 0.4);
+  background: rgba(255, 77, 94, 0.1);
+}
+
+/* My rooms: its head's buttons; no rooms yet */
+.rooms-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-shell #rooms .saved-panel {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.app-shell #rooms .saved-header {
+  margin-bottom: 18px;
+}
+
+.rooms-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 460px;
+  margin: 20px auto;
+  padding: 34px 28px;
+  border-radius: 24px;
+  text-align: center;
+}
+
+.rooms-empty[hidden] {
+  display: none;
+}
+
+.rooms-empty-icon {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  font-size: 22px;
+  color: #fff;
+  background: linear-gradient(135deg, #3e97fd, #7c5cff);
+  box-shadow: 0 10px 30px rgba(62, 151, 253, 0.35);
+}
+
+.rooms-empty b {
+  font-size: 17px;
+  color: #fff;
+}
+
+.rooms-empty p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #a9a9bb;
+}
+
+.rooms-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* The room bar (welcome back / back to the room): centred on the main column */
+.app-shell .room-home-bar {
+  left: calc(50% + var(--side-w) / 2);
+  border-color: var(--glass-line);
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(30px) saturate(170%);
+  backdrop-filter: blur(30px) saturate(170%);
+}
+
+/* ---------- Tablets: a narrower sidebar */
+@media (max-width: 1100px) {
+  .home.app-shell {
+    --side-w: 220px;
+  }
+  .quick-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-shell .hero {
+    padding: 28px;
+  }
+}
+
+/* ---------- Phones: the sidebar is a tab bar along the bottom */
+@media (max-width: 860px) {
+  .home.app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-sidebar {
+    position: fixed;
+    inset: auto 0 0 0;
+    top: auto;
+    height: auto;
+    flex-direction: row;
+    gap: 0;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    overflow: visible;
+    border-right: 0;
+    border-top: 1px solid var(--glass-line);
+    background: rgba(16, 16, 24, 0.72);
+  }
+  .home-sidebar :is(.side-brand, .side-section, .side-foot) {
+    display: none;
+  }
+  .side-nav {
+    flex: 1;
+    flex-direction: row;
+    gap: 4px;
+  }
+  .side-link {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 4px 6px;
+    font-size: 11px;
+    text-align: center;
+  }
+  .side-link > i:first-child {
+    width: auto;
+    font-size: 17px;
+  }
+  .side-link.active {
+    background: rgba(62, 151, 253, 0.16);
+    box-shadow: none;
+  }
+  .side-link::before {
+    left: 50%;
+    top: -6px;
+    width: 0;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    transform: translateX(-50%);
+    transition: width 0.3s var(--ease);
+  }
+  .side-link.active::before {
+    width: 26px;
+    height: 3px;
+  }
+  .side-count,
+  .side-live {
+    position: absolute;
+    top: 4px;
+    left: calc(50% + 6px);
+    margin: 0;
+  }
+  .side-count {
+    min-width: 18px;
+    padding: 0 5px;
+    font-size: 10px;
+    background: #3e97fd;
+    color: #fff;
+  }
+  .side-live {
+    left: calc(50% + 10px);
+  }
+  .side-live:not([hidden]) + .side-count {
+    display: none;
+  }
+  .home-main {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  .app-shell .home-topbar {
+    padding: 10px 16px;
+  }
+  .topbar-brand {
+    display: flex;
+  }
+  .topbar-title {
+    display: none;
+  }
+  .home-view {
+    padding: 10px 16px 32px;
+  }
+  .app-shell .hero {
+    padding: 22px 18px;
+    border-radius: 22px;
+  }
+  .quick-tile {
+    padding: 14px;
+    border-radius: 18px;
+  }
+  .quick-icon {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 6px;
+    font-size: 15px;
+  }
+  .quick-tile small {
+    display: none;
+  }
+  .room-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell .room-home-bar {
+    left: 50%;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-backdrop .glow,
+  .home-view.entering > *,
+  .home-view.entering .quick-tile,
+  .room-card,
+  .side-live,
+  .room-card-live i {
+    animation: none;
+  }
+}
+
+
+/* =================== HOME SHELL: LESS REPEATED =================== */
+/* The sidebar and the quick starts have Open / Create / Join: the welcome doesn't repeat them,
+   nor (on a computer, where the sidebar shows) the top bar; "welcome back" to a remembered room is
+   its card on Home and in My rooms (the bar stays for the room you're in) */
+.app-shell .hero .hero-actions {
+  display: none;
+}
+
+.app-shell .hero .hero-notes {
+  margin-top: 18px;
+}
+
+@media (min-width: 861px) {
+  .app-shell .home-topbar :is(.room-create-open, .room-join-open) {
+    display: none;
+  }
+}
+
+.app-shell .room-home-bar:not(.live) {
+  display: none;
+}
+/* Phones: no drop-a-file illustration (the quick starts come straight after the welcome) */
+@media (max-width: 860px) {
+  .app-shell .hero .hero-visual {
+    display: none;
+  }
+  .app-shell .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* =================== SIDEBAR: SHRUNK TO ITS ICONS =================== */
+/* (home.js: .side-collapsed) A rail of icons; pointed at (or tabbed into) it opens out over the
+   page - not pushing it - with every name, and folds back as the pointer leaves */
+.side-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.side-collapse {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 9px;
+  font-size: 12px;
+  color: #9a9aab;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.side-collapse:hover,
+.side-collapse:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@media (min-width: 861px) {
+  .home.app-shell {
+    transition: grid-template-columns 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .home.app-shell.side-collapsed {
+    --side-w: 76px;
+  }
+  .home-sidebar {
+    width: var(--side-w);
+    white-space: nowrap;
+    transition: width 0.3s var(--ease), box-shadow 0.3s ease, background 0.3s ease;
+  }
+  .side-collapsed .home-sidebar:hover:not(.no-peek),
+  .side-collapsed .home-sidebar:has(:focus-visible):not(.no-peek) {
+    width: 248px;
+    background: rgba(18, 18, 26, 0.88);
+    box-shadow: 24px 0 60px rgba(0, 0, 0, 0.5);
+  }
+  .home-sidebar :is(.side-link span, .side-action span, .side-label, .side-privacy, .side-brand span, .side-collapse) {
+    transition: opacity 0.2s ease;
+  }
+  /* the rail: icons only */
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) :is(.side-link span, .side-action span, .side-label, .side-privacy, .side-brand span, .side-collapse) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) .side-link {
+    padding-left: 15px;
+  }
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) .side-action {
+    padding-left: 10px;
+  }
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) .side-count {
+    position: absolute;
+    top: 3px;
+    left: 30px;
+    min-width: 17px;
+    padding: 0 4px;
+    font-size: 9.5px;
+    color: #fff;
+    background: #3e97fd;
+  }
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) .side-live {
+    position: absolute;
+    top: 6px;
+    left: 36px;
+  }
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) .side-live:not([hidden]) + .side-count {
+    display: none;
+  }
+  .side-collapsed .home-sidebar:is(:not(:hover, :has(:focus-visible)), .no-peek) .side-section {
+    border-top-color: transparent;
+  }
+}
+
+@media (min-width: 861px) {
+  .home-sidebar .side-privacy {
+    white-space: normal;
+    min-width: 200px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-sidebar,
+  .home.app-shell {
+    transition: none;
+  }
+}
+
+/* =================== THE MINIPLAYER (room.js) =================== */
+/* Out of a room to the home page, its video on: the player shrinks into a small window at the
+   corner (the page's own player - nothing moves or starts over), over the room's bar: its name,
+   play / pause, Open, and leave (or end). A click on the video opens the room again. On a phone,
+   a strip along the bottom like YouTube's: the video at its left. */
+.room-home-video,
+.room-home-play,
+.room-home-leave,
+.room-home-leave-menu {
+  display: none;
+}
+
+.player-page.miniplayer[hidden] {
+  position: fixed;
+  inset: auto 20px 84px auto;
+  z-index: 29;
+  display: block !important;
+  width: 384px;
+  height: 216px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px 16px 0 0;
+  background: #000;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+  animation: miniIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.player-page.miniplayer[hidden] > :not(.container) {
+  display: none !important;
+}
+
+.player-page.miniplayer[hidden] > .container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.player-page.miniplayer[hidden] > .container :is(.wrapper, .top-bar, .upload-overlay, .center-feedback, .player-sheet, .room-stream-wait, .error-overlay, .compat-banner) {
+  display: none !important;
+}
+
+.room-home-bar.mini {
+  left: auto;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  transform: none;
+  isolation: isolate;
+  width: 384px;
+  height: 280px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  align-content: end;
+  gap: 8px;
+  padding: 216px 10px 10px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  animation: miniIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* (its bar's glass: below the video only, which stays sharp) */
+.room-home-bar.mini::before {
+  content: "";
+  position: absolute;
+  inset: 216px 0 0 0;
+  z-index: -1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  background: rgba(22, 22, 30, 0.97);
+  -webkit-backdrop-filter: blur(30px) saturate(170%);
+  backdrop-filter: blur(30px) saturate(170%);
+}
+
+.room-home-bar.mini :is(.room-home-icon, .room-home-forget, .room-home-dismiss) {
+  display: none !important;
+}
+
+.room-home-bar.mini .room-home-text {
+  min-width: 0;
+}
+
+.room-home-bar.mini .room-home-text b,
+.room-home-bar.mini .room-home-text small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.room-home-bar.mini .room-home-text small {
+  font-size: 11.5px;
+}
+
+/* the video: a click opens the room (an icon to say so, when pointed at) */
+.room-home-bar.mini .room-home-video {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 30;
+  height: 216px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  font-size: 22px;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-home-bar.mini .room-home-video i {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.room-home-bar.mini .room-home-video:is(:hover, :focus-visible) {
+  background: linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35));
+}
+
+.room-home-bar.mini .room-home-video:is(:hover, :focus-visible) i {
+  opacity: 1;
+  transform: none;
+}
+
+.room-home-bar.mini :is(.room-home-play, .room-home-leave) {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.room-home-bar.mini .room-home-play:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.room-home-bar.mini .room-home-leave:hover {
+  border-color: rgba(255, 90, 100, 0.5);
+  background: rgba(255, 77, 94, 0.2);
+}
+
+.room-home-bar.mini :is(.room-home-play, .room-home-leave):active {
+  transform: scale(0.92);
+}
+
+.room-home-bar.mini .room-home-action {
+  padding: 8px 14px;
+}
+
+/* leave: just leave, or end it */
+.room-home-bar.mini .room-home-leave-menu:not([hidden]) {
+  position: absolute;
+  right: 8px;
+  bottom: 58px;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(22, 22, 30, 0.97);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  animation: miniIn 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.room-home-leave-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: #e4e4ee;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-home-leave-opt:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.room-home-leave-opt.danger {
+  color: #ff7a85;
+}
+
+.room-home-leave-opt i {
+  width: 16px;
+  text-align: center;
+}
+
+@keyframes miniIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* (the page's end clear of it) */
+.has-miniplayer .home-main {
+  padding-bottom: 300px;
+}
+
+/* Phones: a strip along the bottom, above the tab bar - the video at its left */
+@media (max-width: 860px) {
+  .player-page.miniplayer[hidden] {
+    inset: auto auto calc(84px + env(safe-area-inset-bottom)) 8px;
+    width: 116px;
+    height: 66px;
+    border-radius: 14px 0 0 14px;
+    box-shadow: none;
+  }
+  .room-home-bar.mini {
+    left: 8px;
+    right: 8px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: auto;
+    height: 66px;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-content: center;
+    gap: 6px;
+    padding: 0 8px 0 128px;
+    border-radius: 14px;
+  }
+  .room-home-bar.mini::before {
+    inset: 0 0 0 116px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 0;
+    border-radius: 0 14px 14px 0;
+  }
+  .room-home-bar.mini .room-home-video {
+    width: 116px;
+    height: 66px;
+    border-radius: 14px 0 0 14px;
+  }
+  .room-home-bar.mini .room-home-video i {
+    display: none;
+  }
+  .room-home-bar.mini .room-home-action {
+    padding: 7px 10px;
+    font-size: 12.5px;
+  }
+  .room-home-bar.mini :is(.room-home-play, .room-home-leave) {
+    width: 34px;
+    height: 34px;
+  }
+  .room-home-bar.mini .room-home-leave-menu:not([hidden]) {
+    bottom: 74px;
+  }
+  .has-miniplayer .home-main {
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+  }
+}
+
+/* (the sidebar is a tab bar on a phone: nothing to shrink) */
+@media (max-width: 860px) {
+  .side-collapse {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-page.miniplayer[hidden],
+  .room-home-bar.mini,
+  .room-home-bar.mini .room-home-leave-menu:not([hidden]) {
+    animation: none;
+  }
+}
+
+/* =================== /HOME SHELL =================== */
+
+
+/* =================== THE PLAYER'S NOTICES =================== */
+/* Everything the player has to tell or ask - can't play it, converting, no sound, stop it for
+   everyone? - is a small card: an icon, a few words, and the choices. They drop in at the top of
+   the video like a notification (the player still there behind them); the empty player's "pick
+   something" card sits in the middle. The longer why is on pointing at it. */
+.notice-layer,
+.notice-layer.compat-banner {
+  position: absolute;
+  inset: auto;
+  top: 72px;
+  left: 50%;
+  z-index: 12;
+  display: block;
+  width: min(520px, calc(100% - 24px));
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+}
+
+.notice-layer > .notice {
+  pointer-events: auto;
+}
+
+.notice-layer.hidden,
+.notice-layer.compat-banner.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -14px) scale(0.97);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s 0.25s;
+}
+
+.notice-layer.compat-banner {
+  z-index: 6;
+}
+
+/* (the empty player's: in the middle, the whole player still taking a dropped file) */
+.upload-overlay {
+  background: rgba(8, 8, 12, 0.35);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* The card */
+.upload-box.notice {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(22, 22, 30, 0.9);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  animation: noticeIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.upload-overlay .upload-box.notice {
+  width: min(500px, calc(100% - 24px));
+}
+
+.upload-box .notice-actions .upload-yt {
+  margin: 0;
+}
+
+/* (touch screens: the big play / jump buttons in the middle are away while it's there) */
+@media (pointer: coarse), screen and (max-width: 600px) {
+  .container:has(.upload-overlay:not(.hidden)) .video-controls .options.center {
+    visibility: hidden;
+  }
+}
+
+.upload-box.notice.drag-over {
+  border-color: #3e97fd;
+  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.35), 0 14px 40px rgba(0, 0, 0, 0.5);
+  transform: scale(1.02);
+}
+
+@keyframes noticeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.97);
+  }
+}
+
+.notice .box-scroll {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 46px 12px 12px;
+  overflow: visible;
+}
+
+.notice-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 17px;
+  color: #8cc2ff;
+  background: rgba(62, 151, 253, 0.16);
+}
+
+.notice-danger .notice-icon {
+  color: #ff8a94;
+  background: rgba(255, 77, 94, 0.16);
+}
+
+.notice-warn .notice-icon {
+  color: #ffc46b;
+  background: rgba(255, 181, 71, 0.16);
+}
+
+.notice-text {
+  min-width: 0;
+}
+
+.notice-text b {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #fff;
+}
+
+.upload-box .notice-text small {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #a4a4b4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.notice-text small:empty {
+  display: none;
+}
+
+.notice-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.notice-actions[hidden],
+.notice-actions button[hidden] {
+  display: none;
+}
+
+.upload-box .notice-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.upload-box .notice-actions button:hover {
+  transform: none;
+  filter: brightness(1.1);
+}
+
+.upload-box .notice-actions .notice-danger-btn {
+  background: #e5484d;
+}
+
+.upload-box .notice-actions .notice-danger-btn:hover {
+  background: #f05a5f;
+}
+
+.notice .box-close,
+.upload-box.notice .box-close {
+  top: 50%;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  transform: translateY(-50%);
+}
+
+.notice .box-close:hover,
+.upload-box.notice .box-close:hover {
+  transform: translateY(-50%);
+}
+
+/* Converting: a thin bar along the card's foot */
+.notice .convert-progress {
+  grid-column: 1 / -1;
+  height: 4px;
+  margin: 0;
+}
+
+.notice .convert-reason,
+.notice .convert-plan {
+  display: none;
+}
+
+/* Fullscreen, phones and narrow players: the choices under the words */
+@media (max-width: 600px) {
+  .notice-layer,
+  .notice-layer.compat-banner {
+    top: 58px;
+    width: calc(100% - 16px);
+  }
+  .notice .box-scroll {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px 12px;
+    padding: 10px;
+  }
+  .notice-text {
+    padding-right: 30px;
+  }
+  .notice-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .upload-box .notice-actions button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .notice .box-close,
+  .upload-box.notice .box-close {
+    top: 14px;
+    transform: none;
+  }
+  .notice .box-close:hover,
+  .upload-box.notice .box-close:hover {
+    transform: none;
+  }
+  .notice-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-box.notice {
+    animation: none;
+  }
+  .notice-layer,
+  .notice-layer.hidden {
+    transition: opacity 0.2s ease, visibility 0s;
+  }
+}
+/* =================== /THE PLAYER'S NOTICES =================== */
+
+/* =================== NOTICES: ABOVE EVERYTHING =================== */
+/* (script.js / room.js) On the page itself, not inside the video's box, so nothing covers them -
+   not the call, its dock, the panel or the toasts - placed at the top of wherever the video is
+   (script.js sets the numbers). On the home page: at the top of the page. */
+.player-page > .notice-layer,
+.player-page > .notice-layer.compat-banner {
+  position: fixed;
+  top: var(--notice-top, 72px);
+  left: var(--notice-x, 50%);
+  width: var(--notice-w, min(520px, calc(100% - 24px)));
+  z-index: 1100;
+}
+
+body > .notice-layer {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  width: min(480px, calc(100% - 24px));
+  z-index: 1100;
+}
+
+/* ---------- The room's messages and questions, as a notice */
+.upload-box.room-notice-box > .room-view {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 12px 46px 12px 12px;
+  text-align: left;
+}
+
+.upload-box.room-notice-box > .room-view[hidden] {
+  display: none;
+}
+
+.upload-box.room-notice-box .room-status-icon {
+  grid-row: 1 / span 2;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 17px;
+  color: #8cc2ff;
+  background: rgba(62, 151, 253, 0.16);
+}
+
+.upload-box.room-notice-box.notice-danger .room-status-icon {
+  color: #ff8a94;
+  background: rgba(255, 77, 94, 0.16);
+}
+
+.upload-box.room-notice-box .room-status-title {
+  grid-column: 2;
+  align-self: end;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.upload-box.room-notice-box .room-status-text {
+  grid-column: 2;
+  align-self: start;
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-align: left;
+  color: #a4a4b4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.upload-box.room-notice-box .room-status-text[hidden] {
+  display: none;
+}
+
+/* (no words under the title: the title beside the icon's middle) */
+.upload-box.room-notice-box > .room-view:not(:has(.room-status-text:not([hidden]))) .room-status-title {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.upload-box.room-notice-box .room-status-list {
+  grid-column: 1 / -1;
+  max-height: 40vh;
+  margin: 10px 0 0;
+  overflow-y: auto;
+}
+
+.upload-box.room-notice-box .room-status-progress {
+  grid-column: 1 / -1;
+  height: 4px;
+  margin: 10px 0 0;
+}
+
+.upload-box.room-notice-box .room-status-progress[hidden] {
+  display: none;
+}
+
+.upload-box.room-notice-box .room-status-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.upload-box.room-notice-box .room-status-actions[hidden] {
+  display: none;
+}
+
+.upload-box.room-notice-box .room-status-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.upload-box.room-notice-box .room-status-actions button:hover {
+  transform: none;
+  filter: brightness(1.1);
+}
+
+@media (max-width: 600px) {
+  .upload-box.room-notice-box > .room-view {
+    padding: 10px;
+  }
+  .upload-box.room-notice-box .room-status-title,
+  .upload-box.room-notice-box .room-status-text {
+    padding-right: 30px;
+  }
+  .upload-box.room-notice-box .room-status-actions button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .upload-box.room-notice-box .box-close {
+    top: 14px;
+    transform: none;
+  }
+}
+/* (computers: one or two choices beside the words, like the other notices; more, or a list,
+   underneath) */
+@media (min-width: 601px) {
+  .upload-box.room-notice-box > .room-view {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .upload-box.room-notice-box .room-status-actions:not(:has(> button:nth-child(3))) {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    margin: 0;
+  }
+  .upload-box.room-notice-box > .room-view:has(.room-status-list:not([hidden])) .room-status-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    margin: 10px 0 0;
+  }
+}
+/* =================== /NOTICES: ABOVE EVERYTHING =================== */
+
+/* =================== SAVED: HEARTS =================== */
+/* (history.js, youtube.js, home.js, script.js) A heart keeps a YouTube video or a whole playlist
+   in Saved; filled and pink once it's there, with a small pop */
+@keyframes heartPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+:is(.yt-save, .dash-fav, .player-save-btn).on i {
+  color: #ff4f8b;
+  animation: heartPop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* On a search result: on its picture's corner (the dashboard's cards); in a list (the search
+   launcher, the room's queue), at its end beside its buttons */
+.yt-result {
+  position: relative;
+}
+
+.yt-result-list:not(.compact) .yt-save {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+}
+
+.yt-result-list:not(.compact) .yt-result:hover .yt-save,
+.yt-result-list:not(.compact) .yt-save:focus-visible,
+.yt-result-list:not(.compact) .yt-save.on {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .yt-result-list:not(.compact) .yt-save {
+    opacity: 1;
+  }
+}
+
+.yt-save {
+  flex-shrink: 0;
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 15px;
+  color: #a4a4b4;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.yt-result-list.compact .yt-save:hover,
+.yt-result-list:not(.compact) .yt-save:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.yt-save:active {
+  transform: scale(0.9);
+}
+
+/* On a dashboard card: on its picture, top right (beside the ×), showing when pointed at or saved */
+.dash-card {
+  position: relative;
+}
+
+.dash-fav {
+  position: absolute;
+  top: 6px;
+  right: 40px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.fav-card .dash-fav {
+  right: 6px;
+}
+
+.dash-card:hover .dash-fav,
+.dash-fav:focus-visible,
+.dash-fav.on {
+  opacity: 1;
+}
+
+.dash-fav:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.dash-fav:active {
+  transform: scale(0.9);
+}
+
+@media (hover: none) {
+  .dash-fav {
+    opacity: 1;
+  }
+}
+
+/* The Saved cards rise in one after another */
+.fav-grid .fav-card {
+  animation: favIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 35ms);
+}
+
+@keyframes favIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+.fav-empty > i {
+  color: #ff4f8b;
+}
+
+.side-link[data-view="favorites"].active > i:first-child {
+  color: #ff7aa8;
+}
+
+/* ---------- The player's heart (top bar) and its menu: this video, or the whole playlist */
+.player-save-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.player-save-wrap[hidden] {
+  display: none;
+}
+
+.top-bar .player-save-btn {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  font-size: 15px;
+  color: #fff;
+  background: rgba(20, 20, 26, 0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.top-bar .player-save-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.top-bar .player-save-btn:active {
+  transform: scale(0.92);
+}
+
+.player-save-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 230px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(22, 22, 30, 0.96);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  animation: noticeIn 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.player-save-menu[hidden] {
+  display: none;
+}
+
+.player-save-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: #e4e4ee;
+  background: transparent;
+  cursor: pointer;
+}
+
+.player-save-opt:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.player-save-opt > i:first-child {
+  width: 16px;
+  text-align: center;
+  color: #9a9aab;
+}
+
+.player-save-opt span {
+  flex: 1;
+}
+
+.player-save-opt .player-save-heart {
+  color: #9a9aab;
+}
+
+.player-save-opt.on .player-save-heart {
+  color: #ff4f8b;
+}
+
+/* ---------- The miniplayer's bar: the video's title under the room's name, gliding to its end
+   and back when it's too long (room.js) */
+.room-home-now {
+  display: none;
+}
+
+.room-home-bar.mini .room-home-now:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 12px;
+  color: #c9c9d6;
+  white-space: nowrap;
+}
+
+.room-home-now-clip {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+}
+
+.room-home-now > i {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: #ff4f8b;
+}
+
+.room-home-now-text {
+  display: inline-block;
+}
+
+.room-home-now.glide .room-home-now-text {
+  animation: miniGlide var(--glide, 10s) ease-in-out infinite;
+}
+
+@keyframes miniGlide {
+  0%, 18% { transform: translateX(0); }
+  62%, 80% { transform: translateX(var(--over, 0px)); }
+  100% { transform: translateX(0); }
+}
+
+/* (in the miniplayer: the room's name and the video's title - who hosts it on pointing at it) */
+.room-home-bar.mini .room-home-text small {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-home-now.glide .room-home-now-text,
+  .fav-grid .fav-card,
+  :is(.yt-save, .dash-fav, .player-save-btn).on i {
+    animation: none;
+  }
+  .room-home-bar.mini .room-home-now-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+#favorites .saved-title i,
+.home-fav-strip h2 i {
+  color: #ff4f8b;
+}
+@media (pointer: coarse), screen and (max-width: 600px) {
+  .top-bar .player-save-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+}
+/* ---------- Saved: searching it, and Videos / Playlists (with how many match) */
+.fav-box .dash-history-head[hidden] {
+  display: none;
+}
+
+.fav-search {
+  position: relative;
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 8px 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fav-search:focus-within {
+  border-color: rgba(255, 79, 139, 0.55);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 3px rgba(255, 79, 139, 0.14);
+}
+
+.fav-search > i {
+  font-size: 13px;
+  color: #8f8f9e;
+}
+
+.fav-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 14px;
+  color: #fff;
+  background: transparent;
+}
+
+.fav-search input::placeholder {
+  color: #7d7d8c;
+}
+
+.fav-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.fav-search-clear {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #a4a4b4;
+  background: transparent;
+  cursor: pointer;
+}
+
+.fav-search-clear:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fav-search-clear[hidden] {
+  display: none;
+}
+
+.fav-filters .dash-filter.active {
+  background: rgba(255, 79, 139, 0.16);
+  border-color: rgba(255, 79, 139, 0.55);
+}
+
+.fav-n {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: #d6d6e2;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fav-filters .dash-filter.active .fav-n {
+  color: #fff;
+  background: rgba(255, 79, 139, 0.45);
+}
+
+.fav-nomatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 16px;
+  text-align: center;
+  color: #a4a4b4;
+  animation: favIn 0.3s ease both;
+}
+
+.fav-nomatch[hidden] {
+  display: none;
+}
+
+.fav-nomatch > i {
+  font-size: 22px;
+  color: #6f6f7e;
+}
+
+.fav-nomatch p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.fav-nomatch .fav-nomatch-clear[hidden] {
+  display: none;
+}
+@media (max-width: 600px) {
+  .fav-clear span {
+    display: none;
+  }
+  .fav-filters {
+    gap: 5px;
+  }
+  .fav-filters .dash-filter {
+    padding: 5px 10px;
+  }
+  .fav-filters .dash-filter > i {
+    display: none;
+  }
+}
+/* =================== /SAVED: HEARTS =================== */

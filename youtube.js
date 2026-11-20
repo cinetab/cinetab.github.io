@@ -109,6 +109,18 @@
     // running or loading anything
     const unescape = text => new DOMParser().parseFromString(String(text || ""), "text/html").documentElement.textContent;
     const thumbOf = id => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+
+    // A heart for Saved (history.js): filled when it's saved. Every heart on the page follows
+    // when something is saved or taken out (here, or in another tab)
+    const paintHeart = heart => {
+        const on = !!window.CineSaved && CineSaved.has(heart.dataset.saveKey);
+        heart.classList.toggle("on", on);
+        heart.firstChild.className = `${on ? "fa-solid" : "fa-regular"} fa-heart`;
+        heart.title = on ? "Saved - take it out of Saved" : heart.dataset.saveKey.startsWith("pl:") ? "Save the whole playlist" : "Save this video";
+        heart.setAttribute("aria-label", heart.title);
+        heart.setAttribute("aria-pressed", String(on));
+    };
+    if (window.CineSaved) CineSaved.onChange(() => document.querySelectorAll("[data-save-key]").forEach(paintHeart));
     const text = (value, max = 200) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
     const searchYouTube = async (query, kind, token) => {
@@ -453,7 +465,8 @@
     // `onPick(ref, key, item)` gets the chosen one. `input`: the search box; Clear empties it,
     // and emptying it (or Esc in it) clears the results. `suggest`: while the box is empty or
     // being typed in, it suggests what was watched before (matching what's typed); Enter searches.
-    const createResults = ({ host, actions, onPick, input = null, compact = false, suggest = false }) => {
+    // `save`: a heart on each result, to keep it in Saved (history.js) - a video, or a whole playlist
+    const createResults = ({ host, actions, onPick, input = null, compact = false, suggest = false, save = !!window.CineSaved }) => {
         const head = el("div", "yt-results-head");
         const label = el("span", "yt-results-label");
         label.append(el("i", "fa-solid fa-clock-rotate-left"), el("span", null, "Watched before"));
@@ -552,6 +565,15 @@
             if (meta) info.append(el("small", null, meta));
             main.append(thumb, info);
             li.append(main);
+            const savedKey = save && window.CineSaved ? CineSaved.keyOf(item) : null;
+            if (savedKey) {
+                const heart = el("button", "yt-save");
+                heart.type = "button";
+                heart.dataset.saveKey = savedKey;
+                heart.append(el("i"));
+                paintHeart(heart);
+                li.append(heart);
+            }
             if (actions.length > 1) {
                 const row = el("span", "yt-result-actions");
                 actions.forEach((action, n) => {
@@ -609,6 +631,13 @@
         });
         more.addEventListener("click", () => !state.busy && state.next && run(state.query, state.kind, state.next));
         list.addEventListener("click", e => {
+            const heart = e.target.closest(".yt-save");
+            if (heart) {
+                const row = heart.closest(".yt-result");
+                const item = row && state.items[+row.dataset.i];
+                if (item) CineSaved.toggle(item);
+                return;
+            }
             const button = e.target.closest("[data-act]");
             const row = button && button.closest(".yt-result");
             const item = row && state.items[+row.dataset.i];
@@ -850,6 +879,7 @@
             }
             const id = data.video_id;
             if (id && YT_ID.test(id) && id === expectedId()) {
+                if (together.onSoloVideoChange) together.onSoloVideoChange(id, text(data.title));
                 if (solo.played[0] !== id) solo.played = [id, ...solo.played.filter(other => other !== id)].slice(0, 200);
                 // Each new video: captions as the remembered setting says
                 if (solo.captionsFor !== id) {
@@ -859,10 +889,10 @@
             }
         }
         if (e.data === S.ENDED) {
+            save(true);
+            if (together.playNextSoloQueue && together.playNextSoloQueue()) return;
             const ids = playlist();
             if (!ids || playlistIndex() >= ids.length - 1) {
-                save(true);
-                if (together.playNextSoloQueue && together.playNextSoloQueue()) return;
                 // Autoplay: on with the YouTube Mix of the video that ended
                 if (!(autoplay && !solo.wantAfter && autoplayAfter(currentId()))) solo.intent = false;
             }
@@ -1035,9 +1065,10 @@
         }
         // The previous / next video of a playlist, beside the play button (with Autoplay, Next
         // also goes past the end, to the Mix)
+        const queueHasTracks = together.hasSoloQueue && together.hasSoloQueue();
         const ids = playlist();
-        prevTrackBtn.hidden = (!ids || ids.length < 2);
-        nextTrackBtn.hidden = !autoplay && (!ids || ids.length < 2);
+        prevTrackBtn.hidden = (!queueHasTracks && (!ids || ids.length < 2));
+        nextTrackBtn.hidden = (!queueHasTracks && !autoplay && (!ids || ids.length < 2));
         prevTrackBtn.disabled = !canStep(-1);
         nextTrackBtn.disabled = !canStep(1);
         if (together.renderShuffle) together.renderShuffle();
@@ -1067,7 +1098,7 @@
     // Plays `ref` ({ id, list, start }) here. `meta`: what's known about it already, e.g. from the
     // search ({ title, channel, listTitle, count, index }). In a room it goes to the room instead.
     // Returns null, or why it couldn't.
-    const play = (ref, meta = {}) => {
+    const play = (ref, meta = {}, opts = {}) => {
         if (!ref || (!ref.id && !ref.list)) return "That isn't a YouTube video or playlist.";
         if (together.active()) {
             if (!together.shareYouTube) return "You're in a room.";
@@ -1075,6 +1106,9 @@
             if (refused) return refused;
             showPlayer();
             return null;
+        }
+        if (together.onSoloPlay && !opts.fromQueue) {
+            together.onSoloPlay(ref, meta, opts);
         }
         const wasPlaying = solo.active;
         // Your own video gives way
@@ -1135,26 +1169,17 @@
             const r = solo.ref;
             syncVolume();
             try {
-                if (r.list && Number.isInteger(meta.index) && meta.index >= 0) {
+                if (opts.fromQueue && r.id) {
+                    player.loadVideoById({ videoId: r.id, startSeconds: r.start || 0 });
+                } else if (r.list && Number.isInteger(meta.index) && meta.index >= 0) {
                     // From the dashboard: straight to the video it was on
                     player.loadPlaylist({ list: r.list, listType: "playlist", index: meta.index, startSeconds: r.start });
                 } else if (r.list && r.id) {
-                    // A link to one video in a playlist: open the playlist, then that video
-                    player.cuePlaylist({ list: r.list, listType: "playlist", index: 0 });
-                    solo.wantId = r.id;
-                    solo.wantStart = r.start;
-                    // A playlist YouTube won't open (private): just the video
-                    clearTimeout(solo.cueTimer);
-                    solo.cueTimer = setTimeout(() => {
-                        if (!solo.active || solo.token !== token || !solo.wantId) return;
-                        solo.wantId = null;
-                        solo.ref = { id: r.id, list: null, start: r.start };
-                        player.loadVideoById({ videoId: r.id, startSeconds: r.start });
-                    }, 6000);
+                    player.loadVideoById({ videoId: r.id, startSeconds: r.start || 0 });
                 } else if (r.list) {
                     player.loadPlaylist({ list: r.list, listType: "playlist", index: 0, startSeconds: r.start });
                 } else {
-                    player.loadVideoById({ videoId: r.id, startSeconds: r.start });
+                    player.loadVideoById({ videoId: r.id, startSeconds: r.start || 0 });
                 }
             } catch (e) {
                 solo.error = "YouTube couldn't play this video.";
@@ -1230,6 +1255,7 @@
         solo.meta = { title: next.title, channel: next.channel };
         solo.intent = true;
         solo.started = now();
+        if (together.onSoloAutoplay) together.onSoloAutoplay(next);
         try {
             solo.player.loadVideoById({ videoId: next.id, startSeconds: 0 });
         } catch (e) {}
@@ -1298,6 +1324,7 @@
     // next after the end too
     const canStep = n => {
         if (!solo.active) return false;
+        if (together.canStepSoloQueue && together.canStepSoloQueue(n)) return true;
         const ids = playlist();
         const index = ids ? playlistIndex() : -1;
         if (n < 0) return !!ids && index > 0;
@@ -1307,6 +1334,10 @@
     // The previous / next video of a playlist (buttons beside play, Shift + P / N, the lock screen)
     const step = n => {
         if (!canStep(n)) return false;
+        if (!together.active()) {
+            if (n > 0 && together.playNextSoloQueue && together.playNextSoloQueue()) return true;
+            if (n < 0 && together.playPrevSoloQueue && together.playPrevSoloQueue()) return true;
+        }
         const ids = playlist();
         const index = ids ? playlistIndex() + n : -1;
         save();
@@ -1327,6 +1358,18 @@
         get paused() { return soloControls.paused; },
         // The video that should be on (its picture: ambient mode, the lock screen)
         get videoId() { return solo.active ? expectedId() : null; },
+        // What's on, to save it (the player's heart): the video, and its playlist if it's in one
+        // (not a Mix Autoplay made)
+        get current() {
+            if (!solo.active || !solo.ref) return null;
+            const id = expectedId();
+            const data = solo.ready ? videoData() : {};
+            const same = data.video_id && data.video_id === id;
+            const video = id ? { kind: "video", id, title: (same && text(data.title)) || solo.meta.title || "", channel: (same && text(data.author, 100)) || solo.meta.channel || "", live: live() } : null;
+            const ids = playlist();
+            const list = solo.ref.list && !solo.mix ? { kind: "playlist", list: solo.ref.list, id: (ids && ids[0]) || id, title: solo.meta.listTitle || "", channel: solo.meta.listChannel || "", count: ids ? ids.length : solo.meta.count || null } : null;
+            return video || list ? { video, list } : null;
+        },
         get autoplay() { return autoplay; },
         toggleAutoplay: () => setAutoplay(!autoplay),
         // A YouTube playlist on: YouTube's player shuffles what's left of it (or stops shuffling)
@@ -1334,7 +1377,7 @@
             const ids = solo.active && solo.ref && solo.ref.list ? playlist() : null;
             return !!ids && ids.length > 2;
         },
-        get shuffled() { return !!solo.shuffle; },
+        get shuffled() { return together.isSoloShuffled ? together.isSoloShuffled() : !!solo.shuffle; },
         setShuffle: on => {
             solo.shuffle = !!on;
             try {
@@ -1363,5 +1406,5 @@
     together.step = n => together.solo.step(n);
     window.addEventListener("pagehide", () => solo.active && save());
 
-    window.CineYouTube = { parse, search, api, play, createResults, thumbOf, suggestedAfter, details, fullDescription, views };
+    window.CineYouTube = { parse, search, api, play, stop: () => stop(true), createResults, thumbOf, suggestedAfter, details, fullDescription, views, paintHeart };
 })();

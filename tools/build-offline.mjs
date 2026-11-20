@@ -77,6 +77,7 @@ const cutBlock = (text, start, end) => {
 const playerStyles = styles => {
     let css = styles.replace(/@import url\([^)]*fonts\.googleapis[^)]*\);\s*/, "");
     css = cutSection(css, "/* =================== HOME PAGE", "/* =================== FORMAT SUPPORT");
+    css = cutSection(css, "/* =================== HOME SHELL", "/* =================== /HOME SHELL");
     css = cutSection(css, "/* Home: converted videos */", "/* =================== TOOLTIPS");
     css = cutBlock(css, "/* =================== WATCH TOGETHER ROOMS", "/* =================== /WATCH TOGETHER ROOMS");
     return css;

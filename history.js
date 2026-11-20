@@ -101,3 +101,84 @@
     // Another tab watched something
     window.addEventListener("storage", e => e.key === KEY && changed());
 })();
+
+// CineTab saved: YouTube videos and whole playlists kept to watch later (the home page's Saved,
+// the hearts on search results, the dashboard's cards and the player). In localStorage only.
+// An entry: { k: "yt:<id>" | "pl:<list>", type: "video" | "playlist", id, list, title, channel,
+// count, duration, at }.
+(() => {
+    const KEY = "cinetab:favorites";
+    const MAX = 300;
+    const listeners = new Set();
+    const read = () => {
+        try {
+            const list = JSON.parse(localStorage.getItem(KEY) || "[]");
+            return Array.isArray(list) ? list.filter(entry => entry && typeof entry.k === "string") : [];
+        } catch (e) {
+            return [];
+        }
+    };
+    const changed = () => listeners.forEach(fn => {
+        try {
+            fn();
+        } catch (e) {}
+    });
+    const write = list => {
+        try {
+            localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)));
+        } catch (e) {}
+        changed();
+    };
+    // A YouTube video or playlist ({ kind | type, id, list, ... }) as a saved entry, or null
+    const entryOf = item => {
+        if (!item) return null;
+        const playlist = (item.kind || item.type) === "playlist";
+        if (playlist ? !item.list : !item.id) return null;
+        const clean = (value, max = 200) => typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+        return {
+            k: playlist ? `pl:${item.list}` : `yt:${item.id}`,
+            type: playlist ? "playlist" : "video",
+            id: item.id || null,
+            list: playlist ? item.list : null,
+            title: clean(item.title) || (playlist ? "YouTube playlist" : "YouTube video"),
+            channel: clean(item.channel, 100),
+            count: Number.isFinite(item.count) ? item.count : null,
+            duration: Number.isFinite(item.duration) ? item.duration : null,
+            live: !!item.live
+        };
+    };
+    const has = k => read().some(entry => entry.k === k);
+    const add = item => {
+        const entry = entryOf(item);
+        if (!entry) return null;
+        const list = read().filter(old => old.k !== entry.k);
+        // (what was known already stays, unless there's better now)
+        const old = read().find(saved => saved.k === entry.k) || {};
+        const merged = { ...old, ...Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== null && value !== "")), at: Date.now() };
+        write([merged, ...list]);
+        return merged;
+    };
+    const remove = k => write(read().filter(entry => entry.k !== k));
+    window.CineSaved = {
+        list: read,
+        get: k => read().find(entry => entry.k === k) || null,
+        keyOf: item => (entryOf(item) || {}).k || null,
+        has,
+        add,
+        remove,
+        // Saved now? true / false (null: nothing to save)
+        toggle: item => {
+            const entry = entryOf(item);
+            if (!entry) return null;
+            if (has(entry.k)) {
+                remove(entry.k);
+                return false;
+            }
+            add(item);
+            return true;
+        },
+        clear: () => write([]),
+        onChange: fn => listeners.add(fn)
+    };
+    window.addEventListener("storage", e => e.key === KEY && changed());
+})();

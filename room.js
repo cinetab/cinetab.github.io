@@ -197,6 +197,11 @@
     const camButtons = [camBtn];
     let syncHoverControls = null;
     const remoteVoiceAudio = new Map();
+    // The home page's miniplayer's buttons (made with the room's bar, below)
+    let miniUI = null;
+    // Who's in the room now (the home page's room cards; remembered with the room, below)
+    let lastMembers = [];
+    let peopleSaveTimer = null;
     // The host: each guest's voice as it arrives, to pass on to the others
     const voiceTracks = new Map();
     let reopening = null;
@@ -297,12 +302,30 @@
     const panelFormSlot = panel.querySelector(".together-form");
     const togetherTab = panel.querySelector(".room-tab-together");
     const statusView = overlay.querySelector('[data-view="status"]');
+    // The room's messages and questions (connecting, waiting to be let in, go home?, leave or
+    // end?, it ended...) aren't a dialog over the video: a notice card at the top of the player,
+    // above everything (the call too), like the player's own (script.js) - an icon, a few words
+    // (all of them on pointing at it), and the choices
+    const formsHome = document.createComment(" the room's forms ");
+    statusView.before(formsHome);
+    const roomNotice = el("div", "notice-layer room-notice hidden");
+    roomNotice.dataset.dialog = "";
+    const roomNoticeBox = el("div", "upload-box notice room-notice-box");
+    roomNoticeBox.setAttribute("role", "alertdialog");
+    const roomNoticeClose = el("button", "box-close");
+    roomNoticeClose.type = "button";
+    roomNoticeClose.title = "Close (Esc)";
+    roomNoticeClose.setAttribute("aria-label", "Close");
+    roomNoticeClose.append(el("i", "fa-solid fa-xmark"));
+    roomNoticeBox.append(roomNoticeClose, statusView);
+    roomNotice.append(roomNoticeBox);
+    playerPage.append(roomNotice);
     let panelForm = null;
     const closePanelForm = () => {
         if (!panelForm) return;
         panelForm.classList.remove("in-panel");
         panelForm.hidden = true;
-        statusView.before(panelForm);
+        formsHome.before(panelForm);
         panelForm = null;
         panelFormSlot.hidden = true;
         togetherTab.classList.remove("form-open");
@@ -343,12 +366,23 @@
         closePanelForm();
         views.forEach(view => view.hidden = view.dataset.view !== name);
         closeAction = onClose;
+        if (name === "status") {
+            overlay.classList.add("hidden");
+            roomNotice.classList.remove("hidden");
+            if (window.placeNotices) placeNotices();
+            return;
+        }
+        roomNotice.classList.add("hidden");
         // On small screens a dialog gets the whole screen, unless the room's chat is open beside it
         overlay.classList.toggle("room-modal", panel.hidden);
         overlay.classList.remove("hidden");
     };
-    const hideOverlay = () => overlay.classList.add("hidden");
+    const hideOverlay = () => {
+        overlay.classList.add("hidden");
+        roomNotice.classList.add("hidden");
+    };
     overlayClose.addEventListener("click", () => (closeAction || hideOverlay)());
+    roomNoticeClose.addEventListener("click", () => (closeAction || hideOverlay)());
     overlay.addEventListener("click", e => {
         if (e.target === overlay) (closeAction || hideOverlay)();
     });
@@ -358,6 +392,10 @@
         statusTitle.textContent = title;
         statusText.textContent = text;
         statusText.hidden = !text;
+        roomNoticeBox.title = text;
+        roomNoticeBox.setAttribute("aria-label", title);
+        roomNoticeBox.classList.toggle("notice-danger", icon === "fa-triangle-exclamation");
+        roomNoticeBox.classList.toggle("has-list", list.length > 0);
         statusList.replaceChildren(...list.map(({ ok, title, text }) => {
             const item = el("li", ok === true ? "ok" : ok === false ? "bad" : "info");
             item.append(el("i", `fa-solid ${ok === true ? "fa-circle-check" : ok === false ? "fa-circle-xmark" : "fa-circle-info"}`));
@@ -428,7 +466,7 @@
     new MutationObserver(() => toasts.parentNode === playerPage && toasts.childElementCount && placeToastBox())
         .observe(playerPage, { attributes: true, attributeFilter: ["class"] });
 
-    const toast = (text, name = null, avatar = "", onClick = null) => {
+    const toast = (text, name = null, avatar = "", onClick = null, action = null) => {
         placeToasts();
         const item = el(onClick ? "button" : "div", `room-toast${onClick ? " clickable" : ""}`);
         if (name) {
@@ -436,7 +474,19 @@
             body.append(el("b", null, name), el("span", "room-toast-text", text));
             item.append(makeAvatar(name, avatar, "small"), body);
         } else {
-            item.append(text);
+            const span = el("span", "room-toast-text", text);
+            item.append(span);
+        }
+        if (action && action.label && action.run) {
+            const actionBtn = el("button", "room-toast-action");
+            actionBtn.type = "button";
+            actionBtn.textContent = action.label;
+            actionBtn.addEventListener("click", e => {
+                e.stopPropagation();
+                item.remove();
+                action.run();
+            });
+            item.append(actionBtn);
         }
         if (onClick) {
             item.title = "Open the chat";
@@ -449,7 +499,7 @@
         // At most three at once, not counting people waiting to be let in
         const plain = [...toasts.children].filter(child => !child.classList.contains("room-knock"));
         plain.slice(0, Math.max(0, plain.length - 3)).forEach(child => child.remove());
-        setTimeout(() => item.remove(), onClick ? 7000 : 5000);
+        setTimeout(() => item.remove(), action ? 8000 : onClick ? 7000 : 5000);
     };
 
     // A short two-note chime, made on the spot (no sound file to load)
@@ -863,6 +913,10 @@
 
     const renderPeople = members => {
         room.memberCount = members.length;
+        lastMembers = members.map(member => ({ id: member.id, name: member.name, avatar: member.avatar || "", host: !!member.host }));
+        clearTimeout(peopleSaveTimer);
+        peopleSaveTimer = setTimeout(rememberPeople, 1500);
+        if (!homePage.hidden) renderRoomCards();
         peopleCount.textContent = members.length;
         renderRoomButton();
         // The button under the title: people and how many (its tooltip and label say "Room")
@@ -1900,10 +1954,9 @@
             call.unitFloat = saved.unitFloat === true;
             // (from before the dock: it starts in the dock once)
             if (saved.v === 2) {
-                call.docked = saved.docked !== false;
+                call.docked = true;
                 if (["bottom", "side"].includes(saved.dockPos)) call.dockPos = saved.dockPos;
-                // (pinned above the video, which is gone: pinned left)
-                else if (saved.dockPos === "top") call.dockPos = "side";
+                else call.dockPos = "bottom";
             }
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
             if (finite(saved.stripH, 40, 2000)) call.stripH = saved.stripH;
@@ -1943,8 +1996,7 @@
     // column pinned at the side (phones have their own call bar: below)
     const CALL_LAYOUTS = [
         { mode: "bottom", icon: "fa-arrows-down-to-line", text: "Dock on the video" },
-        { mode: "side", icon: "fa-table-columns", text: "Pin to the side" },
-        { mode: "float", icon: "fa-window-restore", text: "Floating window" }
+        { mode: "side", icon: "fa-table-columns", text: "Pin to the side" }
     ];
     const callLayoutBtn = callButton("room-call-layout", "Call layout");
     callLayoutBtn.setAttribute("aria-haspopup", "menu");
@@ -2084,21 +2136,8 @@
     const unitFloatBtn = el("button", "room-unit-only room-mic-btn room-unit-float");
     unitFloatBtn.type = "button";
     unitFloatBtn.append(el("i"));
-    // Minimized: everyone's video back, from the call bar
-    const unitExpandBtn = el("button", "room-unit-only room-mic-btn room-unit-expand");
-    unitExpandBtn.type = "button";
-    unitExpandBtn.title = "Show everyone's video";
-    unitExpandBtn.setAttribute("aria-label", unitExpandBtn.title);
-    unitExpandBtn.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
     roomFoot.insertBefore(unitPeopleBtn, leaveWrap);
-    roomFoot.insertBefore(unitExpandBtn, leaveWrap);
     roomFoot.insertBefore(unitFloatBtn, leaveWrap);
-    // On the call itself, floating or docked: minimize it (to its call bar)
-    const unitMinBtn = el("button", "room-call-unit-min");
-    unitMinBtn.type = "button";
-    unitMinBtn.title = "Minimize";
-    unitMinBtn.setAttribute("aria-label", "Minimize the video call");
-    unitMinBtn.append(el("i", "fa-solid fa-minus"));
     // (also a computer's window made as narrow as a phone: the phone's call window)
     const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px), (orientation: portrait) and (max-width: 600px)");
     const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
@@ -2183,7 +2222,7 @@
     callStripGrip.type = "button";
     callStripGrip.title = "Drag to make the videos taller or shorter (tap: taller / back)";
     callStripGrip.setAttribute("aria-label", "Video call height (drag, or tap)");
-    callWin.append(callStripGrip, unitMinBtn, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
+    callWin.append(callStripGrip, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
@@ -2393,7 +2432,7 @@
 
     // An edge or corner, dragged with a mouse: that side moves, the opposite one stays put
     const startCallResize = (e, handle) => {
-        if (e.button > 0 || call.collapsed || call.dock) return;
+        if (e.button > 0 || call.collapsed || call.dock || !callWin.classList.contains("expanded")) return;
         e.preventDefault();
         e.stopPropagation();
         handle.setPointerCapture(e.pointerId);
@@ -2632,9 +2671,6 @@
         unitFloatBtn.title = call.dock ? "Float it: drag it anywhere" : phoneSideways.matches ? "Dock it on the left" : "Dock it at the bottom";
         unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
         unitFloatBtn.hidden = !call.dock && !call.dockable;
-        // (minimize on the call, restore in its bar; docked at the bottom, a chevron down)
-        unitExpandBtn.hidden = !(unit && call.collapsed && !alone);
-        unitMinBtn.firstChild.className = `fa-solid ${call.dock === "strip" ? "fa-chevron-down" : "fa-minus"}`;
         // Hide 3-dot more menu; pin and minimize buttons are shown directly in the bar
         callMoreBtn.hidden = true;
         showCallMore(false);
@@ -2678,11 +2714,6 @@
     callWin.addEventListener("pointerdown", showCallNames);
 
     unitPeopleBtn.addEventListener("click", () => callFoldBtn.click());
-    unitExpandBtn.addEventListener("click", () => call.collapsed && callFoldBtn.click());
-    unitMinBtn.addEventListener("click", e => {
-        e.stopPropagation();
-        if (!call.collapsed) callFoldBtn.click();
-    });
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -2750,7 +2781,7 @@
 
     // Its long edge, dragged with a mouse: the column follows it, and the video beside it
     callDockEdge.addEventListener("pointerdown", e => {
-        if (e.button > 0 || call.dock !== "side") return;
+        if (e.button > 0 || call.dock !== "side" || call.collapsed) return;
         e.preventDefault();
         e.stopPropagation();
         callDockEdge.setPointerCapture(e.pointerId);
@@ -2927,20 +2958,23 @@
     // ---------- A phone, sideways or fullscreen, with the call minimized: after a few seconds
     // without a touch it steps aside (a slim column slides away, the video taking its place; a
     // floating pill fades out), like a video call's buttons; a touch anywhere brings it back
-    const CALL_IDLE_MS = 4000;
+    const CALL_IDLE_MS = 3500;
     let callIdleTimer = null;
-    const callIdleWanted = () => !callWin.hidden && callWin.classList.contains("unit") && call.collapsed && call.dock !== "strip"
-        && (phoneSideways.matches || !!(document.fullscreenElement || document.webkitFullscreenElement))
-        && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden);
+    const callIdleWanted = () => !callWin.hidden && call.collapsed
+        && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden)
+        && !callWin.matches(":hover") && !callWin.matches(":focus-within")
+        && !callWin.querySelector(":focus-visible") && callLayoutMenu.hidden && callLeaveMenu.hidden;
     const setCallIdle = idle => {
         callWin.classList.toggle("idle", idle);
-        playerPage.classList.toggle("call-idle", idle && call.dock === "side");
+        playerPage.classList.toggle("call-idle", idle);
     };
     const wakeCall = () => {
         clearTimeout(callIdleTimer);
         if (callWin.classList.contains("idle")) setCallIdle(false);
         if (callIdleWanted()) callIdleTimer = setTimeout(() => callIdleWanted() && setCallIdle(true), CALL_IDLE_MS);
     };
+    playerPage.addEventListener("pointermove", wakeCall, { passive: true });
+    container.addEventListener("pointermove", wakeCall, { passive: true });
     playerPage.addEventListener("pointerdown", wakeCall, true);
     document.addEventListener("keydown", wakeCall, true);
     document.addEventListener("fullscreenchange", wakeCall);
@@ -3882,11 +3916,16 @@
         else refuse(peer, "denied");
     });
 
-    peopleList.addEventListener("click", e => {
+    // (asked in the player, as a small card at the top - not the browser's box)
+    const askInPlayer = options => window.playerAsk ? playerAsk(options) : Promise.resolve(confirm(options.title));
+    peopleList.addEventListener("click", async e => {
         const button = e.target.closest("button[data-remove]");
         if (!button || !room || room.role !== "host") return;
-        const peer = room.peers.get(button.dataset.remove);
-        if (!peer || peer.status !== "admitted" || !confirm(`Remove ${peer.name} from the room?`)) return;
+        let peer = room.peers.get(button.dataset.remove);
+        if (!peer || peer.status !== "admitted") return;
+        if (!await askInPlayer({ icon: "fa-user-minus", title: `Remove ${peer.name}?`, yes: "Remove", danger: true })) return;
+        peer = room && room.role === "host" && room.peers.get(button.dataset.remove);
+        if (!peer || peer.status !== "admitted") return;
         room.tickets.delete(peer.ticket);
         room.hashes.delete(peer.ticket);
         if (peer.ticket) fingerprint(peer.ticket).then(hash => {
@@ -4433,7 +4472,7 @@
     const needsTap = () => showStatus({
         icon: "fa-circle-play",
         title: "Ready to watch",
-        text: "Your browser needs a tap before it plays sound.",
+        text: "Tap once to start the sound",
         actions: [{ label: "Start watching", icon: "fa-play", onClick: () => {
             mainVideo.play().catch(() => {});
             hideOverlay();
@@ -4896,17 +4935,20 @@
         .catch(() => "");
     // `items` from `list` (only when there's more than one): marked, and named once YouTube says
     const markPlaylist = (items, list, named) => {
-        if (!list || items.length < 2) return;
+        if (!list || !items.length) return null;
         const pl = Signaling.newId().slice(0, 8);
         items.forEach(item => {
             item.pl = pl;
             item.plt = "";
+            // (YouTube's own id for it: to save the whole playlist)
+            item.pll = list;
         });
         playlistTitle(list).then(title => {
             if (!title) return;
             items.forEach(item => item.pl === pl && (item.plt = title));
             named();
         });
+        return pl;
     };
 
     // The queue as guests get it
@@ -4915,7 +4957,7 @@
         index: room.yt ? room.yt.index : 0,
         shuffled: !!(room.yt && room.yt.shuffled),
         items: room.yt ? room.yt.queue.map(item => ({ k: item.k, id: item.id, title: item.title, by: item.by.name,
-            ...(item.pl ? { pl: item.pl, plt: item.plt || "" } : {}) })) : []
+            ...(item.pl ? { pl: item.pl, plt: item.plt || "", ...(item.pll ? { pll: item.pll } : {}) } : {}) })) : []
     });
 
     // Changes to the queue go out together, a moment later
@@ -5115,7 +5157,72 @@
             notice(`${by.name} turned shuffle ${on ? "on" : "off"}`);
             return;
         }
-        if (!y || typeof message.k !== "string") return;
+        if (!y) return;
+        if (message.op === "shuffle-pl" && typeof message.pl === "string") {
+            const pl = message.pl;
+            const indices = [];
+            y.queue.forEach((item, i) => {
+                if (item.pl === pl && i > y.index) indices.push(i);
+            });
+            if (indices.length < 2) {
+                const allIndices = [];
+                y.queue.forEach((item, i) => {
+                    if (item.pl === pl) allIndices.push(i);
+                });
+                const others = allIndices.filter(i => i !== y.index);
+                if (others.length >= 2) {
+                    const picked = others.map(i => y.queue[i]);
+                    for (let i = picked.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [picked[i], picked[j]] = [picked[j], picked[i]];
+                    }
+                    others.forEach((origIdx, k) => {
+                        y.queue[origIdx] = picked[k];
+                    });
+                    shareQueue();
+                    notice(`${by.name} shuffled the playlist in the queue`);
+                }
+            } else {
+                const picked = indices.map(i => y.queue[i]);
+                for (let i = picked.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [picked[i], picked[j]] = [picked[j], picked[i]];
+                }
+                indices.forEach((origIdx, k) => {
+                    y.queue[origIdx] = picked[k];
+                });
+                shareQueue();
+                notice(`${by.name} shuffled the playlist in the queue`);
+            }
+            return;
+        }
+        if (message.op === "remove-playlist" && typeof message.pl === "string") {
+            const pl = message.pl;
+            const toRemove = y.queue.filter(item => item.pl === pl);
+            if (!toRemove.length) return;
+            const currentItem = y.queue[y.index];
+            const currentInPlaylist = currentItem && currentItem.pl === pl;
+            const firstIndex = y.queue.findIndex(item => item.pl === pl);
+            const plTitle = toRemove[0].plt || "playlist";
+            y.queue = y.queue.filter(item => item.pl !== pl);
+            openPlaylists.delete(pl);
+            if (!y.queue.length) {
+                clearYouTube();
+                return notice(`${by.name} removed the playlist “${plTitle}” (${toRemove.length} videos)`);
+            }
+            if (currentInPlaylist) {
+                playQueued(Math.min(firstIndex, y.queue.length - 1));
+            } else {
+                y.index = y.queue.indexOf(currentItem);
+                if (y.index < 0) y.index = 0;
+            }
+            shareFile();
+            shareQueue();
+            notice(`${by.name} removed the playlist “${plTitle}” (${toRemove.length} videos)`);
+            if (autoplayOn() && y.index === y.queue.length - 1) autoplayNext();
+            return;
+        }
+        if (typeof message.k !== "string") return;
         const at = y.queue.findIndex(item => item.k === message.k);
         if (at < 0) return;
         if (message.op === "play") {
@@ -5446,12 +5553,10 @@
             showStatus({
                 icon: "fa-couch",
                 title: "Nothing is playing yet",
-                text: share ? "Share a video from this device or a YouTube link, or wait for someone to start one. Chat with everyone in the meantime."
-                    : youtube ? "Share a YouTube link, or wait for someone to start a video. Chat with everyone in the meantime."
-                    : `Waiting for ${room.hostName} to start a video. Chat with everyone in the meantime.`,
+                text: share || youtube ? "Start one, or wait for someone else" : `Waiting for ${room.hostName} to start one`,
                 actions: [
                     share && { label: "Share a video", icon: "fa-folder-open", onClick: shareVideo },
-                    youtube && { label: "YouTube link", icon: "fa-brands fa-youtube", secondary: share, onClick: () => {
+                    youtube && { label: "YouTube", icon: "fa-brands fa-youtube", secondary: share, onClick: () => {
                         hideOverlay();
                         showPanel(true);
                         if (ytForm.hidden) nowYtBtn.click();
@@ -5477,10 +5582,8 @@
             showStatus({
                 icon: "fa-film",
                 title: `Open your copy of “${file.title}”`,
-                text: tunneled() && file.stream
-                    ? `${by} is playing ${file.name} (${details}). Your connection goes through the room's relay because your networks don't allow a direct one, and video can't stream that way. Choose the same movie on this device and CineTab keeps it in step with ${by}. YouTube links play for everyone as usual.`
-                    : `${by} is playing ${file.name} (${details}) but isn't streaming it right now. Choose the same movie on this device and CineTab keeps it in step with ${by}.`,
-                actions: [{ label: "Choose my copy", icon: "fa-folder-open", onClick: () => pickFile(false) }]
+                text: `${by} plays ${file.name}${details ? ` · ${details}` : ""}`,
+                actions: [{ label: "Choose it", icon: "fa-folder-open", onClick: () => pickFile(false) }]
             });
         }
         renderGuestWatch();
@@ -5837,6 +5940,9 @@
         if (current && current.pl) {
             to = from;
             while (to < items.length && items[to].pl === current.pl) to++;
+        } else if (items[from] && items[from].pl) {
+            to = from;
+            while (to < items.length && items[to].pl === items[from].pl) to++;
         }
         const part = items.slice(from, to);
         if (on) {
@@ -5858,13 +5964,13 @@
     const shuffleState = () => {
         if (room) {
             const queue = room.file && room.file.yt && room.queue;
-            if (!queue || (!queue.shuffled && queue.items.length - queue.index - 1 < 2)) return null;
+            if (!queue || (!queue.shuffled && queue.items.length - queue.index - 1 < 1)) return null;
             return { kind: "room", on: !!queue.shuffled, can: canShareYouTube() };
         }
         const solo = together.solo;
         if (!solo || !solo.active) return null;
+        if (soloQueue.shuffled || soloQueue.items.length - soloQueue.index - 1 >= 1) return { kind: "queue", on: !!soloQueue.shuffled, can: true };
         if (solo.isList) return { kind: "list", on: solo.shuffled, can: true };
-        if (soloQueue.shuffled || soloQueue.items.length - soloQueue.index - 1 >= 2) return { kind: "queue", on: !!soloQueue.shuffled, can: true };
         return null;
     };
     const renderShuffle = () => {
@@ -5882,12 +5988,16 @@
         const state = shuffleState();
         if (!state || !state.can) return;
         const on = !state.on;
-        if (state.kind === "list") together.solo.setShuffle(on);
-        else if (state.kind === "queue") {
+        if (state.kind === "queue") {
             shuffleQueue(soloQueue.items, soloQueue.index, soloQueue, on);
+            if (together.solo && together.solo.setShuffle) together.solo.setShuffle(on);
             saveSoloQueue();
             renderQueue();
-        } else sendQueueOp({ op: "shuffle", on });
+        } else if (state.kind === "list") {
+            together.solo.setShuffle(on);
+        } else {
+            sendQueueOp({ op: "shuffle", on });
+        }
         showFeedback("fa-shuffle", on ? "Shuffle on" : "Shuffle off");
         renderShuffle();
     };
@@ -5900,6 +6010,7 @@
     const openPlaylists = new Set();
     const groupPlaylists = (items, index) => {
         const rows = [...queueList.querySelectorAll("li[data-k]")];
+        const edit = room ? canShareYouTube() : true;
         for (let i = 0; i < items.length; ) {
             const pl = items[i].pl;
             let j = i;
@@ -5931,6 +6042,25 @@
                     el("small", null, playing ? `Playing ${index - i + 1} / ${count}` : `${count} videos`));
                 button.append(cover, info, el("i", "fa-solid fa-chevron-down room-queue-group-chevron"));
                 head.append(button);
+                if (edit) {
+                    const actions = el("span", "room-queue-group-actions");
+                    const shuffleGroupBtn = el("button", "room-icon-btn");
+                    shuffleGroupBtn.type = "button";
+                    shuffleGroupBtn.dataset.q = "shuffle-playlist";
+                    shuffleGroupBtn.dataset.pl = pl;
+                    shuffleGroupBtn.title = "Shuffle this playlist";
+                    shuffleGroupBtn.setAttribute("aria-label", "Shuffle this playlist");
+                    shuffleGroupBtn.append(el("i", "fa-solid fa-shuffle"));
+                    const removeBtn = el("button", "room-icon-btn danger");
+                    removeBtn.type = "button";
+                    removeBtn.dataset.q = "remove-playlist";
+                    removeBtn.dataset.pl = pl;
+                    removeBtn.title = "Remove whole playlist";
+                    removeBtn.setAttribute("aria-label", "Remove whole playlist from queue");
+                    removeBtn.append(el("i", "fa-solid fa-trash-can"));
+                    actions.append(shuffleGroupBtn, removeBtn);
+                    head.append(actions);
+                }
                 rows[i].before(head);
                 for (let k = i; k <= j; k++) {
                     rows[k].dataset.pl = pl;
@@ -5970,9 +6100,11 @@
         queueTitle.hidden = !items.length;
         queueCount.textContent = items.length ? `${Math.min(queue.index + 1, items.length)} of ${items.length}` : "";
         const scrolledTo = queueList.dataset.current;
+        const isPlaying = room ? !!(room.file && room.file.yt) : !!(together.solo && together.solo.active);
         queueList.replaceChildren(...items.map((item, i) => {
-            const current = i === queue.index;
-            const li = el("li", `room-queue-item${current ? " current" : i < queue.index ? " played" : ""}`);
+            const current = isPlaying && i === queue.index;
+            const played = isPlaying ? i < queue.index : false;
+            const li = el("li", `room-queue-item${current ? " current" : played ? " played" : ""}`);
             li.dataset.k = item.k;
             li.dataset.i = i;
             li.draggable = edit;
@@ -5999,7 +6131,7 @@
             const info = el("span", "room-queue-info");
             const title = el("b", null, item.title || "YouTube video");
             title.title = item.title || item.id;
-            info.append(title, el("small", null, current ? "Now playing" : `Added by ${item.by || "You"}`));
+            info.append(title, el("small", null, current ? "Now playing" : item.auto ? "Added by Autoplay" : (item.by ? `Added by ${item.by}` : "Added by You")));
             li.append(cover, info);
             if (edit) {
                 const actions = el("span", "room-queue-actions");
@@ -6053,19 +6185,104 @@
         else send(room.peer, { t: "queue-op", ...op });
     };
 
+    const shufflePlaylistGroup = pl => {
+        const indices = [];
+        soloQueue.items.forEach((item, i) => {
+            if (item.pl === pl && i > soloQueue.index) indices.push(i);
+        });
+        if (indices.length < 2) {
+            const allIndices = [];
+            soloQueue.items.forEach((item, i) => {
+                if (item.pl === pl) allIndices.push(i);
+            });
+            const others = allIndices.filter(i => i !== soloQueue.index);
+            if (others.length < 2) return toast("Not enough videos in playlist to shuffle");
+            const picked = others.map(i => soloQueue.items[i]);
+            for (let i = picked.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [picked[i], picked[j]] = [picked[j], picked[i]];
+            }
+            others.forEach((origIdx, k) => {
+                soloQueue.items[origIdx] = picked[k];
+            });
+        } else {
+            const picked = indices.map(i => soloQueue.items[i]);
+            for (let i = picked.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [picked[i], picked[j]] = [picked[j], picked[i]];
+            }
+            indices.forEach((origIdx, k) => {
+                soloQueue.items[origIdx] = picked[k];
+            });
+        }
+        soloQueue.shuffled = true;
+        saveSoloQueue();
+        renderQueue();
+        renderShuffle();
+        showFeedback("fa-shuffle", "Playlist shuffled");
+        toast("Shuffled playlist in queue");
+    };
+
+    const removeSoloPlaylist = pl => {
+        const toRemove = soloQueue.items.filter(item => item.pl === pl);
+        if (!toRemove.length) return;
+        const currentItem = soloQueue.items[soloQueue.index];
+        const currentInPlaylist = currentItem && currentItem.pl === pl;
+        const firstIndex = soloQueue.items.findIndex(item => item.pl === pl);
+        const plTitle = toRemove[0].plt || "playlist";
+        soloQueue.items = soloQueue.items.filter(item => item.pl !== pl);
+        openPlaylists.delete(pl);
+        if (!soloQueue.items.length) {
+            soloQueue.index = 0;
+            saveSoloQueue();
+            renderQueue();
+            if (window.CineYouTube && CineYouTube.stop) CineYouTube.stop();
+            toast(`Removed playlist “${plTitle}” (${toRemove.length} videos)`);
+            return;
+        }
+        if (currentInPlaylist) {
+            soloQueue.index = Math.min(firstIndex, soloQueue.items.length - 1);
+            const target = soloQueue.items[soloQueue.index];
+            if (target && target.id && window.CineYouTube) {
+                CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+            }
+        } else {
+            soloQueue.index = soloQueue.items.indexOf(currentItem);
+            if (soloQueue.index < 0) soloQueue.index = 0;
+        }
+        saveSoloQueue();
+        renderQueue();
+        toast(`Removed playlist “${plTitle}” (${toRemove.length} videos)`);
+    };
+
     queueList.addEventListener("click", e => {
         const button = e.target.closest("button[data-q]");
-        const row = button && button.closest("li[data-k]");
+        if (!button) return;
+        const op = button.dataset.q;
+        if (op === "shuffle-playlist") {
+            const pl = button.dataset.pl || (button.closest("li[data-pl]") && button.closest("li[data-pl]").dataset.pl);
+            if (!pl) return;
+            if (!room) shufflePlaylistGroup(pl);
+            else sendQueueOp({ op: "shuffle-pl", pl });
+            return;
+        }
+        if (op === "remove-playlist") {
+            const pl = button.dataset.pl || (button.closest("li[data-pl]") && button.closest("li[data-pl]").dataset.pl);
+            if (!pl) return;
+            if (!room) removeSoloPlaylist(pl);
+            else sendQueueOp({ op: "remove-playlist", pl });
+            return;
+        }
+        const row = button.closest("li[data-k]");
         if (!row) return;
         const k = row.dataset.k;
         const at = +row.dataset.i;
-        const op = button.dataset.q;
         if (!room) {
             if (op === "play") {
                 const target = soloQueue.items[at];
                 if (target && target.id && window.CineYouTube) {
                     soloQueue.index = at;
-                    CineYouTube.play({ id: target.id }, { title: target.title });
+                    CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
                     saveSoloQueue();
                     renderQueue();
                 }
@@ -6084,8 +6301,22 @@
                 saveSoloQueue();
                 renderQueue();
             } else if (op === "remove") {
-                soloQueue.items.splice(at, 1);
-                if (soloQueue.index >= soloQueue.items.length) soloQueue.index = Math.max(0, soloQueue.items.length - 1);
+                const [item] = soloQueue.items.splice(at, 1);
+                if (!soloQueue.items.length) {
+                    soloQueue.index = 0;
+                    saveSoloQueue();
+                    renderQueue();
+                    if (window.CineYouTube && CineYouTube.stop) CineYouTube.stop();
+                    return;
+                }
+                if (at < soloQueue.index) soloQueue.index--;
+                else if (at === soloQueue.index) {
+                    soloQueue.index = Math.min(at, soloQueue.items.length - 1);
+                    const target = soloQueue.items[soloQueue.index];
+                    if (target && target.id && window.CineYouTube) {
+                        CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+                    }
+                }
                 saveSoloQueue();
                 renderQueue();
             }
@@ -6218,15 +6449,25 @@
         } else if (ref.id && ids.includes(ref.id)) ids = ids.slice(ids.indexOf(ref.id));
         else if (ref.id) ids = [ref.id, ...ids];
         const items = ids.slice(0, 200).map(id => ({ k: Math.random().toString(36).slice(2), id, title: "", by: "You" }));
-        markPlaylist(items, ref.list, () => {
+        const pl = markPlaylist(items, ref.list, () => {
             saveSoloQueue();
             renderQueue();
         });
+        const wasEmpty = !soloQueue.items.length;
         soloQueue.items.push(...items);
+        if (soloQueue.shuffled) {
+            shuffleQueue(soloQueue.items, soloQueue.index, soloQueue, true);
+        }
         saveSoloQueue();
         renderQueue();
-        toast(items.length > 1 ? `Added ${items.length} videos to the queue` : "Added to queue");
+        toast(items.length > 1 ? `Added ${items.length} videos to the queue` : "Added to queue", null, "", null, pl ? {
+            label: "Remove playlist",
+            run: () => removeSoloPlaylist(pl)
+        } : null);
         soloTitles();
+        if (wasEmpty && (!together.solo || !together.solo.active) && window.CineYouTube) {
+            CineYouTube.play({ id: items[0].id }, { title: items[0].title }, { fromQueue: true });
+        }
     };
     // (their titles, a few at a time)
     let soloTitleFetches = 0;
@@ -6261,12 +6502,15 @@
             return null;
         }
         if (!ref || !ref.id) return "That isn't a link to a YouTube video.";
+        const autoAt = soloQueue.items.findIndex((item, i) => i > soloQueue.index && item.auto);
+        if (autoAt >= 0) soloQueue.items.splice(autoAt);
         const item = {
             k: Math.random().toString(36).slice(2),
             id: ref.id,
             title: meta.title || meta.listTitle || "YouTube video",
             by: "You"
         };
+        const wasEmpty = !soloQueue.items.length;
         soloQueue.items.push(item);
         saveSoloQueue();
         renderQueue();
@@ -6279,6 +6523,9 @@
                     renderQueue();
                 }
             }).catch(() => {});
+        }
+        if (wasEmpty && (!together.solo || !together.solo.active) && window.CineYouTube) {
+            CineYouTube.play({ id: item.id }, { title: item.title }, { fromQueue: true });
         }
         return null;
     };
@@ -6400,7 +6647,7 @@
             soloQueue.index++;
             const target = soloQueue.items[soloQueue.index];
             if (target && target.id && window.CineYouTube) {
-                CineYouTube.play({ id: target.id }, { title: target.title });
+                CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
                 saveSoloQueue();
                 renderQueue();
                 return true;
@@ -6414,13 +6661,148 @@
             soloQueue.index--;
             const target = soloQueue.items[soloQueue.index];
             if (target && target.id && window.CineYouTube) {
-                CineYouTube.play({ id: target.id }, { title: target.title });
+                CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
                 saveSoloQueue();
                 renderQueue();
                 return true;
             }
         }
         return false;
+    };
+
+    together.isSoloShuffled = () => !room && !!soloQueue.shuffled;
+    together.canStepSoloQueue = n => {
+        if (room || !soloQueue.items.length) return false;
+        return n > 0 ? soloQueue.index + 1 < soloQueue.items.length : soloQueue.index > 0;
+    };
+    together.hasSoloQueue = () => !room && soloQueue.items.length > 1;
+
+    together.onSoloPlay = (ref, meta = {}, opts = {}) => {
+        if (room || opts.fromQueue || !ref) return;
+
+        if (ref.list) {
+            const token = Math.random().toString(36).slice(2);
+            together._soloToken = token;
+
+            if (ref.id) {
+                const currentItem = {
+                    k: Math.random().toString(36).slice(2),
+                    id: ref.id,
+                    title: meta.title || meta.videoTitle || "YouTube video",
+                    by: "You"
+                };
+                soloQueue.items = [currentItem];
+                soloQueue.index = 0;
+                saveSoloQueue();
+                renderQueue();
+            } else {
+                toast("Opening the YouTube playlist…");
+            }
+
+            resolvePlaylist(ref.list).then(ids => {
+                if (room || together._soloToken !== token) return;
+                if (!ids || !ids.length) {
+                    if (ref.id) toast("Couldn't open the video's playlist, so just the video is queued.");
+                    else toast("Couldn't open that playlist. It may be private, or YouTube didn't answer.");
+                    return;
+                }
+                const at = ref.id ? ids.indexOf(ref.id) : (Number.isInteger(meta.index) && meta.index >= 0 ? meta.index : 0);
+                const before = at > 0 ? ids.slice(0, at) : [];
+                const after = at >= 0 ? ids.slice(at + 1) : ids;
+                const beforeItems = before.map(id => ({ k: Math.random().toString(36).slice(2), id, title: "", by: "You" }));
+                const current = ref.id && soloQueue.items[soloQueue.index] && soloQueue.items[soloQueue.index].id === ref.id
+                    ? soloQueue.items[soloQueue.index]
+                    : { k: Math.random().toString(36).slice(2), id: ids[Math.max(0, at)], title: meta.title || "", by: "You" };
+                const afterItems = after.map(id => ({ k: Math.random().toString(36).slice(2), id, title: "", by: "You" }));
+                const all = [...beforeItems, current, ...afterItems];
+                const pl = markPlaylist(all, ref.list, () => {
+                    saveSoloQueue();
+                    renderQueue();
+                });
+                soloQueue.items = all;
+                soloQueue.index = before.length;
+                if (soloQueue.shuffled) {
+                    shuffleQueue(soloQueue.items, soloQueue.index, soloQueue, true);
+                }
+                saveSoloQueue();
+                renderQueue();
+                soloTitles();
+                if (!ref.id && window.CineYouTube) {
+                    CineYouTube.play({ id: current.id, start: ref.start || 0 }, meta, { fromQueue: true });
+                }
+            });
+            return;
+        }
+
+        if (ref.id) {
+            const existingIdx = soloQueue.items.findIndex(item => item.id === ref.id);
+            if (existingIdx >= 0) {
+                soloQueue.index = existingIdx;
+                saveSoloQueue();
+                renderQueue();
+                return;
+            }
+            const item = {
+                k: Math.random().toString(36).slice(2),
+                id: ref.id,
+                title: meta.title || meta.videoTitle || "YouTube video",
+                by: "You"
+            };
+            if (together.solo && together.solo.active && soloQueue.items.length) {
+                soloQueue.items.splice(soloQueue.index + 1, 0, item);
+                soloQueue.index++;
+            } else {
+                soloQueue.items = [item];
+                soloQueue.index = 0;
+            }
+            saveSoloQueue();
+            renderQueue();
+            soloTitles();
+        }
+    };
+
+    together.onSoloVideoChange = (id, title = "") => {
+        if (room || !id) return;
+        if (!soloQueue.items.length) {
+            soloQueue.items = [{ k: Math.random().toString(36).slice(2), id, title: title || "YouTube video", by: "You" }];
+            soloQueue.index = 0;
+            saveSoloQueue();
+            renderQueue();
+            return;
+        }
+        const current = soloQueue.items[soloQueue.index];
+        if (current && current.id === id) {
+            if (title && !current.title) {
+                current.title = title;
+                saveSoloQueue();
+                renderQueue();
+            }
+            return;
+        }
+        const match = soloQueue.items.findIndex((item, i) => i >= soloQueue.index && item.id === id);
+        const target = match >= 0 ? match : soloQueue.items.findIndex(item => item.id === id);
+        if (target >= 0) {
+            soloQueue.index = target;
+            if (title && !soloQueue.items[target].title) soloQueue.items[target].title = title;
+            saveSoloQueue();
+            renderQueue();
+        }
+    };
+
+    together.onSoloAutoplay = next => {
+        if (room || !next || !next.id) return;
+        const item = {
+            k: Math.random().toString(36).slice(2),
+            id: next.id,
+            title: next.title || "YouTube video",
+            channel: next.channel || "",
+            by: "Autoplay",
+            auto: true
+        };
+        soloQueue.items.push(item);
+        soloQueue.index = soloQueue.items.length - 1;
+        saveSoloQueue();
+        renderQueue();
     };
     together.playNextSoloQueue = playNextSoloQueue;
     together.playPrevSoloQueue = playPrevSoloQueue;
@@ -6483,7 +6865,7 @@
         showFeedback(step > 0 ? "fa-forward-step" : "fa-backward-step", step > 0 ? "Next video" : "Previous video");
     };
 
-    const stopVideo = () => {
+    const stopVideo = async () => {
         if (!room) {
             if (window.unloadPlayer) window.unloadPlayer();
             updateStopButtons(false);
@@ -6495,13 +6877,30 @@
             return refreshGuestView();
         }
         const file = room.file;
-        if (!file || !confirm(`Stop “${file.title}” for everyone?`)) return;
+        if (!file || !await askInPlayer({ icon: "fa-stop", title: "Stop it for everyone?", text: file.title, yes: "Stop", danger: true }) || !room || room.file !== file) return;
         if (room.role === "host") removeMedia({ id: room.id, name: room.name });
         else send(room.peer, { t: "remove" });
     };
 
     nowShareBtn.addEventListener("click", shareVideo);
     together.stopVideo = stopVideo;
+    // The playlist the queue's video `id` came from (the one playing), to save the whole of it:
+    // { kind, list, id, title, count } - the room's queue, or your own
+    together.queuePlaylist = id => {
+        const queue = room ? (room.role === "host" ? room.yt && { items: room.yt.queue, index: room.yt.index } : room.queue)
+            : soloQueue;
+        const items = queue && queue.items;
+        const item = items && items[queue.index];
+        if (!item || !item.pll || (id && item.id !== id)) return null;
+        const group = items.filter(other => other.pl === item.pl);
+        return { kind: "playlist", list: item.pll, id: group[0].id, title: item.plt || "", count: group.length };
+    };
+    // The room's YouTube video, to save it (the player's heart, script.js)
+    together.roomYouTube = () => {
+        const file = room && room.file;
+        if (!file || !file.yt || !file.yt.id) return null;
+        return { video: { kind: "video", id: file.yt.id, title: file.title && file.title !== "YouTube video" ? file.title : "", channel: file.channel || "" }, list: together.queuePlaylist(file.yt.id) };
+    };
 
     renderQueue();
 
@@ -6560,8 +6959,8 @@
                 guest.phase = "waiting";
                 return showStatus({
                     icon: "fa-hourglass-half",
-                    title: "Waiting for the host to let you in…",
-                    text: `You're at the door of room ${Signaling.formatCode(guest.code)}. The host has been asked to let you in.`,
+                    title: "Waiting to be let in…",
+                    text: `Room ${Signaling.formatCode(guest.code)}`,
                     busy: true,
                     actions: [{ label: "Cancel", secondary: true, onClick: () => leaveRoom(false) }],
                     onClose: () => leaveRoom(false)
@@ -6685,7 +7084,8 @@
                 const items = message.items.slice(0, 500)
                     .filter(item => item && typeof item.k === "string" && YT_ID.test(item.id))
                     .map(item => ({ k: item.k.slice(0, 16), id: item.id, title: clean(item.title, 200), by: clean(item.by, 30) || "someone",
-                        ...(typeof item.pl === "string" && item.pl ? { pl: item.pl.slice(0, 12), plt: clean(item.plt, 120) } : {}) }));
+                        ...(typeof item.pl === "string" && item.pl ? { pl: item.pl.slice(0, 12), plt: clean(item.plt, 120),
+                            ...(typeof item.pll === "string" && /^[\w-]{10,64}$/.test(item.pll) ? { pll: item.pll } : {}) } : {}) }));
                 const index = Number.isInteger(message.index) ? Math.max(0, Math.min(items.length - 1, message.index)) : 0;
                 guest.queue = items.length ? { index, items, shuffled: message.shuffled === true } : null;
                 return renderQueue();
@@ -6808,7 +7208,7 @@
             if (rank > 0) guest.takeoverTimer = setTimeout(() => room === guest && !guest.hostId && takeOver(), rank * 12000);
             knock();
         } else if (guest.joinedOnce) {
-            ended(["Connection lost", `The connection to ${guest.hostName} dropped. They may have closed CineTab or lost their internet connection.`]);
+            ended(["Connection lost", `${guest.hostName} may have closed CineTab or gone offline`]);
         } else {
             cantConnect();
         }
@@ -6950,7 +7350,7 @@
     });
 
     const checkNetwork = async back => {
-        showStatus({ icon: "fa-stethoscope", title: "Checking this network…", text: "Takes a few seconds.", busy: true, onClose: back });
+        showStatus({ icon: "fa-stethoscope", title: "Checking this network…", text: "A few seconds", busy: true, onClose: back });
         await loadTurn();
         const [relays, ice] = await Promise.all([Signaling.check(), iceCheck()]);
         const reached = relays.filter(relay => relay.ok);
@@ -6990,14 +7390,14 @@
     }));
 
     const cantConnect = () => failedToJoin(
-        "Couldn't connect to the host",
-        "The room was found, but the host's browser stopped answering, directly or through the relay. Their CineTab tab may have been closed, or put to sleep (phones pause tabs in the background): ask them to keep it open in front, then try again. If it keeps happening, try a phone hotspot or home Wi-Fi on either side.",
+        "Couldn't reach the host",
+        "Their CineTab tab may be closed or asleep - ask them to keep it open, then try again",
         true
     );
 
     const notFound = () => failedToJoin(
         "Couldn't find this room",
-        "Check the room code and password. The host's CineTab tab also has to be open."
+        "Check the code and password - the host's tab has to be open"
     );
 
     const failedToJoin = async (title, text, offerLocal = false) => {
@@ -7010,13 +7410,13 @@
         showStatus({
             icon: "fa-triangle-exclamation", title, text,
             actions: [
-                local && { label: "Same Wi-Fi: try again", icon: "fa-wifi", onClick: async () => {
+                local && { label: "Same Wi-Fi", icon: "fa-wifi", onClick: async () => {
                     if (!await allowLocalNetwork()) return;
                     openJoin(retry);
                     joinForm.requestSubmit();
                 } },
                 { label: "Try again", icon: "fa-rotate-right", secondary: local, onClick: () => openJoin(retry) },
-                { label: "Check my network", icon: "fa-stethoscope", secondary: true, onClick: () => checkNetwork(() => openJoin(retry)) }
+                { label: "Network", icon: "fa-stethoscope", secondary: true, onClick: () => checkNetwork(() => openJoin(retry)) }
             ].filter(Boolean),
             onClose: closeDialog
         });
@@ -7148,7 +7548,7 @@
         clearInterval(guest.offerTimer);
         if (!guest.joinedOnce) showStatus({
             title: "Connecting through the relay…",
-            text: "Your network and the host's don't allow a direct connection, so the room goes through the relay that found it.",
+            text: "No direct route between your networks",
             busy: true,
             actions: [{ label: "Cancel", secondary: true, onClick: () => leaveRoom(false) }],
             onClose: () => leaveRoom(false)
@@ -7404,13 +7804,11 @@
         const hasOthers = isHost ? guests().length > 0 : true;
         showStatus({
             icon: "fa-right-from-bracket",
-            title: "Leave or end room?",
-            text: hasOthers
-                ? "You can just leave the room while it carries on with others, or end the room completely."
-                : "You can just leave the room, or end the room completely.",
+            title: "Leave the room?",
+            text: hasOthers ? "It goes on for the others, unless you end it" : "",
             actions: [
-                { label: "Just leave the room", icon: "fa-right-from-bracket", onClick: () => leaveRoom(false, home, false) },
-                { label: "End the room", icon: "fa-door-closed", secondary: true, onClick: () => leaveRoom(false, home, true) }
+                { label: "End it", icon: "fa-door-closed", secondary: true, onClick: () => leaveRoom(false, home, true) },
+                { label: "Just leave", icon: "fa-right-from-bracket", onClick: () => leaveRoom(false, home, false) }
             ],
             onClose: back
         });
@@ -7423,15 +7821,13 @@
         showStatus({
             icon: "fa-house",
             title: "Go to the home page?",
-            text: host
-                ? "Your room stays open while you're on the home page: the video keeps playing for everyone, and you can come back any time. If you close this tab, the room goes on with everyone else."
-                : "You stay in the room and can come back any time from the home page. Closing this tab takes you out of the room.",
+            text: host ? "The room stays open - back any time" : "You stay in the room - back any time",
             actions: [
-                { label: host ? "Go home, keep the room open" : "Go home, stay in the room", icon: "fa-house", onClick: () => {
+                { label: "Leave room", secondary: true, onClick: () => leaveRoom(true, true) },
+                { label: "Go home", icon: "fa-house", onClick: () => {
                     restore();
                     history.back();
-                } },
-                { label: "Leave the room", secondary: true, onClick: () => leaveRoom(true, true) }
+                } }
             ],
             onClose: restore
         });
@@ -7499,7 +7895,12 @@
     // you're in, it also stops being saved again.
     const forgetRoom = (code, ask = true) => {
         const item = savedRooms().find(saved => saved.code === code);
-        if (item && ask && !confirm(`Delete “${roomLabel(item)}” from this browser?\n\nIts code and password are erased here. You can still join again with an invite link.`)) return false;
+        // (asked first, in a small card - then deleted)
+        if (item && ask) {
+            playerAsk({ icon: "fa-trash-can", title: `Delete “${roomLabel(item)}”?`, text: "From this browser - an invite link still works", yes: "Delete", danger: true })
+                .then(yes => yes && forgetRoom(code, false));
+            return false;
+        }
         writeRooms(savedRooms().filter(saved => saved.code !== code));
         deleteApprovedTickets(code);
         if (room && room.code === code) {
@@ -7509,8 +7910,8 @@
         return true;
     };
 
-    forgetAllBtn?.addEventListener("click", () => {
-        if (!confirm("Delete all remembered rooms from this browser?\n\nTheir codes and passwords are erased here. You can still join again with an invite link.")) return;
+    forgetAllBtn?.addEventListener("click", async () => {
+        if (!await playerAsk({ icon: "fa-trash-can", title: "Delete all your rooms?", text: "From this browser - invite links still work", yes: "Delete", danger: true })) return;
         writeRooms([]);
         storage.remove(APPROVED_KEY);
         if (room) {
@@ -7545,32 +7946,132 @@
             owner: item.owner || null, ownerTag: item.ownerTag || null, hostIfAlone: item.owner ? { title: item.title } : null });
     };
 
-    const renderRooms = () => {
-        if (!roomList) return;
-        const list = savedRooms();
-        roomsSection.hidden = !list.length;
-        roomList.replaceChildren(...list.map(item => {
-            const host = item.role === "host";
-            const li = el("li", "saved-item");
-            const icon = el("span", "saved-icon");
-            icon.append(el("i", `fa-solid ${host ? "fa-crown" : "fa-door-open"}`));
-            const info = el("div", "saved-info");
-            const date = new Date(item.at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-            info.append(el("p", "saved-name", roomLabel(item)),
-                el("p", "saved-meta", `${Signaling.formatCode(item.code)} · ${host ? "you host it" : "you joined"} · last used ${date}`));
-            const open = el("button", "btn btn-primary btn-sm saved-play");
-            open.dataset.room = item.code;
+    // ---------- The home page's room cards (My rooms, and a few on Home): the room you're in
+    // ("Live now", with everyone in it), then the rooms remembered in this browser, each with who
+    // has been in it, when it was last used, and one button to get back in
+    const roomHue = code => [...code].reduce((hue, char) => (hue * 31 + char.charCodeAt(0)) % 360, 7);
+    const roomAgo = at => {
+        const seconds = (Date.now() - at) / 1000;
+        try {
+            const format = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+            if (seconds < 60) return "just now";
+            if (seconds < 3600) return format.format(-Math.round(seconds / 60), "minute");
+            if (seconds < 86400) return format.format(-Math.round(seconds / 3600), "hour");
+            if (seconds < 86400 * 30) return format.format(-Math.round(seconds / 86400), "day");
+        } catch (e) {}
+        return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    };
+    const peopleNames = people => {
+        const names = people.map(person => person.name);
+        if (names.length <= 2) return names.join(" and ");
+        return `${names.slice(0, 2).join(", ")} and ${plural(names.length - 2, "other")}`;
+    };
+    const roomCard = (item, live) => {
+        const host = item.role === "host";
+        const li = el("li", `room-card${live ? " live" : ""}${host ? " host" : ""}`);
+        li.style.setProperty("--hue", roomHue(item.code));
+        const cover = el("div", "room-card-cover");
+        const initial = el("span", "room-card-initial", (roomLabel(item).trim()[0] || "R").toUpperCase());
+        const role = el("span", "room-card-role");
+        role.append(el("i", `fa-solid ${host ? "fa-crown" : "fa-user"}`), host ? " Host" : " Guest");
+        cover.append(initial, role);
+        if (live) {
+            const badge = el("span", "room-card-live");
+            badge.append(el("i"), "Live now");
+            cover.append(badge);
+        }
+        const body = el("div", "room-card-body");
+        const name = el("b", "room-card-name", roomLabel(item));
+        name.title = roomLabel(item);
+        const count = live ? room.memberCount || lastMembers.length || 1 : 0;
+        body.append(name, el("small", "room-card-meta", [Signaling.formatCode(item.code),
+            live ? plural(count, "person").replace("persons", "people") + " in it" : `used ${roomAgo(item.at)}`].join(" · ")));
+        // Who: everyone in it now (live), or who has been in it - not you
+        const others = (live ? lastMembers : item.people || []).filter(person => !live || person.id !== room.id);
+        const people = el("div", "room-card-people");
+        if (others.length) {
+            const stack = el("span", "room-card-avatars");
+            others.slice(0, 5).forEach(person => {
+                const face = makeAvatar(person.name, person.avatar, "small");
+                face.title = person.name + (person.host ? " (host)" : "");
+                stack.append(face);
+            });
+            if (others.length > 5) stack.append(el("span", "room-card-more", `+${others.length - 5}`));
+            people.append(stack, el("small", null, peopleNames(others)));
+        } else people.append(el("small", "room-card-nobody", live ? "Just you so far · invite people" : "No one's been in it yet"));
+        body.append(people);
+        const actions = el("div", "room-card-actions");
+        const open = el("button", "btn btn-primary btn-sm room-card-open");
+        open.type = "button";
+        open.dataset.room = item.code;
+        if (live) {
+            open.dataset.live = "";
+            open.title = "Back to the room";
+            open.append(el("i", "fa-solid fa-arrow-right-to-bracket"), el("span", null, "Return"));
+        } else {
             open.title = host ? "Open this room again with the same code and password" : "Join this room (its host needs to have it open)";
             open.append(el("i", `fa-solid ${host ? "fa-play" : "fa-right-to-bracket"}`), el("span", null, host ? "Open" : "Join"));
-            const forget = el("button", "icon-btn saved-remove");
+        }
+        actions.append(open);
+        if (!live || item.password) {
+            const forget = el("button", "icon-btn room-card-forget");
+            forget.type = "button";
             forget.dataset.room = item.code;
             forget.dataset.forget = "";
             forget.title = `Delete “${roomLabel(item)}” from this browser (its code and password)`;
             forget.setAttribute("aria-label", forget.title);
             forget.append(el("i", "fa-solid fa-trash-can"));
-            li.append(icon, info, open, forget);
-            return li;
+            actions.append(forget);
+        }
+        li.append(cover, body, actions);
+        return li;
+    };
+    const homeRoomCards = document.querySelector(".home-room-cards");
+    const roomsEmpty = document.querySelector(".rooms-empty");
+    function renderRoomCards() {
+        if (!roomList) return;
+        const list = savedRooms();
+        const live = room && (room.role === "host" || room.phase === "in") ? room : null;
+        const liveItem = live ? list.find(item => item.code === live.code) || { code: live.code, title: live.title, role: live.role, at: Date.now() } : null;
+        const items = liveItem ? [liveItem, ...list.filter(item => item !== liveItem)] : list;
+        roomsSection.hidden = false;
+        roomList.replaceChildren(...items.map((item, i) => {
+            const card = roomCard(item, item === liveItem);
+            card.style.setProperty("--i", i);
+            return card;
         }));
+        if (roomsEmpty) roomsEmpty.hidden = items.length > 0;
+        if (forgetAllBtn) forgetAllBtn.hidden = !list.length;
+        if (homeRoomCards) {
+            homeRoomCards.replaceChildren(...items.slice(0, 3).map(item => roomCard(item, item === liveItem)));
+            homeRoomCards.closest(".home-rooms-strip").hidden = !items.length;
+        }
+        const sideCount = document.querySelector('.side-count[data-count="rooms"]');
+        if (sideCount) {
+            sideCount.hidden = !items.length;
+            sideCount.textContent = String(items.length);
+        }
+        const sideLive = document.querySelector(".side-live");
+        if (sideLive) sideLive.hidden = !liveItem;
+    }
+    // Who's been in the room, with the remembered room (merged: the newest first, up to 8)
+    function rememberPeople() {
+        if (!room) return;
+        const list = savedRooms();
+        const at = list.findIndex(item => item.code === room.code);
+        if (at < 0) return;
+        const now = lastMembers.filter(person => person.id !== room.id).map(({ name, avatar, host }) => ({ name, avatar, host }));
+        const merged = [...now, ...(list[at].people || []).filter(old => !now.some(person => person.name === old.name))].slice(0, 8);
+        if (JSON.stringify(merged) === JSON.stringify(list[at].people || [])) return;
+        list[at] = { ...list[at], people: merged };
+        storage.set(ROOMS_KEY, JSON.stringify(list.slice(0, 6)));
+        renderRoomCards();
+    }
+    // (up to date whenever the home page shows)
+    new MutationObserver(() => !homePage.hidden && renderRoomCards()).observe(homePage, { attributes: true, attributeFilter: ["hidden"] });
+
+    const renderRooms = () => {
+        renderRoomCards();
         renderHomeBar();
         renderTogetherRooms();
     };
@@ -7641,14 +8142,20 @@
         help.classList.remove("hidden");
     });
 
-    roomList?.addEventListener("click", e => {
+    const onRoomCard = e => {
         const button = e.target.closest("button[data-room]");
         if (!button) return;
+        if ("live" in button.dataset && room) {
+            showPlayer();
+            return showPanel(true);
+        }
         const item = savedRooms().find(saved => saved.code === button.dataset.room);
         if (!item) return renderRooms();
         if ("forget" in button.dataset) forgetRoom(item.code);
         else reopen(item);
-    });
+    };
+    roomList?.addEventListener("click", onRoomCard);
+    homeRoomCards?.addEventListener("click", onRoomCard);
 
     // On the home page: the room you're in (it keeps going), or the last room to get back into
     function renderHomeBar() {
@@ -7662,6 +8169,7 @@
                 : room.presenting ? hasMedia() && !mainVideo.paused : !!room.state && !room.state.paused;
             homeBar.hidden = false;
             homeBar.classList.add("live");
+            renderMiniplayer(playing);
             title.textContent = room.title || "Joining a room…";
             detail.textContent = [
                 room.role === "host" ? "You're hosting" : room.hostName && `${room.hostName} is hosting`,
@@ -7669,13 +8177,14 @@
                 playing && "the video is playing",
                 chatUnread && plural(chatUnread, "new message")
             ].filter(Boolean).join(" · ");
-            action.textContent = "Return to room";
+            action.textContent = homeBar.classList.contains("mini") ? "Open" : "Return to room";
             forget.hidden = close.hidden = true;
             homeBar.dataset.code = "";
             return;
         }
         const last = savedRooms()[0];
         homeBar.classList.remove("live");
+        renderMiniplayer(false);
         homeBar.hidden = !last || homeBarDismissed;
         if (!last) return;
         const host = last.role === "host";
@@ -7685,6 +8194,132 @@
         forget.hidden = close.hidden = false;
         homeBar.dataset.code = last.code;
     }
+
+    // ---------- The miniplayer: out of a room (not ending it) to the home page with a video on,
+    // the video goes on in a small window at the corner (a strip along the bottom on a phone),
+    // like YouTube's, over the room's bar: its name, play / pause, open it again, or leave (or end)
+    // it. The player itself shrinks into the window - nothing moves, so nothing starts over.
+    if (homeBar) {
+        const video = el("button", "room-home-video");
+        const play = el("button", "room-home-play");
+        const leave = el("button", "room-home-leave");
+        const menu = el("div", "room-home-leave-menu");
+        video.type = play.type = leave.type = "button";
+        video.title = "Open the room";
+        video.setAttribute("aria-label", "Open the room");
+        video.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
+        play.append(el("i", "fa-solid fa-pause"));
+        leave.title = "Leave the room";
+        leave.setAttribute("aria-label", "Leave the room");
+        leave.append(el("i", "fa-solid fa-xmark"));
+        menu.hidden = true;
+        // The video's title, under the room's name: one line, gliding to its end and back when
+        // it's too long for it (like the player's on a phone)
+        const now = el("span", "room-home-now");
+        const clip = el("span", "room-home-now-clip");
+        clip.append(el("span", "room-home-now-text"));
+        now.append(el("i", "fa-solid fa-play"), clip);
+        homeBar.querySelector(".room-home-text").append(now);
+        homeBar.prepend(video);
+        homeBar.querySelector(".room-home-action").before(play);
+        homeBar.append(leave, menu);
+        miniUI = { video, play, leave, menu, now };
+    }
+    const renderMiniTitle = () => {
+        const now = miniUI && miniUI.now;
+        if (!now) return;
+        const clip = now.lastChild;
+        const line = clip.firstChild;
+        const raw = (document.querySelector(".video-title")?.textContent || "").replace(/\s+/g, " ").trim();
+        const title = raw && raw !== "No Video Loaded" ? raw : "";
+        now.hidden = !title;
+        now.title = title;
+        if (line.textContent !== title) {
+            line.textContent = title;
+            now.classList.remove("glide");
+            now.style.removeProperty("--over");
+        }
+        // (measured once it shows: how far it has to glide, at about 30 px a second)
+        requestAnimationFrame(() => {
+            const over = Math.ceil(line.scrollWidth - clip.clientWidth);
+            if (over > 4) {
+                now.style.setProperty("--over", `${-over}px`);
+                now.style.setProperty("--glide", `${Math.max(8, over / 30 + 5).toFixed(1)}s`);
+                now.classList.add("glide");
+            } else now.classList.remove("glide");
+        });
+    };
+    const hasVideoOn = () => !!room && (!!together.stream || hasMedia());
+    function renderMiniplayer(playing) {
+        if (!homeBar || !miniUI) return;
+        const { play: miniPlay, leave: miniLeave, menu: miniMenu } = miniUI;
+        const on = !!room && !homePage.hidden && hasVideoOn();
+        // (over the player, its bar leaves the home page's layer for the page's own while it's the
+        // miniplayer - its menu over the video - and goes back after)
+        if (on && homeBar.parentNode !== document.body) {
+            miniUI.home = [homeBar.parentNode, homeBar.nextSibling];
+            document.body.append(homeBar);
+        } else if (!on && miniUI.home) {
+            miniUI.home[0].insertBefore(homeBar, miniUI.home[1]);
+            miniUI.home = null;
+        }
+        homeBar.classList.toggle("mini", on);
+        playerPage.classList.toggle("miniplayer", on);
+        document.body.classList.toggle("has-miniplayer", on);
+        if (!on) {
+            miniMenu.hidden = true;
+            return;
+        }
+        miniPlay.firstChild.className = `fa-solid ${playing ? "fa-pause" : "fa-play"}`;
+        miniPlay.title = playing ? "Pause" : "Play";
+        miniPlay.setAttribute("aria-label", miniPlay.title);
+        miniLeave.title = room.role === "host" || room.ownerSecret ? "Leave, or end and delete the room" : "Leave, or leave and delete the room";
+        renderMiniTitle();
+        miniLeave.setAttribute("aria-label", miniLeave.title);
+    }
+    // (going home and back, playing and pausing: it follows)
+    new MutationObserver(() => renderHomeBar()).observe(homePage, { attributes: true, attributeFilter: ["hidden"] });
+    ["play", "pause"].forEach(type => mainVideo.addEventListener(type, () => !homePage.hidden && renderHomeBar()));
+    setInterval(() => playerPage.classList.contains("miniplayer") && renderHomeBar(), 1000);
+    const { video: miniVideo, play: miniPlay, leave: miniLeave, menu: miniMenu } = miniUI || {};
+    miniVideo?.addEventListener("click", () => homeBar.querySelector(".room-home-action").click());
+    miniPlay?.addEventListener("click", () => {
+        togglePlay();
+        setTimeout(renderHomeBar, 300);
+    });
+    // Leave: just leave (it goes on for everyone); its host: end it for everyone and delete it;
+    // a guest: leave and delete it from this browser
+    const leaveFromHome = mode => {
+        if (!room) return;
+        const end = mode === "end";
+        if (end && room.role === "guest") send(room.peer, { t: "end", by: room.name, owner: room.ownerSecret || undefined });
+        if (mode !== "leave") forgetRoom(room.code, false);
+        sayBye(end === true);
+        teardown();
+        closeRoomUI();
+        if (hasMedia()) mainVideo.pause();
+        miniMenu.hidden = true;
+        renderHomeBar();
+        renderRoomCards();
+    };
+    miniLeave?.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!room) return;
+        const host = room.role === "host" || room.ownerSecret;
+        miniMenu.replaceChildren();
+        const option = (icon, text, mode, danger = false) => {
+            const button = el("button", `room-home-leave-opt${danger ? " danger" : ""}`);
+            button.type = "button";
+            button.append(el("i", `fa-solid ${icon}`), el("span", null, text));
+            button.addEventListener("click", () => leaveFromHome(mode));
+            return button;
+        };
+        miniMenu.append(option("fa-right-from-bracket", "Just leave (it goes on)", "leave"));
+        if (host) miniMenu.append(option("fa-trash-can", "End and delete the room", "end", true));
+        else miniMenu.append(option("fa-trash-can", "Leave and delete it from here", "forget", true));
+        miniMenu.hidden = !miniMenu.hidden;
+    });
+    document.addEventListener("click", e => miniMenu && !miniMenu.hidden && !miniMenu.contains(e.target) && e.target !== miniLeave && (miniMenu.hidden = true));
 
     homeBar?.querySelector(".room-home-action").addEventListener("click", () => {
         if (room) {
@@ -7705,7 +8340,7 @@
     const unsupported = () => showStatus({
         icon: "fa-triangle-exclamation",
         title: "Rooms don't work in this browser",
-        text: "Use a recent version of Chrome, Edge, Firefox or Safari, on the CineTab website (https).",
+        text: "Try a recent Chrome, Edge, Firefox or Safari",
         actions: [{ label: "Close", onClick: closeDialog }],
         onClose: closeDialog
     });

@@ -750,8 +750,83 @@ const showError = message => {
     uploadOverlay.classList.add("hidden");
     convertOverlay.classList.add("hidden");
     errorMessage.innerText = message;
+    errorMessage.title = message;
     errorOverlay.classList.remove("hidden");
 };
+
+// ---------- The notices sit above everything in the player (the call, its dock, the panel):
+// on the page itself, not inside the video's box, placed at the top of wherever the video is
+// (style.css reads these numbers). Also in fullscreen, which is the whole player page.
+const placeNotices = () => {
+    if (playerPage.hidden) return;
+    const box = container.getBoundingClientRect();
+    if (!box.width) return;
+    const phone = box.width <= 600;
+    const style = playerPage.style;
+    style.setProperty("--notice-x", `${Math.round(box.left + box.width / 2)}px`);
+    style.setProperty("--notice-top", `${Math.round(Math.max(8, box.top) + (phone ? 58 : 72))}px`);
+    style.setProperty("--notice-w", `${Math.round(Math.min(520, Math.max(260, box.width - (phone ? 16 : 24))))}px`);
+};
+window.placeNotices = placeNotices;
+[errorOverlay, convertOverlay, compatBanner].forEach(notice => playerPage.append(notice));
+if (window.ResizeObserver) new ResizeObserver(placeNotices).observe(container);
+window.addEventListener("resize", placeNotices);
+new MutationObserver(() => requestAnimationFrame(placeNotices)).observe(playerPage, { attributes: true, attributeFilter: ["class", "hidden"] });
+
+// ---------- Asking: a small card at the top, like a notification - a few words and the choices
+// (not the browser's own box, which stops everything). In the player, at the top of the video;
+// on the home page, at the top of the page. Resolves true for the main choice; Esc, × or the
+// other choice resolve false. Used by room.js and home.js too.
+const playerAsk = ({ icon = "fa-circle-question", title, text = "", yes = "OK", no = "Cancel", danger = false }) => new Promise(resolve => {
+    document.querySelectorAll(".player-ask").forEach(old => old.querySelector(".box-close").click());
+    const layer = el("div", "notice-layer player-ask");
+    layer.dataset.dialog = "";
+    const box = el("div", `upload-box notice${danger ? " notice-danger" : ""}`);
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-label", title);
+    const close = el("button", "box-close");
+    close.type = "button";
+    close.title = `${no} (Esc)`;
+    close.setAttribute("aria-label", no);
+    close.append(el("i", "fa-solid fa-xmark"));
+    const scroll = el("div", "box-scroll");
+    const iconBox = el("span", "notice-icon");
+    iconBox.append(el("i", `fa-solid ${icon}`));
+    const words = el("div", "notice-text");
+    words.append(el("b", null, title));
+    if (text) words.append(el("small", null, text));
+    const actions = el("div", "notice-actions");
+    const noBtn = el("button", "secondary-btn", no);
+    const yesBtn = el("button", danger ? "notice-danger-btn" : "", yes);
+    noBtn.type = yesBtn.type = "button";
+    actions.append(noBtn, yesBtn);
+    scroll.append(iconBox, words, actions);
+    box.append(close, scroll);
+    layer.append(box);
+    let done = false;
+    const finish = answer => {
+        if (done) return;
+        done = true;
+        layer.classList.add("hidden");
+        setTimeout(() => layer.remove(), 300);
+        resolve(answer);
+    };
+    close.addEventListener("click", () => finish(false));
+    noBtn.addEventListener("click", () => finish(false));
+    yesBtn.addEventListener("click", () => finish(true));
+    const onKey = e => {
+        if (e.key !== "Escape" || !layer.isConnected || done) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        finish(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    layer.addEventListener("transitionend", () => done && document.removeEventListener("keydown", onKey, true));
+    (playerPage.hidden ? document.body : playerPage).append(layer);
+    placeNotices();
+    yesBtn.focus({ preventScroll: true });
+});
+window.playerAsk = playerAsk;
 
 const setConvertProgress = (ratio, text) => {
     convertProgress.classList.toggle("indeterminate", ratio === null);
@@ -793,7 +868,7 @@ const playConverted = ({ key, file, subtitles, plan, cached }) => {
 
 const startConversion = (reason, detail = null, forceVideoTranscode = false) => {
     if (!Converter.isSupported) {
-        return showError("This browser can't play this file and can't run CineTab's converter. Try the latest Chrome or Edge.");
+        return showError("This browser can't convert it · try Chrome or Edge");
     }
     cancelConversion();
     const file = currentFile;
@@ -807,13 +882,17 @@ const startConversion = (reason, detail = null, forceVideoTranscode = false) => 
     });
 
     const ext = (file.name.match(/\.([^.]+)$/) || [, ""])[1].toUpperCase();
-    convertTitle.innerText = reason === "audio" ? "Fixing the sound" : "Making this file playable";
+    convertTitle.innerText = { format: `Converting ${ext || "it"} to MP4`, audio: "Fixing the sound", video: "Converting the video" }[reason];
     convertReason.innerText = {
         format: `Your browser can't play ${ext || "this kind of"} files directly, so CineTab is converting it to MP4.`,
         audio: `This file's sound${detail ? ` (${detail})` : ""} isn't supported by your browser, so it would play silently. CineTab is converting just the sound and keeping the video as is.`,
         video: "Your browser can't show this file's video, so CineTab is converting it."
     }[reason];
     convertPlan.innerText = "";
+    // (the why, and the plan below: on pointing at it, not in the way)
+    const convertBox = convertOverlay.querySelector(".upload-box");
+    convertBox.title = `${convertReason.innerText}
+Converted on your computer, never uploaded - saved in this browser so it opens instantly next time.`;
     convertSkipBtn.hidden = reason !== "audio";
     setConvertProgress(null, "Starting…");
     uploadOverlay.classList.add("hidden");
@@ -823,15 +902,20 @@ const startConversion = (reason, detail = null, forceVideoTranscode = false) => 
     let convertStartedAt = 0;
     const job = Converter.convert(file, {
         forceVideoTranscode,
-        onPlan: plan => convertPlan.innerText = describePlan(plan),
+        onPlan: plan => {
+            convertPlan.innerText = describePlan(plan);
+            convertBox.title = `${convertReason.innerText}
+${convertPlan.innerText}
+Converted on your computer, never uploaded - saved in this browser so it opens instantly next time.`;
+        },
         onStatus: ({ stage, ratio }) => {
             if (stage === "download") {
-                setConvertProgress(ratio, `Downloading the converter (31 MB, first time only)… ${Math.round(ratio * 100)}%`);
+                setConvertProgress(ratio, `Getting the converter (first time only) · ${Math.round(ratio * 100)}%`);
             } else if (stage === "probe") {
                 setConvertProgress(null, "Reading the file…");
             } else if (stage === "convert") {
                 if (!convertStartedAt) convertStartedAt = Date.now();
-                setConvertProgress(ratio, `Converting… ${Math.round(ratio * 100)}%${timeLeft(ratio, convertStartedAt)}`);
+                setConvertProgress(ratio, `${Math.round(ratio * 100)}%${timeLeft(ratio, convertStartedAt)}`);
             }
         }
     });
@@ -868,7 +952,7 @@ mainVideo.addEventListener("error", () => {
         return startConversion("video", null, true);
     }
     playbackMode = null;
-    showError("Sorry, CineTab couldn't play this file, even after converting it.");
+    showError("Not even after converting it");
 });
 
 convertCancelBtn.addEventListener("click", () => {
@@ -1021,7 +1105,7 @@ savedList?.addEventListener("click", async e => {
 });
 
 clearAllBtn?.addEventListener("click", async () => {
-    if (!confirm("Delete all converted videos from this browser?\nYour original files are not touched, and anything can be converted again later.")) return;
+    if (!await playerAsk({ icon: "fa-trash-can", title: "Delete all converted videos?", text: "Your own files aren't touched", yes: "Delete", danger: true })) return;
     if (currentSavedKey) unloadPlayer();
     await Converter.clearSaved();
     renderSavedList();
@@ -1060,8 +1144,8 @@ document.querySelectorAll("[data-dialog]:not(#room-overlay)").forEach(dialog => 
 closeButton(helpOverlay).addEventListener("click", () => helpOverlay.classList.add("hidden"));
 closeButton(shortcutsOverlay).addEventListener("click", () => shortcutsOverlay.classList.add("hidden"));
 closeButton(errorOverlay).addEventListener("click", () => closeErrorBtn.click());
-closeButton(convertOverlay).addEventListener("click", () => {
-    if (confirm("Stop converting this file?")) convertCancelBtn.click();
+closeButton(convertOverlay).addEventListener("click", async () => {
+    if (await playerAsk({ icon: "fa-wand-magic-sparkles", title: "Stop converting?", yes: "Stop", no: "Keep going", danger: true })) convertCancelBtn.click();
 });
 // The empty player's "Select a movie" box: back to the home page (in a room, just out of the way)
 closeButton(uploadOverlay).hidden = !homePage;
@@ -3612,4 +3696,72 @@ document.addEventListener("keydown", e => {
     if (playerPage.hidden || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "k") return;
     e.preventDefault();
     cmdPalette.toggle();
+});
+
+// ---------- Saved: the heart in the player's top bar keeps the YouTube video that's on in the
+// home page's Saved (history.js) - on your own or in a room. In a playlist it asks which: this
+// video, or the whole playlist. (Not in the offline player: it has no home page to keep them on.)
+document.addEventListener("DOMContentLoaded", () => {
+    const wrap = container.querySelector(".player-save-wrap");
+    if (!wrap || !homePage || !window.CineSaved) return;
+    const button = wrap.querySelector(".player-save-btn");
+    const menu = wrap.querySelector(".player-save-menu");
+    const current = () => {
+        const inRoom = together.roomYouTube && together.roomYouTube();
+        if (inRoom) return inRoom;
+        const own = together.solo && together.solo.current;
+        // (a playlist played through the queue: its videos remember which playlist they came from)
+        if (own && own.video && !own.list && together.queuePlaylist) return { ...own, list: together.queuePlaylist(own.video.id) };
+        return own || null;
+    };
+    const isSaved = item => !!item && CineSaved.has(CineSaved.keyOf(item));
+    const closeMenu = () => {
+        menu.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+    };
+    const render = () => {
+        const now = current();
+        wrap.hidden = !now;
+        if (!now) return closeMenu();
+        const on = isSaved(now.video) || isSaved(now.list);
+        button.classList.toggle("on", on);
+        button.firstChild.className = `${on ? "fa-solid" : "fa-regular"} fa-heart`;
+        button.title = now.list ? "Save this video or the playlist" : on ? "Saved - take it out of Saved" : "Save this video";
+        button.setAttribute("aria-label", button.title);
+    };
+    const toggle = item => {
+        const saved = CineSaved.toggle(item);
+        if (saved === null) return;
+        const what = item.kind === "playlist" ? "Playlist" : "Video";
+        showFeedback(saved ? "fa-heart" : "fa-heart-crack", saved ? `${what} saved` : "Taken out of Saved");
+    };
+    const option = (item, label, icon) => {
+        const on = isSaved(item);
+        const row = el("button", `player-save-opt${on ? " on" : ""}`);
+        row.type = "button";
+        row.setAttribute("role", "menuitemcheckbox");
+        row.setAttribute("aria-checked", String(on));
+        row.append(el("i", `fa-solid ${icon}`), el("span", null, label), el("i", `${on ? "fa-solid" : "fa-regular"} fa-heart player-save-heart`));
+        row.addEventListener("click", () => {
+            toggle(item);
+            closeMenu();
+        });
+        return row;
+    };
+    button.addEventListener("click", e => {
+        e.stopPropagation();
+        const now = current();
+        if (!now) return;
+        // Just a video: saved (or taken out) straight away
+        if (!now.list || !now.video) return toggle(now.video || now.list);
+        if (!menu.hidden) return closeMenu();
+        menu.replaceChildren(option(now.video, "This video", "fa-play"), option(now.list, now.list.count ? `The playlist · ${now.list.count} videos` : "The whole playlist", "fa-list"));
+        menu.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+    });
+    document.addEventListener("click", e => !menu.hidden && !wrap.contains(e.target) && closeMenu());
+    document.addEventListener("keydown", e => e.key === "Escape" && !menu.hidden && (e.stopImmediatePropagation(), closeMenu()), true);
+    CineSaved.onChange(render);
+    setInterval(() => !playerPage.hidden && render(), 1000);
+    render();
 });

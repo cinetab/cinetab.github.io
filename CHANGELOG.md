@@ -4,6 +4,72 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.6.9] - 2026-11-21
+
+### Home page, redesigned
+- A sidebar with the home page's sections - Home, Dashboard, My rooms, Help & FAQ - and quick
+  starts (open a movie, create or join a room); on a phone, a tab bar along the bottom. One
+  section at a time, each rising into place; links to #faq, #dashboard and the like open theirs
+- Home: the welcome, four quick-start tiles (open a movie, search YouTube, create or join a
+  room), Continue watching (the last four), and your rooms
+- Dashboard: YouTube search and everything watched (filters), and converted videos
+- My rooms: cards - each room's name, whether you host it, when it was last used, and the people
+  who've been in it (their avatars, remembered with the room); the room you're in first, "Live
+  now", with everyone in it and Return. No rooms yet: what they are, with Create and Join
+- Help & FAQ: how it works, features, questions, and the footer
+- Mica: soft colour glows drifting slowly behind frosted-glass panels, sidebar and cards
+- Counts in the sidebar (videos watched, rooms) and a live dot while you're in a room; the
+  "welcome back" bar is now the rooms' cards (the bar stays for the room you're in)
+- The sidebar shrinks to its icons (the button beside the logo; remembered): pointed at or
+  tabbed into, it opens out over the page with every name, and folds back as the pointer leaves.
+  Counts become small badges on the icons
+
+### The player's pop-ups, as notices
+- Everything the player tells or asks is a small card now - an icon, a few words, and the
+  choices - instead of a big box of text. It drops in at the top of the video like a
+  notification, with the player still there behind it; on a phone the choices sit under the words
+- Can't play a file: the reason in a line, and Another file
+- Converting: what it's doing, the percent and time left, a thin progress bar, and Play muted /
+  Cancel (the why and the plan when pointed at)
+- No sound?: Fix sound
+- The empty player: "Pick a video" with Browse and YouTube (the big play buttons on a touch
+  screen step aside for it)
+- Asking - stop converting, remove someone from the room, stop a video for everyone - is one of
+  these cards in the player with its two choices, not the browser's own box (Esc says no)
+- The room's messages are notices too: go to the home page?, leave the room?, connecting,
+  waiting to be let in, nothing playing yet, open your copy, couldn't join, the room ended,
+  checking the network - each in a line or two (the rest on pointing at it), with its choices
+- Notices sit above everything in the player - the call, its dock, the side panel - at the top of
+  the video wherever it is, in fullscreen too
+- On the home page, deleting a room, all rooms, what you watched or the converted videos asks
+  with the same card at the top of the page
+
+### Saved
+- A new Saved section in the sidebar (with its count): YouTube videos and whole playlists kept
+  to watch later, as cards - picture, length or number of videos, channel, when it was saved -
+  with Clear. One click plays it (a playlist from its start)
+- Search in Saved: by title or channel as you type (any order of words; accents and capitals
+  don't matter), Esc or × clears it. All / Videos / Playlists beside it, each with how many match;
+  nothing matching says so, with Clear the search
+- Save with the heart: on any YouTube search result (the dashboard, the search launcher, the
+  room's queue search), on the dashboard's YouTube cards, and in the player's top bar - in a
+  playlist it asks which: this video or the whole playlist (also for a playlist playing through
+  the queue, and in a room). Filled pink once saved, everywhere at once; again to take it out
+- The home page shows the last four saved under Continue watching
+- Kept in this browser only, like the rest
+
+### Miniplayer
+- Out of a room (not ending it) to the home page with a video on, the video keeps playing in a
+  small window at the corner, like YouTube's - on a phone, a strip along the bottom with the
+  video at its left. Below it: the room's name and who's hosting, play / pause, Open (or click
+  the video) to go back to the room, and × - just leave (the room goes on), or end and delete
+  it (its host), or leave and delete it from this browser (a guest). It's the room's own player
+  shrunk, so nothing starts over or loses sync
+- Its bar shows the video's title under the room's name, on one line: a long one glides slowly
+  to its end and back
+
 ## [1.6.8] - 2026-11-21
 
 ### Queue
