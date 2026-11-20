@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.6.0">
+  <meta name="version" content="1.6.1">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.6.0",
+      "softwareVersion": "1.6.1",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -375,7 +375,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.6.0</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.6.1</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -429,6 +429,7 @@
       <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-label">Autoplay</span><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
       <!-- Search and commands: YouTube, a pasted link, or anything the player does (script.js) -->
       <button class="player-search-btn" title="Search and commands (Ctrl+K or /)" aria-label="Search YouTube, or run a command" aria-keyshortcuts="Control+K /"><i class="fa-solid fa-magnifying-glass"></i></button>
+      <button class="player-queue-btn" title="Video Queue (Q)" aria-label="Queue"><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
       <button class="share-help-btn" title="How to watch together (R)"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
     </div>
 
@@ -528,6 +529,7 @@
             <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
+            <dt><kbd>Q</kbd></dt><dd>Queue panel: show / hide</dd>
             <dt><kbd>R</kbd></dt><dd>Room panel: show / hide (outside a room: Watch together)</dd>
             <dt><kbd>D</kbd></dt><dd>Video call window: pin it to the side / float it again</dd>
             <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
@@ -803,7 +805,7 @@
       <span class="room-now-icon"><i class="fa-solid fa-film"></i></span>
       <span class="room-now-text"><b class="room-now-title">Nothing is playing</b><small class="room-now-meta"></small></span>
       <button type="button" class="room-icon-btn room-now-yt" title="Search YouTube or paste a link, to play for everyone" aria-label="Search YouTube or paste a link, to play for everyone"><i class="fa-brands fa-youtube"></i></button>
-      <button type="button" class="room-small-btn primary room-now-share"><i class="fa-solid fa-folder-open"></i> <span>Share a video</span></button>
+      <button type="button" class="room-icon-btn primary room-now-share" title="Share a video" aria-label="Share a video"><i class="fa-solid fa-file-video"></i></button>
       <button type="button" class="room-icon-btn danger room-now-stop" title="Stop video for everyone" aria-label="Stop video for everyone" hidden><i class="fa-solid fa-stop"></i></button>
       <!-- A YouTube playlist: the video before and after this one -->
       <div class="room-now-list" hidden>

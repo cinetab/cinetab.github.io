@@ -4,6 +4,20 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.1] - 2026-11-20
+
+### Video call window
+- Top dock position option: when docked on computers, an option toggles between side column and top dock directly above the video player so widescreen letterboxing is utilized; participant cameras stack horizontally with smooth scrolling
+- Hover overlay on own video: hovering reveals quick mic, camera, and camera switch controls with auto-hide, keeping the window compact
+- Pin, minimize, and leave buttons are directly accessible in the call bar rather than buried in a menu
+
+### Video Queue & Side Panel
+- Universal queue panel: the Queue is now always available whether in a room or watching solo
+- Dedicated top bar Queue button (and `Q` shortcut) to toggle the video queue
+- Solo mode queue supports adding, removing, and reordering upcoming videos with a one-click "Watch with friends" room creation card
+- Full room sections (Chat, People, Settings) dynamically activate whenever a room is created or joined
+- Icon-only file share button in the room header for a cleaner, compact toolbar
+
 ## [1.6.0] - 2026-11-20
 
 ### Phones: the floating call window, redesigned
@@ -743,6 +757,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.6.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.1
 [1.6.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.0
 [1.5.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.9
 [1.5.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.8

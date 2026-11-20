@@ -32,6 +32,7 @@ subtitleInput = document.querySelector("#subtitle-input"),
 subtitlesBtn = container.querySelector(".subtitles"),
 helpOverlay = document.querySelector("#help-overlay"),
 shareHelpBtn = container.querySelector(".share-help-btn"),
+playerQueueBtn = container.querySelector(".player-queue-btn"),
 closeHelpBtn = document.querySelector("#close-help-btn"),
 homePage = document.querySelector(".home"),
 playerPage = document.querySelector(".player-page"),
@@ -945,6 +946,7 @@ shareHelpBtn.addEventListener("click", () => {
     mainVideo.pause();
     helpOverlay.classList.remove("hidden");
 });
+if (playerQueueBtn) playerQueueBtn.addEventListener("click", () => together.toggleQueue && together.toggleQueue());
 closeHelpBtn.addEventListener("click", () => helpOverlay.classList.add("hidden"));
 
 closeErrorBtn.addEventListener("click", () => {
@@ -2761,6 +2763,12 @@ document.addEventListener("keydown", e => {
             if (refused) showFeedback("fa-video", refused);
             break;
         }
+
+        // Queue panel: show or hide it
+        case "KeyQ":
+            if (e.shiftKey) break;
+            if (together.toggleQueue) together.toggleQueue();
+            break;
 
         // The room's panel: show or hide it (outside a room: the Watch together options)
         case "KeyR":

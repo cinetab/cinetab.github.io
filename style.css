@@ -5531,7 +5531,11 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.18);
 }
 
-/* Your mic and camera (room.js), in the title bar: blue while on */
+/* Your mic and camera controls are shown on own video hover to save space */
+.room-call-bar .room-call-controls {
+  display: none !important;
+}
+
 .room-call-controls {
   display: flex;
   flex-shrink: 0;
@@ -5614,32 +5618,82 @@ body > .room-toasts {
   transform: scaleX(-1);
 }
 
-/* Your own tile, on a phone: switch between the front and back cameras */
+/* Your own tile: hover overlay with mic, camera, and camera switching options */
 .room-call-flip {
+  display: none !important;
+}
+
+.room-call-tile-hover {
   position: absolute;
-  top: 5px;
-  left: 5px;
-  z-index: 1;
-  width: 26px;
-  height: 26px;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+  border-radius: inherit;
+}
+
+.room-call-tile.me:hover .room-call-tile-hover,
+.room-call-tile.me:focus-within .room-call-tile-hover,
+.room-call-tile.me.hover-active .room-call-tile-hover {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.room-call-hover-btn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   border: none;
   border-radius: 50%;
-  font-size: 12px;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.55);
-  cursor: pointer;
-}
-
-.room-call-flip:active {
-  background: rgba(62, 151, 253, 0.85);
-}
-
-.room-call.big .room-call-flip {
-  width: 32px;
-  height: 32px;
   font-size: 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.room-call-hover-btn:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: scale(1.1);
+}
+
+.room-call-hover-btn:active {
+  transform: scale(0.94);
+}
+
+.room-call-hover-btn.active {
+  background: #3e97fd;
+}
+
+.room-call-hover-btn.active:hover {
+  background: #2b84ea;
+}
+
+.room-call-hover-btn.off {
+  background: #e53935;
+}
+
+.room-call-hover-btn.off:hover {
+  background: #d32f2f;
+}
+
+.room-call.big .room-call-hover-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
 }
 
 /* Camera off: their avatar in the middle, above the name */
@@ -8908,36 +8962,33 @@ body > .room-toasts {
 }
 
 /* =================== A PHONE'S FLOATING CALL WINDOW =================== */
-/* Floating, a phone's call window is its own compact thing (room.js): at the top how many are in
-   the room and ⋮ (pin it to the side or the bottom, minimize it, show everyone again); everyone's
-   video; below, just the mic, the camera and end call, as round buttons. Minimized: one pill with
-   the number, those three and ⋮. Nothing is wider than the window. (Docked, the bar is as it was.) */
+/* Floating, a phone's call window shows participant count, pin, minimize, and leave buttons
+   directly in the bar. Pin and minimize are shown properly, not hidden in a 3-dot menu.
+   Mic and camera switching are accessible on hovering/tapping your own video tile. */
 .room-call-more,
 .room-call-more-menu {
-  display: none;
+  display: none !important;
 }
 
 .room-call.unit:not(.docked) .room-call-bar {
   display: flex;
   flex-wrap: nowrap;
+  align-items: center;
   min-height: 34px;
-  padding: 4px 4px 0 12px;
+  padding: 4px 6px 0 10px;
+  gap: 6px;
 }
 
-.room-call.unit:not(.docked) .room-call-bar > :not(.room-call-title):not(.room-call-more) {
-  display: none;
+/* Show the pin, minimize, and leave buttons properly in the bar */
+.room-call.unit:not(.docked) .room-call-bar > .room-call-btn {
+  display: grid !important;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
 }
 
-.room-call.unit:not(.docked) .room-call-more:not([hidden]) {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  font-size: 13px;
-  background: transparent;
-}
-
-.room-call.unit:not(.docked) .room-call-more[aria-expanded="true"] {
-  background: rgba(255, 255, 255, 0.14);
+.room-call.unit:not(.docked) .room-call-bar > .room-call-btn[hidden] {
+  display: none !important;
 }
 
 .room-call.unit:not(.docked) .room-call-title i {
@@ -8948,30 +8999,9 @@ body > .room-toasts {
   margin: 4px 6px 0;
 }
 
+/* On floating call window, the bottom bar is hidden to save space (mic/cam on own video hover) */
 .room-call.unit:not(.docked) .room-foot {
-  justify-content: center;
-  gap: 12px;
-  padding: 8px;
-  border-top: 0;
-}
-
-/* (no avatar, no people button, no float button: ⋮ has those) */
-.room-call.unit:not(.docked) .room-foot .room-me,
-.room-call.unit:not(.docked) .room-foot .room-unit-only {
   display: none !important;
-}
-
-.room-call.unit:not(.docked) .room-foot .room-mic-btn,
-.room-call.unit:not(.docked) .room-foot .room-leave-btn {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  justify-content: center;
-  font-size: 15px;
-}
-
-.room-call.unit:not(.docked) .room-leave-btn span {
-  display: none;
 }
 
 .room-call.unit:not(.docked) .room-leave-popover {
@@ -8984,35 +9014,28 @@ body > .room-toasts {
   right: calc(50% - 5px);
 }
 
-/* Minimized: one pill (how many, mic, camera, end call, ⋮) */
+/* Minimized: compact pill showing count, pin, expand, and leave */
 .room-call.unit:not(.docked).collapsed {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 4px 4px 4px 12px;
+  gap: 6px;
+  padding: 4px 8px 4px 12px;
   border-radius: 999px;
+  width: auto;
 }
 
 .room-call.unit:not(.docked).collapsed .room-call-bar {
-  display: contents;
-}
-
-.room-call.unit:not(.docked).collapsed .room-foot {
-  order: 1;
+  display: flex;
+  align-items: center;
   gap: 6px;
-  padding: 0 2px 0 8px;
+  padding: 0;
+  min-height: auto;
 }
 
-.room-call.unit:not(.docked).collapsed .room-foot .room-mic-btn,
-.room-call.unit:not(.docked).collapsed .room-foot .room-leave-btn {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
-}
-
-.room-call.unit:not(.docked).collapsed .room-call-more {
-  order: 2;
+.room-call-btn.room-call-dock[aria-pressed="true"] {
+  background: rgba(62, 151, 253, 0.35);
+  color: #72b5ff;
 }
 
 /* The ⋮ menu: inside the window's width, below its top (or above it, low on the screen) */
@@ -9125,6 +9148,278 @@ body > .room-toasts {
   .room-foot {
     justify-content: flex-end;
   }
+}
+
+/* Top bar: Video Queue button */
+.player-queue-btn {
+  pointer-events: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.player-queue-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.player-page.queue-open .player-queue-btn {
+  background: rgba(62, 151, 253, 0.35);
+  border-color: rgba(62, 151, 253, 0.6);
+  color: #72b5ff;
+}
+
+@media (max-width: 600px) {
+  .player-queue-btn {
+    padding: 7px 10px;
+  }
+  .player-queue-btn span {
+    display: none;
+  }
+}
+
+/* Docked call panel at top of video player */
+.player-page.call-dock-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.player-page.call-dock-top > .room-call.docked.top {
+  width: 100%;
+  max-width: min(96vw, 1400px);
+  flex-shrink: 0;
+}
+
+.player-page.call-dock-top > .container {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100vh - 120px);
+}
+
+/* When room panel is open on the right and call is docked on top:
+   CSS Grid layout: Column 1 has call at top, container below; Column 2 has right panel */
+.player-page.call-dock-top.room-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w, 360px);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: stretch;
+  gap: 12px;
+  padding: 12px;
+}
+
+.player-page.call-dock-top.room-open > .room-call.docked.top {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.player-page.call-dock-top.room-open > .container {
+  grid-column: 1;
+  grid-row: 2;
+  width: 100%;
+  max-width: none;
+  align-self: center;
+  justify-self: center;
+}
+
+.player-page.call-dock-top.room-open > .room-panel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+}
+
+.room-call.docked.top {
+  order: -1;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  background: #17171c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 4px 8px;
+  gap: 8px;
+  min-height: 52px;
+  max-height: 110px;
+  box-sizing: border-box;
+}
+
+.room-call.docked.top .room-call-bar {
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.room-call.docked.top .room-call-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 4px;
+  margin: 0;
+  max-height: none;
+  scrollbar-width: thin;
+}
+
+.room-call.docked.top .room-call-tile {
+  flex: 0 0 auto;
+  width: 116px;
+  height: 72px;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.room-call.docked.top.collapsed {
+  width: auto !important;
+  max-width: fit-content;
+  padding: 4px 10px;
+}
+
+.room-call.docked.top.collapsed .room-call-grid {
+  display: none !important;
+}
+
+/* Call dock position switch button & docked bar controls */
+.room-call-btn.room-call-pos {
+  display: grid;
+  place-items: center;
+  color: #c4c4d0;
+  transition: all 0.2s ease;
+}
+
+.room-call-btn.room-call-pos:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.room-call.unit.docked.side .room-call-bar {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 0;
+  gap: 4px;
+}
+
+.room-call.unit.docked .room-call-bar > .room-call-btn {
+  display: grid !important;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.room-call.unit.docked .room-call-bar > .room-call-btn[hidden] {
+  display: none !important;
+}
+
+/* Solo Queue panel (active even when not connected to a room) */
+.room-panel.solo-queue .room-tab-btn:not([data-tab="queue"]) {
+  display: none !important;
+}
+
+.room-panel.solo-queue .room-tab-btn[data-tab="queue"] {
+  border-bottom: none;
+  pointer-events: none;
+}
+
+.room-panel.solo-queue .room-tabbar {
+  justify-content: space-between;
+}
+
+.room-panel.solo-queue .room-foot {
+  display: none !important;
+}
+
+.queue-solo-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(62, 151, 253, 0.08);
+  border: 1px solid rgba(62, 151, 253, 0.25);
+}
+
+.queue-solo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(62, 151, 253, 0.2);
+  color: #72b5ff;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.queue-solo-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.queue-solo-info b {
+  font-size: 13px;
+  color: #fff;
+}
+
+.queue-solo-info span {
+  font-size: 11.5px;
+  color: #a8a8b6;
+}
+
+.queue-solo-card .queue-create-room-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Icon-only file share button */
+.room-now-share {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.room-now-share i {
+  font-size: 13px;
 }
 
 /* =================== /WATCH TOGETHER ROOMS =================== */

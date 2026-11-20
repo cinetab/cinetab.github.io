@@ -192,6 +192,7 @@
     // The mic and camera buttons: the side panel's, and the call window's (added with it below)
     const micButtons = [micBtn];
     const camButtons = [camBtn];
+    let syncHoverControls = null;
     const remoteVoiceAudio = new Map();
     let reopening = null;
     let homeBarDismissed = false;
@@ -483,6 +484,7 @@
             button.setAttribute("aria-selected", button.dataset.tab === tab);
         });
         tabPanels.forEach(section => section.hidden = section.dataset.tab !== tab);
+        playerPage.classList.toggle("queue-open", !panel.hidden && tab === "queue");
         if (tab === "chat") {
             chatUnread = 0;
             scrollChat();
@@ -493,14 +495,25 @@
     const setPanel = show => {
         panel.hidden = !show;
         playerPage.classList.toggle("room-open", show);
+        playerPage.classList.toggle("queue-open", show && activeTab === "queue");
         roomToggle.setAttribute("aria-expanded", String(show));
-        roomToggle.title = show ? "Hide the room (R)" : "Show the room: chat, queue, people (R)";
-        if (show && activeTab === "chat") {
-            chatUnread = 0;
-            scrollChat();
+        roomToggle.title = show ? "Hide the panel" : "Show the panel";
+        if (show && !room) {
+            panel.classList.add("solo-queue");
+            showTab("queue");
+            renderQueue();
+            roomTitle.textContent = "Queue";
+            roomState.textContent = "Upcoming videos";
+        } else if (show && room) {
+            panel.classList.remove("solo-queue");
+            if (activeTab === "chat") {
+                chatUnread = 0;
+                scrollChat();
+            }
         }
         if (!show) closeProfile();
         updateBadges();
+        placeDock();
     };
 
     // ---------- Phones held upright: what's playing, under its title. The video's title is below
@@ -877,6 +890,7 @@
         rememberSwitch.checked = !!room.remember;
         renderInvite();
         renderMe();
+        panel.classList.remove("solo-queue");
         together.following = room.role === "guest";
         // (pressed again while it's closing: it opens again)
         together.openPanel = () => showPanel(panel.hidden || !!panelClosing);
@@ -905,6 +919,7 @@
         if (pipCall && window.documentPictureInPicture && window.documentPictureInPicture.window) window.documentPictureInPicture.window.close();
         toggleLeaveMenu(false);
         showPanel(false);
+        panel.classList.add("solo-queue");
         chatUnread = 0;
         updateBadges();
         shareLabel.textContent = "Watch together";
@@ -1449,15 +1464,18 @@
         }
     };
 
-    const renderMic = () => micButtons.forEach(button => {
-        button.classList.toggle("active", micEnabled);
-        button.setAttribute("aria-pressed", String(micEnabled));
-        button.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
-        button.setAttribute("aria-label", micEnabled ? "Microphone on" : "Microphone off");
-        button.querySelector("i").className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
-        const label = button.querySelector("span");
-        if (label) label.textContent = micEnabled ? "Mic on" : "Mic off";
-    });
+    const renderMic = () => {
+        micButtons.forEach(button => {
+            button.classList.toggle("active", micEnabled);
+            button.setAttribute("aria-pressed", String(micEnabled));
+            button.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
+            button.setAttribute("aria-label", micEnabled ? "Microphone on" : "Microphone off");
+            button.querySelector("i").className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
+            const label = button.querySelector("span");
+            if (label) label.textContent = micEnabled ? "Mic on" : "Mic off";
+        });
+        if (syncHoverControls) syncHoverControls();
+    };
 
     const syncMicrophonePeer = peer => {
         if (!peer?.voiceSender) return;
@@ -1645,7 +1663,7 @@
     // floating; a phone held upright in fullscreen, with the room's panel closed, floats it);
     // `dockW`: the docked column's width (px) dragged to by its long edge (none: its own)
     // `unitFloat`: on a phone, floating instead of docked
-    const call = { x: 0, y: 0, pos: null, collapsed: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockable: true, dockW: null, unitFloat: false };
+    const call = { x: 0, y: 0, pos: null, collapsed: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockPos: "side", dockable: true, dockW: null, unitFloat: false };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
@@ -1653,6 +1671,7 @@
             call.collapsed = saved.collapsed === true;
             call.docked = saved.docked === true;
             call.unitFloat = saved.unitFloat === true;
+            if (saved.dockPos === "top" || saved.dockPos === "side") call.dockPos = saved.dockPos;
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
             if (saved.sizes && typeof saved.sizes === "object") ["landscape", "portrait"].forEach(key => {
                 const size = saved.sizes[key];
@@ -1660,7 +1679,7 @@
             });
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, dockPos: call.dockPos, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1684,8 +1703,19 @@
     callPipBtn.firstChild.className = "fa-solid fa-clone";
     callPipBtn.hidden = !("documentPictureInPicture" in window) || isTouch;
     callPipBtn.addEventListener("click", () => together.pip && together.pip());
-    const callDockBtn = callButton("room-call-dock", "Dock as a panel");
-    const callFoldBtn = callButton("room-call-fold", "Fold up");
+    const callDockBtn = callButton("room-call-dock", "Pin to side");
+    callDockBtn.firstChild.className = "fa-solid fa-thumbtack";
+    const callFoldBtn = callButton("room-call-fold", "Minimize");
+    callFoldBtn.firstChild.className = "fa-solid fa-minus";
+    // Docked: switch between left side panel and top panel (videos stacked horizontally)
+    const callPosBtn = callButton("room-call-pos", "Move video call to top of player");
+    callPosBtn.firstChild.className = "fa-solid fa-arrow-up";
+    callPosBtn.hidden = true;
+    callPosBtn.addEventListener("click", () => {
+        call.dockPos = call.dock === "top" ? "side" : "top";
+        saveCall();
+        placeDock(true);
+    });
     // Folded up: a camera with a live dot in front of the number, so the small pill stands out
     const callLive = el("span", "room-call-live");
     callLive.setAttribute("aria-hidden", "true");
@@ -1729,7 +1759,7 @@
     });
     document.addEventListener("click", e => !callLeaveMenu.hidden && !callLeaveMenu.contains(e.target) && showCallLeave(false));
     document.addEventListener("keydown", e => e.key === "Escape" && !callLeaveMenu.hidden && showCallLeave(false));
-    callBar.append(callLive, callTitle, callControls, callPipBtn, callDockBtn, callFoldBtn, callLeaveBtn);
+    callBar.append(callLive, callTitle, callControls, callPipBtn, callPosBtn, callDockBtn, callFoldBtn, callLeaveBtn);
     callWin.classList.toggle("has-pip", !callPipBtn.hidden);
 
     // On a phone, in the call bar: everyone's video shown or folded away (with how many are in
@@ -2141,26 +2171,30 @@
         unitFloatBtn.title = call.dock ? "Float it: drag it anywhere" : phoneSideways.matches ? "Dock it on the left" : "Dock it at the bottom";
         unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
         unitFloatBtn.hidden = !call.dock && !call.dockable;
-        // The floating one's ⋮: pin it (where it can be), and minimize it or show everyone again
-        morePin.hidden = !call.dockable;
-        morePin.firstChild.className = "fa-solid fa-thumbtack";
-        morePin.lastChild.textContent = phoneSideways.matches ? "Pin to the side" : "Pin to the bottom";
-        moreFold.hidden = alone;
-        moreFold.firstChild.className = `fa-solid ${call.collapsed ? "fa-up-right-and-down-left-from-center" : "fa-minus"}`;
-        moreFold.lastChild.textContent = call.collapsed ? "Show everyone" : "Minimize";
-        callMoreBtn.hidden = morePin.hidden && moreFold.hidden;
-        if (callMoreBtn.hidden || call.dock) showCallMore(false);
+        // Hide 3-dot more menu; pin and minimize buttons are shown directly in the bar
+        callMoreBtn.hidden = true;
+        showCallMore(false);
         callWin.classList.toggle("collapsed", folded);
         callFoldBtn.hidden = !!call.dock;
-        callDockBtn.hidden = folded || (!call.dock && !call.dockable);
-        callDockBtn.firstChild.className = `fa-solid ${call.dock ? "fa-up-right-from-square" : "fa-table-columns"}`;
-        callDockBtn.title = call.dock ? "Float over the video" : "Dock as a panel beside the video";
-        callDockBtn.setAttribute("aria-label", callDockBtn.title);
-        callDockBtn.setAttribute("aria-pressed", String(!!call.dock));
-        callFoldBtn.firstChild.className = `fa-solid ${call.collapsed ? "fa-chevron-down" : "fa-minus"}`;
-        callFoldBtn.title = call.collapsed ? "Show everyone" : "Fold up";
+        callFoldBtn.firstChild.className = `fa-solid ${call.collapsed ? "fa-up-right-and-down-left-from-center" : "fa-minus"}`;
+        callFoldBtn.title = call.collapsed ? "Show everyone" : "Minimize";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
+        callDockBtn.hidden = !call.dock && !call.dockable;
+        callDockBtn.firstChild.className = `fa-solid ${call.dock ? "fa-up-right-from-square" : "fa-thumbtack"}`;
+        callDockBtn.title = call.dock ? "Float over the video" : "Pin to side";
+        callDockBtn.setAttribute("aria-label", callDockBtn.title);
+        callDockBtn.setAttribute("aria-pressed", String(!!call.dock));
+        // Option to switch video call between left side and top of the video player
+        const column = getComputedStyle(playerPage).flexDirection === "column";
+        const canDockSwitch = !!call.dock && !unit && !column;
+        callPosBtn.hidden = !canDockSwitch;
+        if (canDockSwitch) {
+            const isTop = call.dock === "top";
+            callPosBtn.firstChild.className = `fa-solid ${isTop ? "fa-arrow-left" : "fa-arrow-up"}`;
+            callPosBtn.title = isTop ? "Move video call to side" : "Move video call to top of player";
+            callPosBtn.setAttribute("aria-label", callPosBtn.title);
+        }
     };
     // Small pictures show names for a few seconds (when it appears, someone joins or leaves, or
     // it's touched or pointed at), then just the pictures and mics; large ones always show them
@@ -2250,11 +2284,18 @@
         const column = getComputedStyle(playerPage).flexDirection === "column";
         call.dockable = column || !uprightTouch.matches;
         const wanted = unit ? !call.unitFloat : call.docked;
-        const dock = wanted && !callWin.hidden && !playerPage.hidden && call.dockable ? (column ? "strip" : "side") : null;
+        let dock = null;
+        if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
+            if (column) dock = "strip";
+            else if (call.dockPos === "top") dock = "top";
+            else dock = "side";
+        }
         callWin.classList.toggle("docked", !!dock);
         callWin.classList.toggle("side", dock === "side");
+        callWin.classList.toggle("top", dock === "top");
         callWin.classList.toggle("strip", dock === "strip");
         playerPage.classList.toggle("call-dock-side", dock === "side");
+        playerPage.classList.toggle("call-dock-top", dock === "top");
         playerPage.classList.toggle("call-dock-below", dock === "strip");
         const was = call.dock;
         call.dock = dock;
@@ -2269,6 +2310,7 @@
                 glidePlayer(videoWas);
                 const at = callWin.style.transform || "translate(0px, 0px)";
                 callWin.animate(dock === "side" ? [{ opacity: 0, transform: "translateX(-28px)" }, { opacity: 1, transform: "none" }]
+                    : dock === "top" ? [{ opacity: 0, transform: "translateY(-20px)" }, { opacity: 1, transform: "none" }]
                     : dock === "strip" ? [{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }]
                     : [{ opacity: 0, transform: `${at} scale(0.94)` }, { opacity: 1, transform: `${at} scale(1)` }],
                     { duration: 300, easing: PANEL_EASE });
@@ -2286,13 +2328,41 @@
         placeDock(true);
     });
     callDockBtn.addEventListener("click", () => {
-        call.docked = !call.dock;
-        // Into the panel open, with everyone shown
-        if (call.docked) call.collapsed = false;
+        if (unitMode()) {
+            call.unitFloat = !!call.dock;
+            if (call.unitFloat) call.pos = null;
+        } else {
+            call.docked = !call.dock;
+            if (call.docked) call.collapsed = false;
+        }
         saveCall();
         placeDock(true);
     });
     renderCallButtons();
+
+    // Keep hover overlay buttons on the own tile in sync with mic/cam state
+    syncHoverControls = () => {
+        call.tiles.forEach(tile => {
+            if (tile.hoverMic) {
+                tile.hoverMic.firstChild.className = `fa-solid ${micEnabled ? "fa-microphone" : "fa-microphone-slash"}`;
+                tile.hoverMic.classList.toggle("active", micEnabled);
+                tile.hoverMic.classList.toggle("off", !micEnabled);
+                tile.hoverMic.title = micEnabled ? "Turn microphone off" : "Turn microphone on";
+                tile.hoverMic.setAttribute("aria-label", tile.hoverMic.title);
+            }
+            if (tile.hoverCam) {
+                tile.hoverCam.firstChild.className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
+                tile.hoverCam.classList.toggle("active", camEnabled);
+                tile.hoverCam.classList.toggle("off", !camEnabled);
+                tile.hoverCam.title = camEnabled ? "Turn camera off" : "Turn camera on";
+                tile.hoverCam.setAttribute("aria-label", tile.hoverCam.title);
+            }
+            if (tile.hoverFlip) {
+                const canFlip = camEnabled && (isTouch || camCount > 1) && (camCount !== 1);
+                tile.hoverFlip.hidden = !canFlip;
+            }
+        });
+    };
 
     // D (script.js) and the search's command: pinned to the side, or floating again (a phone:
     // the call bar docked, or floating). Returns why it couldn't, or null.
@@ -2484,24 +2554,55 @@
                 const name = el("figcaption", "room-call-name");
                 figure.append(video, face, mic, name);
                 tile = { el: figure, video, face, mic, name, track: null, look: "" };
-                // Your own: switch between the phone's front and back cameras
+                // Your own: hover overlay with mic, camera, and camera switching controls
                 if (person.me) {
-                    const flip = el("button", "room-call-flip");
-                    flip.type = "button";
-                    flip.title = "Switch camera (front / back)";
-                    flip.setAttribute("aria-label", "Switch between the front and back camera");
-                    flip.append(el("i", "fa-solid fa-camera-rotate"));
-                    flip.addEventListener("click", flipCamera);
-                    figure.append(flip);
-                    tile.flip = flip;
+                    // Hover overlay: mic, cam, flip — shown on hover, hidden otherwise
+                    const hoverOverlay = el("div", "room-call-tile-hover");
+                    const hoverMic = el("button", "room-call-hover-btn room-call-hover-mic");
+                    hoverMic.type = "button";
+                    hoverMic.title = "Toggle microphone";
+                    hoverMic.setAttribute("aria-label", "Toggle microphone");
+                    hoverMic.append(el("i"));
+                    hoverMic.addEventListener("click", e => { e.stopPropagation(); toggleMicrophone(); });
+
+                    const hoverCam = el("button", "room-call-hover-btn room-call-hover-cam");
+                    hoverCam.type = "button";
+                    hoverCam.title = "Toggle camera";
+                    hoverCam.setAttribute("aria-label", "Toggle camera");
+                    hoverCam.append(el("i"));
+                    hoverCam.addEventListener("click", e => { e.stopPropagation(); camEnabled ? disableCamera() : enableCamera(); });
+
+                    const hoverFlip = el("button", "room-call-hover-btn room-call-hover-flip");
+                    hoverFlip.type = "button";
+                    hoverFlip.title = "Switch camera (front / back)";
+                    hoverFlip.setAttribute("aria-label", "Switch camera");
+                    hoverFlip.append(el("i", "fa-solid fa-camera-rotate"));
+                    hoverFlip.addEventListener("click", e => { e.stopPropagation(); flipCamera(); });
+
+                    hoverOverlay.append(hoverMic, hoverCam, hoverFlip);
+                    figure.append(hoverOverlay);
+                    tile.hoverOverlay = hoverOverlay;
+                    tile.hoverMic = hoverMic;
+                    tile.hoverCam = hoverCam;
+                    tile.hoverFlip = hoverFlip;
+
+                    // Touch support: tap tile to reveal controls temporarily
+                    let hoverTimer = null;
+                    figure.addEventListener("pointerdown", e => {
+                        if (e.target.closest(".room-call-hover-btn")) return;
+                        figure.classList.toggle("hover-active");
+                        clearTimeout(hoverTimer);
+                        if (figure.classList.contains("hover-active")) {
+                            hoverTimer = setTimeout(() => figure.classList.remove("hover-active"), 3500);
+                        }
+                    });
+                    figure.addEventListener("pointerenter", () => figure.classList.remove("hover-active"));
                 }
                 call.tiles.set(person.key, tile);
             }
             tile.el.classList.toggle("me", !!person.me);
             tile.el.classList.toggle("mirror", !!person.mirror);
             tile.el.classList.toggle("camera", !!person.track);
-            // On a phone or tablet with more than one camera (or one that doesn't say how many)
-            if (tile.flip) tile.flip.hidden = !(person.track && isTouch && camCount !== 1);
             const label = person.me ? `${person.name} (you)` : person.host ? `${person.name} (host)` : person.name;
             if (tile.name.textContent !== label) tile.name.textContent = label;
             // Mic on or off, for each person
@@ -2509,6 +2610,7 @@
             tile.mic.firstChild.className = `fa-solid ${person.mic ? "fa-microphone" : "fa-microphone-slash"}`;
             tile.mic.title = person.mic ? "Mic on" : "Muted";
             tile.el.title = `${label} · ${person.mic ? "mic on" : "muted"}${person.track ? "" : " · camera off"}`;
+            if (syncHoverControls) syncHoverControls();
             // Their avatar while their camera is off
             const look = `${person.name}|${person.avatar || ""}`;
             if (tile.look !== look) {
@@ -2575,15 +2677,18 @@
         else syncCameraGuest();
     };
 
-    const renderCam = () => camButtons.forEach(button => {
-        button.classList.toggle("active", camEnabled);
-        button.setAttribute("aria-pressed", String(camEnabled));
-        button.title = camEnabled ? "Turn camera off" : "Turn camera on";
-        button.setAttribute("aria-label", camEnabled ? "Camera on" : "Camera off");
-        button.querySelector("i").className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
-        const label = button.querySelector("span");
-        if (label) label.textContent = camEnabled ? "Cam on" : "Cam off";
-    });
+    const renderCam = () => {
+        camButtons.forEach(button => {
+            button.classList.toggle("active", camEnabled);
+            button.setAttribute("aria-pressed", String(camEnabled));
+            button.title = camEnabled ? "Turn camera off" : "Turn camera on";
+            button.setAttribute("aria-label", camEnabled ? "Camera on" : "Camera off");
+            button.querySelector("i").className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
+            const label = button.querySelector("span");
+            if (label) label.textContent = camEnabled ? "Cam on" : "Cam off";
+        });
+        if (syncHoverControls) syncHoverControls();
+    };
 
     const enableCamera = async () => {
         if (camBusy || camEnabled || !room) return;
@@ -4887,7 +4992,9 @@
         nowShareBtn.disabled = !canShare();
         nowShareBtn.title = !canStream && !host ? "Sharing a video needs Chrome or Edge"
             : on ? "Play a different video from this device for everyone" : "Play a video from this device for everyone";
-        nowShareBtn.querySelector("span").textContent = on ? "Change" : "Share a video";
+        nowShareBtn.setAttribute("aria-label", nowShareBtn.title);
+        const shareSpan = nowShareBtn.querySelector("span");
+        if (shareSpan) shareSpan.remove();
         nowStopBtn.hidden = !on || !(allowed || mine);
         nowStopBtn.title = mine && !youtube ? "Stop sharing your video" : "Stop video for everyone";
         nowStopBtn.setAttribute("aria-label", nowStopBtn.title);
@@ -5019,16 +5126,29 @@
 
     // (a link dropped on the queue: how that went)
     const showQueueHint = text => text && toast(text);
+    const soloQueue = { index: 0, items: [] };
+
+    // Card encouraging room creation when viewing queue solo
+    const soloRoomCard = el("div", "queue-solo-card");
+    const soloRoomText = el("p");
+    soloRoomText.append(el("i", "fa-solid fa-users"), " Watch together with friends");
+    const soloRoomBtn = el("button", "btn btn-primary btn-sm");
+    soloRoomBtn.type = "button";
+    soloRoomBtn.append(el("i", "fa-solid fa-plus"), " Create room");
+    soloRoomBtn.addEventListener("click", () => openCreate());
+    soloRoomCard.append(soloRoomText, soloRoomBtn);
+    queueTab.append(soloRoomCard);
 
     const renderQueue = () => {
-        if (!room) return;
-        // (only while YouTube is on: what's left of an earlier queue isn't what plays next)
-        const queue = room.file && room.file.yt && room.queue || { index: 0, items: [] };
-        const edit = canShareYouTube();
+        const queue = room ? (room.file && room.file.yt && room.queue || { index: 0, items: [] }) : soloQueue;
+        const edit = room ? canShareYouTube() : true;
         const items = queue.items;
+        soloRoomCard.hidden = !!room;
         // Nothing queued: what it's for, and (for whoever may share) the search to fill it
         queueEmpty.hidden = !!items.length;
-        queueEmpty.querySelector(".room-queue-empty-text").textContent = edit
+        queueEmpty.querySelector(".room-queue-empty-text").textContent = !room
+            ? "Search YouTube or paste a link to add videos to your queue."
+            : edit
             ? "Search YouTube or paste a link, then Add to queue: everyone watches the videos in turn."
             : `YouTube videos ${room.hostName || "the host"} and others line up show here.`;
         queueMoreBtn.querySelector("span").textContent = items.length ? "Find more videos" : "Find videos";
@@ -5111,12 +5231,43 @@
         const k = row.dataset.k;
         const at = +row.dataset.i;
         const op = button.dataset.q;
+        if (!room) {
+            if (op === "play") {
+                const target = soloQueue.items[at];
+                if (target && target.id && window.CineYouTube) {
+                    soloQueue.index = at;
+                    CineYouTube.play({ id: target.id }, { title: target.title });
+                    renderQueue();
+                }
+            } else if (op === "up" && at > 0) {
+                const [item] = soloQueue.items.splice(at, 1);
+                soloQueue.items.splice(at - 1, 0, item);
+                if (soloQueue.index === at) soloQueue.index = at - 1;
+                else if (soloQueue.index === at - 1) soloQueue.index = at;
+                renderQueue();
+            } else if (op === "down" && at < soloQueue.items.length - 1) {
+                const [item] = soloQueue.items.splice(at, 1);
+                soloQueue.items.splice(at + 1, 0, item);
+                if (soloQueue.index === at) soloQueue.index = at + 1;
+                else if (soloQueue.index === at + 1) soloQueue.index = at;
+                renderQueue();
+            } else if (op === "remove") {
+                soloQueue.items.splice(at, 1);
+                if (soloQueue.index >= soloQueue.items.length) soloQueue.index = Math.max(0, soloQueue.items.length - 1);
+                renderQueue();
+            }
+            return;
+        }
         if (op === "up" || op === "down") sendQueueOp({ op: "move", k, to: at + (op === "up" ? -1 : 1) });
         else sendQueueOp({ op, k });
     });
 
     // Adding a video or playlist: to the end of the queue, or to play right away
     const addRefToQueue = (ref, where) => {
+        if (!room) {
+            together.queueYouTube(ref);
+            return true;
+        }
         const refused = shareYouTubeRef(ref, where);
         if (refused) {
             showQueueHint(refused, true);
@@ -5128,7 +5279,6 @@
         return true;
     };
     const addToQueue = (text, where) => {
-        if (!room) return false;
         const ref = parseYouTube(text);
         if (!ref) {
             showQueueHint("That isn't a link to a YouTube video or playlist.", true);
@@ -5139,8 +5289,20 @@
 
     // ---------- For the player's search and commands (script.js): a link or a result queued for
     // everyone (or starting, when nothing's on), whether that's allowed, and the room's own commands
-    together.canQueueYouTube = () => canShareYouTube();
-    together.queueYouTube = ref => shareYouTubeRef(ref, "end");
+    together.canQueueYouTube = () => room ? canShareYouTube() : true;
+    together.queueYouTube = (ref, meta = {}) => {
+        if (room) return shareYouTubeRef(ref, "end");
+        if (!ref || !ref.id) return false;
+        soloQueue.items.push({
+            k: Math.random().toString(36).slice(2),
+            id: ref.id,
+            title: meta.title || "YouTube video",
+            by: "You"
+        });
+        renderQueue();
+        toast("Added to queue");
+        return true;
+    };
     together.roomCommands = () => {
         if (!room) return [];
         const host = room.role === "host";
@@ -6521,6 +6683,28 @@
         renderRooms();
     };
     together.onPlayer = placeToasts;
+    together.openPanel = () => {
+        if (!room) panel.classList.add("solo-queue");
+        showPanel(panel.hidden || !!panelClosing);
+    };
+    together.toggleQueue = () => {
+        if (panel.hidden || panelClosing) {
+            if (!room) panel.classList.add("solo-queue");
+            showTab("queue");
+            showPanel(true);
+        } else if (activeTab === "queue") {
+            showPanel(false);
+        } else {
+            showTab("queue");
+        }
+    };
+    together.openQueue = () => {
+        if (!room) panel.classList.add("solo-queue");
+        showTab("queue");
+        showPanel(true);
+    };
+    // Initialize right panel as solo-queue outside room
+    panel.classList.add("solo-queue");
 
     // On a phone, fullscreen means the whole screen for the video: the panel steps aside (the Room
     // button brings it back, and new messages still pop up)
