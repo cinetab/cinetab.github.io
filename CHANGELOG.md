@@ -4,6 +4,42 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-11-20
+
+### Phones: the floating call window, redesigned
+- No more buttons spilling out of it (in fullscreen too): at the top, how many are in the room and
+  ⋮; then everyone's video; below, just three round buttons: mic, camera and end call (an icon;
+  it still offers Just leave or End room)
+- ⋮ holds the rest: Pin to the side (or to the bottom, held upright) and Minimize / Show everyone;
+  its menu stays inside the window and on the screen
+- Minimized, it's one small pill: the number, mic, camera, end call and ⋮
+- Docked (the bar at the bottom, or the column on the left) is as before
+
+### Room panel
+- Computers: drag the panel's left edge to make it wider or narrower (a bar shows on it while
+  pointed at), the video beside it following, from 280px up to half the screen; arrow keys on it
+  too, a double-click goes back to its own width. Remembered
+- The Queue tab is always there in a room. Nothing queued: what it's for, and Find videos (the
+  search) for whoever may share videos
+- Narrow (its edge dragged in), its call bar drops your avatar and name (People has them): just
+  the mic, the camera and Leave
+
+### Video call window
+- D pins it to the side, and floats it again (on a phone, docks or floats the call bar); also in
+  the search's commands, and the keyboard shortcuts list
+- Phones held sideways (or fullscreen) with the call minimized: after a few seconds without a
+  touch it steps aside, like a video call's buttons (the slim column slides away and the video
+  takes its place; a floating pill fades out); a touch anywhere brings it back
+
+### Search and commands
+- Search YouTube is always first in the list as you type (Enter searches); a time or a speed
+  typed is still what Enter runs
+
+### Home page
+- Join a room in the header too, beside Create a room. On phones the header's labels get shorter
+  as the screen narrows (Create, Join, Open; on the narrowest, Join is just its icon), so every
+  button fits on one line
+
 ## [1.5.9] - 2026-11-20
 
 ### Search and commands (new)
@@ -33,6 +69,8 @@ All notable changes to CineTab are documented here. The format follows
 - The room's panel and the call column use the whole screen, the camera's cutout too, like a
   video filling it
 
+## [1.5.8] - 2026-11-20
+
 ### Phones: the call bar and the call window are one
 - In a room, the call bar (you, mic, camera, leave) and everyone's video are one thing, there all
   through the room. Docked by default:
@@ -60,6 +98,8 @@ All notable changes to CineTab are documented here. The format follows
 - In a room, the window's Close no longer pauses the video for everyone, and it closes when you
   leave the room
 
+## [1.5.7] - 2026-11-20
+
 ### Video call window
 - Computers: resize it from any edge or corner, to any shape, like a computer's window (the
   bottom right corner also takes the arrow keys); double-click its title bar for the size that
@@ -76,6 +116,8 @@ All notable changes to CineTab are documented here. The format follows
   lands. Wider / Narrower is in motion too. Still, for people who asked for less motion
 - Computers: drag the docked column's long right edge to make it any width (a bar shows on it
   while pointed at), or use the arrow keys on it; double-click it to go back. Remembered
+
+## [1.5.6] - 2026-11-20
 
 ### Video call window
 - Mic and camera buttons right in the call window (a row below everyone, and inside the pill when
@@ -701,6 +743,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.6.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.0
 [1.5.9]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.9
 [1.5.8]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.8
 [1.5.7]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.5.7

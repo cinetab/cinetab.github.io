@@ -2754,6 +2754,14 @@ document.addEventListener("keydown", e => {
             toggleSubtitles();
             break;
 
+        // The video call window: pinned to the side, or floating again (a phone: its call bar)
+        case "KeyD": {
+            if (e.shiftKey) break;
+            const refused = together.toggleCallDock ? together.toggleCallDock() : "Not in a room";
+            if (refused) showFeedback("fa-video", refused);
+            break;
+        }
+
         // The room's panel: show or hide it (outside a room: the Watch together options)
         case "KeyR":
             if (e.shiftKey) break;
@@ -2927,6 +2935,8 @@ const cmdPalette = (() => {
     // ---------- The list: commands that match, and "Search YouTube for …"
     let items = [];
     let chosen = 0;
+    // (typing: the choice goes back to the first, or to what's typed as a command)
+    let freshChoice = true;
     const matches = (command, words) => {
         const hay = `${command.label} ${command.words || ""}`.toLowerCase();
         return words.every(word => hay.includes(word));
@@ -2935,14 +2945,20 @@ const cmdPalette = (() => {
         const query = input.value.trim();
         const words = query.toLowerCase().split(/\s+/).filter(Boolean);
         const all = playerCommands();
+        // Searching YouTube first, then what's typed as a command of its own (a time, a speed: the
+        // one Enter runs, when there is one), then the commands that match
+        let preferred = 0;
         if (!query) items = all.filter(command => command.top);
         else {
             // (a speed typed: not the speeds listed as well)
             const typed = typedCommands(query);
             const typedSpeed = typed.some(command => command.speed);
-            items = [...typed, ...all.filter(command => !(typedSpeed && command.speed) && matches(command, words))].slice(0, 7);
+            const search = youtube() ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
+            items = [...search, ...typed, ...all.filter(command => !(typedSpeed && command.speed) && matches(command, words))].slice(0, 8);
+            if (typed.length) preferred = search.length;
         }
-        if (query && youtube()) items.push({ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query });
+        if (freshChoice) chosen = preferred;
+        freshChoice = false;
         chosen = Math.min(chosen, Math.max(0, items.length - 1));
         list.replaceChildren(...items.map((item, i) => {
             const li = make("li", `cmd-item${item.danger ? " danger" : ""}${item.search ? " search" : ""}`);
@@ -3119,6 +3135,7 @@ const cmdPalette = (() => {
     };
     input.addEventListener("input", () => {
         chosen = 0;
+        freshChoice = true;
         if (note.classList.contains("error")) showNote("");
         renderAll();
     });
@@ -3167,6 +3184,7 @@ const cmdPalette = (() => {
         }
         input.value = text;
         chosen = 0;
+        freshChoice = true;
         showNote(message);
         renderAll();
         input.focus();

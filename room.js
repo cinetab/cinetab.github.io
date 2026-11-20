@@ -124,6 +124,7 @@
     queueTitle = panel.querySelector(".room-queue-title"),
     queueTab = panel.querySelector(".room-tab-queue"),
     queueMoreBtn = queueTab.querySelector(".room-queue-more"),
+    queueEmpty = queueTab.querySelector(".room-queue-empty"),
     queueCount = queueTab.querySelector(".room-queue-count"),
     queueList = queueTab.querySelector(".room-queue"),
     prevTrackBtn = document.querySelector(".container .prev-track"),
@@ -915,7 +916,6 @@
         nowBar.classList.remove("live");
         nowList.hidden = true;
         closeYouTubeForm();
-        queueTabBtn.hidden = true;
         prevTrackBtn.hidden = nextTrackBtn.hidden = true;
         queueList.replaceChildren();
         if (activeTab === "queue") showTab("chat");
@@ -923,6 +923,75 @@
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
     hidePanelBtn.addEventListener("click", () => showPanel(false));
+
+    // ---------- The panel's width (with a mouse): its left edge, dragged to make it wider or
+    // narrower, the video beside it following (arrow keys too, once it has focus; a double-click
+    // goes back to its own width). Remembered; never more than half the screen.
+    const PANEL_KEY = "cinetab:panel-w";
+    const PANEL_MIN = 280;
+    const panelMax = () => Math.max(PANEL_MIN, Math.min(640, playerPage.getBoundingClientRect().width * 0.5));
+    let panelW = (() => {
+        const saved = +storage.get(PANEL_KEY);
+        return finite(saved, 200, 4000) ? saved : null;
+    })();
+    const applyPanelW = () => {
+        if (!panelW) return playerPage.style.removeProperty("--panel-w");
+        playerPage.style.setProperty("--panel-w", `${Math.round(Math.max(PANEL_MIN, Math.min(panelW, panelMax())))}px`);
+    };
+    const panelInMotion = () => {
+        if (calmer()) return;
+        playerPage.classList.add("panel-moving");
+        clearTimeout(panelInMotion.timer);
+        panelInMotion.timer = setTimeout(() => playerPage.classList.remove("panel-moving"), 400);
+    };
+    const savePanelW = () => storage.set(PANEL_KEY, panelW ? String(Math.round(panelW)) : "");
+    const panelEdge = el("button", "room-panel-edge");
+    panelEdge.type = "button";
+    panelEdge.title = "Drag to make the panel wider or narrower (double-click: back to its size)";
+    panelEdge.setAttribute("aria-label", "Panel width (drag, or arrow keys)");
+    panel.append(panelEdge);
+    let panelSizing = null;
+    panelEdge.addEventListener("pointerdown", e => {
+        if (e.button > 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        panelEdge.setPointerCapture(e.pointerId);
+        panelSizing = { id: e.pointerId, x0: e.clientX, w: panel.offsetWidth };
+        playerPage.classList.add("dock-sizing");
+        panel.classList.add("sizing");
+    });
+    panelEdge.addEventListener("pointermove", e => {
+        if (!panelSizing || panelSizing.id !== e.pointerId) return;
+        // (its left edge: dragged left, it's wider)
+        panelW = Math.round(Math.max(PANEL_MIN, Math.min(panelSizing.w - (e.clientX - panelSizing.x0), panelMax())));
+        applyPanelW();
+    });
+    const endPanelSizing = e => {
+        if (!panelSizing || panelSizing.id !== e.pointerId) return;
+        panelSizing = null;
+        playerPage.classList.remove("dock-sizing");
+        panel.classList.remove("sizing");
+        savePanelW();
+    };
+    panelEdge.addEventListener("pointerup", endPanelSizing);
+    panelEdge.addEventListener("pointercancel", endPanelSizing);
+    panelEdge.addEventListener("dblclick", () => {
+        panelW = null;
+        panelInMotion();
+        applyPanelW();
+        savePanelW();
+    });
+    panelEdge.addEventListener("keydown", e => {
+        const step = { ArrowLeft: 10, ArrowRight: -10 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        e.stopPropagation();
+        panelW = Math.round(Math.max(PANEL_MIN, Math.min(panel.offsetWidth + step * (e.shiftKey ? 3 : 1), panelMax())));
+        applyPanelW();
+        savePanelW();
+    });
+    window.addEventListener("resize", applyPanelW);
+    applyPanelW();
 
     // ---------- Swipes on a phone or tablet: left and right on the panel go to the next or previous
     // tab (Chat, Search, Queue, People, Settings); down closes it, like a bottom sheet, on a phone
@@ -1679,6 +1748,57 @@
     const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
     const unitMode = () => !!room && (phoneUpright.matches || phoneSideways.matches);
     footInCall = () => unitMode() ? callWin : null;
+
+    // A phone's floating call window: how many at the top, with ⋮ for its options (pin it to the
+    // side or the bottom, minimize it, or show everyone again); just mic, camera and end call below
+    const callMoreBtn = callButton("room-call-more", "More: pin it, or minimize it");
+    callMoreBtn.firstChild.className = "fa-solid fa-ellipsis-vertical";
+    callMoreBtn.setAttribute("aria-haspopup", "true");
+    callMoreBtn.setAttribute("aria-expanded", "false");
+    const callMoreMenu = el("div", "room-call-more-menu");
+    callMoreMenu.hidden = true;
+    callMoreMenu.setAttribute("role", "menu");
+    const moreOption = className => {
+        const button = el("button", `room-call-more-opt ${className}`);
+        button.type = "button";
+        button.setAttribute("role", "menuitem");
+        button.append(el("i"), el("span"));
+        return button;
+    };
+    const morePin = moreOption("pin");
+    const moreFold = moreOption("fold");
+    callMoreMenu.append(morePin, moreFold);
+    const showCallMore = open => {
+        callMoreMenu.hidden = !open;
+        callMoreBtn.setAttribute("aria-expanded", String(open));
+        // (downwards from its top, or below the minimized pill; upwards only when there's no room
+        // below and there is above)
+        if (open) {
+            callMoreMenu.classList.remove("up");
+            const box = callWin.getBoundingClientRect();
+            const page = playerPage.getBoundingClientRect();
+            const tall = callMoreMenu.offsetHeight;
+            const bottom = (call.collapsed ? box.bottom + 6 : box.top + 38) + tall;
+            callMoreMenu.classList.toggle("up", bottom > page.bottom - 4 && box.top - 6 - tall >= page.top);
+        }
+    };
+    callMoreBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        showCallMore(callMoreMenu.hidden);
+    });
+    morePin.addEventListener("click", e => {
+        e.stopPropagation();
+        showCallMore(false);
+        unitFloatBtn.click();
+    });
+    moreFold.addEventListener("click", e => {
+        e.stopPropagation();
+        showCallMore(false);
+        callFoldBtn.click();
+    });
+    document.addEventListener("click", e => !callMoreMenu.hidden && !callMoreMenu.contains(e.target) && showCallMore(false));
+    document.addEventListener("keydown", e => e.key === "Escape" && !callMoreMenu.hidden && showCallMore(false));
+    callBar.append(callMoreBtn);
     const callGrid = el("div", "room-call-grid");
     // With a mouse: every edge and corner resizes it; the bottom right corner shows a grip (and
     // takes the arrow keys, once it has focus). On a touch screen, two fingers do it (below).
@@ -1699,7 +1819,7 @@
     callDockEdge.type = "button";
     callDockEdge.title = "Drag to make the panel wider or narrower (double-click: back to its size)";
     callDockEdge.setAttribute("aria-label", "Panel width (drag, or arrow keys)");
-    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge, callLeaveMenu);
+    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge, callLeaveMenu, callMoreMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
@@ -1708,8 +1828,8 @@
     // (with the picture in picture button, one more in the title bar); on a phone, the call bar's
     // width, upright
     const CALL_MIN_W = 140;
-    const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W
-        : phoneUpright.matches ? Math.min(330, playerPage.getBoundingClientRect().width - 16) : 150;
+    // (a phone's floating one: its three buttons below everyone)
+    const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W : 150;
     const CALL_MIN_H = 88;
     const DOCK_MIN_W = 140;
     const dockMaxW = () => Math.max(DOCK_MIN_W, Math.min(560, playerPage.getBoundingClientRect().width * 0.45));
@@ -2021,6 +2141,15 @@
         unitFloatBtn.title = call.dock ? "Float it: drag it anywhere" : phoneSideways.matches ? "Dock it on the left" : "Dock it at the bottom";
         unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
         unitFloatBtn.hidden = !call.dock && !call.dockable;
+        // The floating one's ⋮: pin it (where it can be), and minimize it or show everyone again
+        morePin.hidden = !call.dockable;
+        morePin.firstChild.className = "fa-solid fa-thumbtack";
+        morePin.lastChild.textContent = phoneSideways.matches ? "Pin to the side" : "Pin to the bottom";
+        moreFold.hidden = alone;
+        moreFold.firstChild.className = `fa-solid ${call.collapsed ? "fa-up-right-and-down-left-from-center" : "fa-minus"}`;
+        moreFold.lastChild.textContent = call.collapsed ? "Show everyone" : "Minimize";
+        callMoreBtn.hidden = morePin.hidden && moreFold.hidden;
+        if (callMoreBtn.hidden || call.dock) showCallMore(false);
         callWin.classList.toggle("collapsed", folded);
         callFoldBtn.hidden = !!call.dock;
         callDockBtn.hidden = folded || (!call.dock && !call.dockable);
@@ -2051,6 +2180,8 @@
         layoutCall();
         saveCall();
         placeCall();
+        // (minimized on a phone sideways: it may step aside in a while)
+        wakeCall();
     });
     // The docked column's width back to its own, in motion (a double-click on its long edge)
     const dockInMotion = () => {
@@ -2133,6 +2264,7 @@
             if (dock) callWin.style.removeProperty("transform");
             layoutCall();
             placeCall();
+            setTimeout(() => wakeCall());
             if (moving) {
                 glidePlayer(videoWas);
                 const at = callWin.style.transform || "translate(0px, 0px)";
@@ -2161,6 +2293,41 @@
         placeDock(true);
     });
     renderCallButtons();
+
+    // D (script.js) and the search's command: pinned to the side, or floating again (a phone:
+    // the call bar docked, or floating). Returns why it couldn't, or null.
+    together.toggleCallDock = () => {
+        if (!room) return "Not in a room";
+        if (callWin.hidden) return "Turn your camera on to see the call window";
+        if (callWin.classList.contains("unit")) {
+            if (!call.dock && !call.dockable) return "It can't be pinned here (fullscreen, held upright)";
+            unitFloatBtn.click();
+        } else callDockBtn.click();
+        return null;
+    };
+    together.callDocked = () => !callWin.hidden && !!call.dock;
+
+    // ---------- A phone, sideways or fullscreen, with the call minimized: after a few seconds
+    // without a touch it steps aside (a slim column slides away, the video taking its place; a
+    // floating pill fades out), like a video call's buttons; a touch anywhere brings it back
+    const CALL_IDLE_MS = 4000;
+    let callIdleTimer = null;
+    const callIdleWanted = () => !callWin.hidden && callWin.classList.contains("unit") && call.collapsed && call.dock !== "strip"
+        && (phoneSideways.matches || !!(document.fullscreenElement || document.webkitFullscreenElement))
+        && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden);
+    const setCallIdle = idle => {
+        callWin.classList.toggle("idle", idle);
+        playerPage.classList.toggle("call-idle", idle && call.dock === "side");
+    };
+    const wakeCall = () => {
+        clearTimeout(callIdleTimer);
+        if (callWin.classList.contains("idle")) setCallIdle(false);
+        if (callIdleWanted()) callIdleTimer = setTimeout(() => callIdleWanted() && setCallIdle(true), CALL_IDLE_MS);
+    };
+    playerPage.addEventListener("pointerdown", wakeCall, true);
+    document.addEventListener("keydown", wakeCall, true);
+    document.addEventListener("fullscreenchange", wakeCall);
+    document.addEventListener("webkitfullscreenchange", wakeCall);
 
     // Everyone in the room: { key, name, avatar, mic, track (their camera, or null), me }, the
     // others first (the host first of them), then you. Alone, only once your camera is on (to see
@@ -2364,7 +2531,10 @@
         renderPipCall();
     };
     // A phone turned: docked at the bottom, or on the left
-    [phoneUpright, phoneSideways].forEach(query => query.addEventListener && query.addEventListener("change", () => renderCameras()));
+    [phoneUpright, phoneSideways].forEach(query => query.addEventListener && query.addEventListener("change", () => {
+        renderCameras();
+        wakeCall();
+    }));
 
     // The host: its own camera to every guest, and each guest gets the others' cameras passed on
     // (and is told whose is where)
@@ -4746,9 +4916,8 @@
             nowPrevBtn.disabled = !control || !hasPrev;
             nowNextBtn.disabled = !control || !hasNext;
         }
-        // The YouTube queue gets its own tab while YouTube is on, and opens when it starts (unless
-        // someone is in the middle of chatting or picking more videos in Search)
-        queueTabBtn.hidden = !youtube;
+        // The queue's tab is always there; it opens when YouTube starts (unless someone is in the
+        // middle of chatting or picking more videos in the search)
         queueMoreBtn.hidden = !allowed;
         if (youtube && !room.queueShown) {
             room.queueShown = true;
@@ -4756,10 +4925,8 @@
                 showPanel(true);
                 showTab("queue");
             }
-        } else if (!youtube && room.queueShown) {
-            room.queueShown = false;
-            if (activeTab === "queue") showTab("chat");
-        }
+        } else if (!youtube && room.queueShown) room.queueShown = false;
+        renderQueue();
     };
 
     // ---------- Pasting a YouTube link
@@ -4855,9 +5022,16 @@
 
     const renderQueue = () => {
         if (!room) return;
-        const queue = room.queue || { index: 0, items: [] };
+        // (only while YouTube is on: what's left of an earlier queue isn't what plays next)
+        const queue = room.file && room.file.yt && room.queue || { index: 0, items: [] };
         const edit = canShareYouTube();
         const items = queue.items;
+        // Nothing queued: what it's for, and (for whoever may share) the search to fill it
+        queueEmpty.hidden = !!items.length;
+        queueEmpty.querySelector(".room-queue-empty-text").textContent = edit
+            ? "Search YouTube or paste a link, then Add to queue: everyone watches the videos in turn."
+            : `YouTube videos ${room.hostName || "the host"} and others line up show here.`;
+        queueMoreBtn.querySelector("span").textContent = items.length ? "Find more videos" : "Find videos";
         // No "Queue" heading over an empty queue (searching before anything plays)
         queueTitle.hidden = !items.length;
         queueCount.textContent = items.length ? `${Math.min(queue.index + 1, items.length)} of ${items.length}` : "";
@@ -4978,6 +5152,7 @@
         return [
             { label: micEnabled ? "Turn the microphone off" : "Turn the microphone on", icon: micEnabled ? "fa-microphone-slash" : "fa-microphone", words: "mic microphone mute unmute talk voice", run: toggleMicrophone },
             { label: camEnabled ? "Turn the camera off" : "Turn the camera on", icon: camEnabled ? "fa-video-slash" : "fa-video", words: "camera cam video webcam face", run: () => camEnabled ? disableCamera() : enableCamera() },
+            !callWin.hidden && { label: call.dock ? "Float the video call window" : "Pin the video call window to the side", icon: call.dock ? "fa-up-right-from-square" : "fa-table-columns", keys: ["D"], words: "pin unpin dock float call video window side panel", run: () => together.toggleCallDock() },
             { label: "Invite people: copy the room's link", icon: "fa-link", words: "invite share link copy friends join", run: () => copy(inviteLink(), "Invite link") },
             { label: "Chat", icon: "fa-message", words: "chat message talk write", run: panelTo("chat") },
             { label: "People in the room", icon: "fa-user-group", words: "people members guests who invite qr code", run: panelTo("people") },

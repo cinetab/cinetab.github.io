@@ -4106,6 +4106,31 @@ button.footer-download {
   cursor: pointer;
 }
 
+/* Phones, narrower still: Open movie is just Open, and then Join is just its icon (the hero below
+   has Join a room), so all four fit beside the logo on one line */
+.header-actions .label-tiny {
+  display: none;
+}
+
+@media screen and (max-width: 425px) {
+  .header-actions .choose-video .label-short {
+    display: none;
+  }
+  .header-actions .choose-video .label-tiny {
+    display: inline;
+  }
+}
+
+@media screen and (max-width: 360px) {
+  .header-actions .header-join span {
+    display: none;
+  }
+  .header-actions .header-join {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+}
+
 /* Phones: the install button is just its icon, so three buttons fit beside the logo */
 @media screen and (max-width: 480px) {
   .header-actions .install-app .label-long {
@@ -5174,8 +5199,9 @@ body > .room-toasts {
   padding: 12px;
 }
 
+/* (the panel's width: dragged to, or its own; room.js) */
 .player-page.room-open .container {
-  width: calc(100% - 374px);
+  width: calc(100% - var(--panel-w, 360px) - 14px);
 }
 
 .player-page.room-open .container.fullscreen {
@@ -5188,7 +5214,7 @@ body > .room-toasts {
 
 .room-panel {
   position: relative;
-  width: 360px;
+  width: var(--panel-w, 360px);
   flex-shrink: 0;
   align-self: stretch;
   display: flex;
@@ -6250,6 +6276,99 @@ body > .room-toasts {
   margin-top: 12px;
 }
 
+/* Nothing queued (room.js): what the queue is for, and the search to fill it */
+.room-queue-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px 8px;
+  text-align: center;
+  color: #8f8f9e;
+}
+
+.room-queue-empty i {
+  margin-bottom: 4px;
+  font-size: 26px;
+  color: #4a4a58;
+}
+
+.room-queue-empty b {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8e8ee;
+}
+
+.room-queue-empty small {
+  max-width: 260px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* The panel's left edge, with a mouse (room.js): dragged to make it wider or narrower. A bar shows
+   on it while pointed at (below the hide button), blue while held. Not on touch screens, nor where
+   the panel is below the video. */
+.room-panel-edge {
+  display: none;
+}
+
+@media (pointer: fine) {
+  .room-panel-edge {
+    display: block;
+    position: absolute;
+    top: 56px;
+    bottom: 16px;
+    left: -10px;
+    z-index: 3;
+    width: 12px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+  .room-panel-edge::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 44px;
+    margin: -22px 0 0 -2px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.35);
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease, height 0.15s ease, margin 0.15s ease;
+  }
+  .room-panel:hover .room-panel-edge::after,
+  .room-panel-edge:focus-visible::after,
+  .room-panel.sizing .room-panel-edge::after {
+    opacity: 1;
+  }
+  .room-panel-edge:hover::after,
+  .room-panel-edge:focus-visible::after,
+  .room-panel.sizing .room-panel-edge::after {
+    height: 72px;
+    margin-top: -36px;
+    background: #3e97fd;
+  }
+  .room-panel-edge:focus-visible {
+    outline: none;
+  }
+}
+
+@media screen and (max-width: 900px) and (orientation: portrait) {
+  .room-panel-edge {
+    display: none !important;
+  }
+}
+
+/* Back to its own width: in motion, the video following */
+.player-page.panel-moving .room-panel,
+.player-page.panel-moving .container {
+  transition: width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .room-tab-queue.drop-link .room-queue {
   outline: 2px dashed #3e97fd;
   outline-offset: 4px;
@@ -6261,12 +6380,6 @@ body > .room-toasts {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.room-queue:empty::after {
-  content: "Nothing queued yet";
-  font-size: 12px;
-  color: #8f8f9e;
 }
 
 .room-queue-item {
@@ -8791,6 +8904,226 @@ body > .room-toasts {
   }
   .room-call.unit .room-foot {
     gap: 6px;
+  }
+}
+
+/* =================== A PHONE'S FLOATING CALL WINDOW =================== */
+/* Floating, a phone's call window is its own compact thing (room.js): at the top how many are in
+   the room and ⋮ (pin it to the side or the bottom, minimize it, show everyone again); everyone's
+   video; below, just the mic, the camera and end call, as round buttons. Minimized: one pill with
+   the number, those three and ⋮. Nothing is wider than the window. (Docked, the bar is as it was.) */
+.room-call-more,
+.room-call-more-menu {
+  display: none;
+}
+
+.room-call.unit:not(.docked) .room-call-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  min-height: 34px;
+  padding: 4px 4px 0 12px;
+}
+
+.room-call.unit:not(.docked) .room-call-bar > :not(.room-call-title):not(.room-call-more) {
+  display: none;
+}
+
+.room-call.unit:not(.docked) .room-call-more:not([hidden]) {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+  background: transparent;
+}
+
+.room-call.unit:not(.docked) .room-call-more[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.room-call.unit:not(.docked) .room-call-title i {
+  display: inline;
+}
+
+.room-call.unit:not(.docked) .room-call-grid {
+  margin: 4px 6px 0;
+}
+
+.room-call.unit:not(.docked) .room-foot {
+  justify-content: center;
+  gap: 12px;
+  padding: 8px;
+  border-top: 0;
+}
+
+/* (no avatar, no people button, no float button: ⋮ has those) */
+.room-call.unit:not(.docked) .room-foot .room-me,
+.room-call.unit:not(.docked) .room-foot .room-unit-only {
+  display: none !important;
+}
+
+.room-call.unit:not(.docked) .room-foot .room-mic-btn,
+.room-call.unit:not(.docked) .room-foot .room-leave-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.room-call.unit:not(.docked) .room-leave-btn span {
+  display: none;
+}
+
+.room-call.unit:not(.docked) .room-leave-popover {
+  right: 50%;
+  transform-origin: bottom center;
+  translate: 50% 0;
+}
+
+.room-call.unit:not(.docked) .room-leave-popover::after {
+  right: calc(50% - 5px);
+}
+
+/* Minimized: one pill (how many, mic, camera, end call, ⋮) */
+.room-call.unit:not(.docked).collapsed {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+}
+
+.room-call.unit:not(.docked).collapsed .room-call-bar {
+  display: contents;
+}
+
+.room-call.unit:not(.docked).collapsed .room-foot {
+  order: 1;
+  gap: 6px;
+  padding: 0 2px 0 8px;
+}
+
+.room-call.unit:not(.docked).collapsed .room-foot .room-mic-btn,
+.room-call.unit:not(.docked).collapsed .room-foot .room-leave-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.room-call.unit:not(.docked).collapsed .room-call-more {
+  order: 2;
+}
+
+/* The ⋮ menu: inside the window's width, below its top (or above it, low on the screen) */
+.room-call.unit:not(.docked) .room-call-more-menu:not([hidden]) {
+  position: absolute;
+  top: 38px;
+  left: 4px;
+  right: 4px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(22, 22, 28, 0.97);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  animation: roomLeavePopIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: default;
+}
+
+.room-call.unit:not(.docked) .room-call-more-menu.up:not([hidden]) {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.room-call.unit:not(.docked).collapsed .room-call-more-menu:not([hidden]):not(.up) {
+  top: calc(100% + 6px);
+}
+
+.room-call-more-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: left;
+  color: #f0f0f4;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-call-more-opt[hidden] {
+  display: none;
+}
+
+.room-call-more-opt i {
+  width: 16px;
+  text-align: center;
+  color: #b8b8c6;
+}
+
+.room-call-more-opt:active,
+.room-call-more-opt:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* The menu (or Leave's) over the video: the window comes up front while it's open */
+.room-call.unit:has(.room-call-more-menu:not([hidden])) {
+  z-index: 80;
+}
+
+/* A phone, sideways or fullscreen, the call minimized (room.js): after a few seconds without a
+   touch it steps aside, like a video call's buttons; a touch anywhere brings it back. The slim
+   column slides away to the left (the video takes its place); a floating pill fades out. */
+.room-call.unit.docked.side {
+  transition: margin-left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease, background 1.2s ease;
+}
+
+.player-page.call-idle > .room-call.unit.docked.side {
+  margin-left: calc(-1 * var(--dock-w) - 6px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.room-call.unit:not(.docked) {
+  transition: opacity 0.35s ease, visibility 0s linear 0s, box-shadow 0.2s ease;
+}
+
+.room-call.unit.idle:not(.docked) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-call.unit.docked.side,
+  .room-call.unit:not(.docked),
+  .room-call.unit.idle:not(.docked) {
+    transition: none;
+  }
+}
+
+/* A narrow room panel (its edge dragged in): no avatar and name in its call bar (People has them),
+   just the mic, the camera and Leave */
+.room-panel {
+  container: room-panel / inline-size;
+}
+
+@container room-panel (max-width: 330px) {
+  .room-foot .room-me {
+    display: none;
+  }
+  .room-foot {
+    justify-content: flex-end;
   }
 }
 

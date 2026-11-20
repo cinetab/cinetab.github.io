@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.5.9">
+  <meta name="version" content="1.6.0">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.5.9",
+      "softwareVersion": "1.6.0",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -101,8 +101,9 @@
       </nav>
       <div class="header-actions">
         <button class="btn btn-ghost btn-sm install-app" hidden title="Install CineTab as an app on this device" aria-label="Install CineTab as an app"><i class="fa-solid fa-download"></i> <span class="label-long">Install app</span></button>
-        <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create room</span></button>
-        <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer" aria-label="Open a movie"><i class="fa-solid fa-play"></i> <span class="label-long">Open a movie</span><span class="label-short">Open movie</span></button>
+        <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create</span></button>
+        <button class="btn btn-ghost btn-sm room-join-open header-join" title="Join a friend's room with its code and password" aria-label="Join a room"><i class="fa-solid fa-right-to-bracket"></i> <span class="label-long">Join a room</span><span class="label-short">Join</span></button>
+        <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer" aria-label="Open a movie"><i class="fa-solid fa-play"></i> <span class="label-long">Open a movie</span><span class="label-short">Open movie</span><span class="label-tiny">Open</span></button>
       </div>
     </header>
 
@@ -374,7 +375,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.5.9</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.6.0</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -528,6 +529,7 @@
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
             <dt><kbd>R</kbd></dt><dd>Room panel: show / hide (outside a room: Watch together)</dd>
+            <dt><kbd>D</kbd></dt><dd>Video call window: pin it to the side / float it again</dd>
             <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
             <dt><kbd>Ctrl</kbd>+<kbd>K</kbd><kbd>/</kbd></dt><dd>Search YouTube, paste a link, or run a command (a time like 1:23, a speed like 1.5x)</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
@@ -821,7 +823,7 @@
     <div class="room-tabbar">
       <nav class="room-tabs" role="tablist" aria-label="Room">
         <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
-        <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next" hidden><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
+        <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next"><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
         <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room, and inviting more people"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
       </nav>
@@ -846,7 +848,13 @@
     <section class="room-tab room-tab-queue" data-tab="queue" role="tabpanel" hidden>
       <p class="room-section-title room-queue-title">Queue <span class="room-queue-count"></span></p>
       <ol class="room-queue"></ol>
-      <button type="button" class="room-wide-btn secondary room-queue-more"><i class="fa-solid fa-magnifying-glass"></i> Find more videos</button>
+      <!-- Nothing queued (or not YouTube): what the queue is, and how to fill it -->
+      <div class="room-queue-empty" hidden>
+        <i class="fa-solid fa-list-ol"></i>
+        <b>Nothing in the queue</b>
+        <small class="room-queue-empty-text"></small>
+      </div>
+      <button type="button" class="room-wide-btn secondary room-queue-more"><i class="fa-solid fa-magnifying-glass"></i> <span>Find more videos</span></button>
     </section>
 
     <!-- People: who's in the room, then everything to invite more -->
