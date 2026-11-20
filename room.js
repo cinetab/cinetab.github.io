@@ -197,6 +197,8 @@
     let reopening = null;
     let homeBarDismissed = false;
     const createIntro = createText.textContent;
+    const uprightTouch = matchMedia("(pointer: coarse) and (orientation: portrait)");
+    const isUprightPhone = () => uprightTouch.matches || playerPage.classList.contains("title-below") || (playerPage.classList.contains("room-open") && matchMedia("(max-width: 900px) and (orientation: portrait)").matches);
 
     // ---------- Small helpers
 
@@ -560,7 +562,7 @@
     let panelClosing = null;
     const calmer = () => matchMedia("(prefers-reduced-motion: reduce)").matches || typeof panel.animate !== "function";
     // Where the panel comes from: below the player when they're stacked, beside it otherwise
-    const panelOffset = () => getComputedStyle(playerPage).flexDirection === "column" ? "translateY(28px)" : "translateX(28px)";
+    const panelOffset = () => isUprightPhone() ? "translateY(28px)" : "translateX(28px)";
     // The player glides from where it was (`before`) to where the new layout puts it
     const glidePlayer = before => {
         const after = container.getBoundingClientRect();
@@ -570,10 +572,11 @@
         const sx = before.width / after.width;
         const sy = before.height / after.height;
         if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.005 && Math.abs(sy - 1) < 0.005) return;
+        if (isNaN(sx) || isNaN(sy) || sx < 0.2 || sx > 5 || sy < 0.2 || sy > 5) return;
         container.animate([
             { transformOrigin: "0 0", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
             { transformOrigin: "0 0", transform: "none" }
-        ], { duration: 320, easing: PANEL_EASE });
+        ], { duration: 250, easing: PANEL_EASE });
     };
 
     // `from`: where a swipe down left it (a transform and opacity), to close from there
@@ -2186,13 +2189,12 @@
         callDockBtn.setAttribute("aria-label", callDockBtn.title);
         callDockBtn.setAttribute("aria-pressed", String(!!call.dock));
         // Option to switch video call between left side and top of the video player
-        const column = getComputedStyle(playerPage).flexDirection === "column";
-        const canDockSwitch = !!call.dock && !unit && !column;
+        const canDockSwitch = !!call.dock && !unit && !isUprightPhone();
         callPosBtn.hidden = !canDockSwitch;
         if (canDockSwitch) {
             const isTop = call.dock === "top";
             callPosBtn.firstChild.className = `fa-solid ${isTop ? "fa-arrow-left" : "fa-arrow-up"}`;
-            callPosBtn.title = isTop ? "Move video call to side" : "Move video call to top of player";
+            callPosBtn.title = isTop ? "Move video call to side panel" : "Move video call to top of player";
             callPosBtn.setAttribute("aria-label", callPosBtn.title);
         }
     };
@@ -2272,54 +2274,72 @@
     // Docked or floating, by the page's layout: beside the video when the player and the room's
     // panel sit side by side, under it when they're stacked (a phone held upright). A phone held
     // upright with the video filling the screen has no room for it, so it floats there.
-    const uprightTouch = matchMedia("(pointer: coarse) and (orientation: portrait)");
     // `motion`: docked or floated by its button, so it moves there smoothly: the video glides to
     // its new place, a docked column slides in from its side (a strip up from below), a floating
     // window fades in where it lands
+    let inPlaceDock = false;
     const placeDock = (motion = false) => {
-        const moving = motion === true && !calmer() && !callWin.hidden;
-        const videoWas = moving ? container.getBoundingClientRect() : null;
-        const unit = unitMode();
-        callWin.classList.toggle("unit", unit);
-        const column = getComputedStyle(playerPage).flexDirection === "column";
-        call.dockable = column || !uprightTouch.matches;
-        const wanted = unit ? !call.unitFloat : call.docked;
-        let dock = null;
-        if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
-            if (column) dock = "strip";
-            else if (call.dockPos === "top") dock = "top";
-            else dock = "side";
-        }
-        callWin.classList.toggle("docked", !!dock);
-        callWin.classList.toggle("side", dock === "side");
-        callWin.classList.toggle("top", dock === "top");
-        callWin.classList.toggle("strip", dock === "strip");
-        playerPage.classList.toggle("call-dock-side", dock === "side");
-        playerPage.classList.toggle("call-dock-top", dock === "top");
-        playerPage.classList.toggle("call-dock-below", dock === "strip");
-        const was = call.dock;
-        call.dock = dock;
-        renderCallButtons();
-        if (was !== dock) {
-            // Docked, the page's layout places it (not where it floated)
-            if (dock) callWin.style.removeProperty("transform");
-            layoutCall();
-            placeCall();
-            setTimeout(() => wakeCall());
-            if (moving) {
-                glidePlayer(videoWas);
-                const at = callWin.style.transform || "translate(0px, 0px)";
-                callWin.animate(dock === "side" ? [{ opacity: 0, transform: "translateX(-28px)" }, { opacity: 1, transform: "none" }]
-                    : dock === "top" ? [{ opacity: 0, transform: "translateY(-20px)" }, { opacity: 1, transform: "none" }]
-                    : dock === "strip" ? [{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }]
-                    : [{ opacity: 0, transform: `${at} scale(0.94)` }, { opacity: 1, transform: `${at} scale(1)` }],
-                    { duration: 300, easing: PANEL_EASE });
+        if (inPlaceDock) return;
+        inPlaceDock = true;
+        try {
+            const moving = motion === true && !calmer() && !callWin.hidden;
+            const videoWas = moving ? container.getBoundingClientRect() : null;
+            const unit = unitMode();
+            callWin.classList.toggle("unit", unit);
+            const upright = isUprightPhone();
+            call.dockable = upright || !uprightTouch.matches;
+            const wanted = unit ? !call.unitFloat : call.docked;
+            let dock = null;
+            if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
+                if (upright) dock = "strip";
+                else if (call.dockPos === "top") dock = "top";
+                else dock = "side";
             }
+            callWin.classList.toggle("docked", !!dock);
+            callWin.classList.toggle("side", dock === "side");
+            callWin.classList.toggle("top", dock === "top");
+            callWin.classList.toggle("strip", dock === "strip");
+            playerPage.classList.toggle("call-dock-side", dock === "side");
+            playerPage.classList.toggle("call-dock-top", dock === "top");
+            playerPage.classList.toggle("call-dock-below", dock === "strip");
+            const was = call.dock;
+            call.dock = dock;
+            renderCallButtons();
+            if (was !== dock) {
+                // Docked, the page's layout places it (not where it floated)
+                if (dock) callWin.style.removeProperty("transform");
+                layoutCall();
+                placeCall();
+                setTimeout(() => wakeCall());
+                if (moving && videoWas && videoWas.width > 0) {
+                    glidePlayer(videoWas);
+                    const at = callWin.style.transform || "translate(0px, 0px)";
+                    callWin.animate(dock === "side" ? [{ opacity: 0, transform: "translateX(-24px)" }, { opacity: 1, transform: "none" }]
+                        : dock === "top" ? [{ opacity: 0, transform: "translateY(-16px)" }, { opacity: 1, transform: "none" }]
+                        : dock === "strip" ? [{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }]
+                        : [{ opacity: 0, transform: `${at} scale(0.94)` }, { opacity: 1, transform: `${at} scale(1)` }],
+                        { duration: 250, easing: PANEL_EASE });
+                }
+            }
+        } finally {
+            inPlaceDock = false;
         }
     };
     window.addEventListener("resize", () => placeDock());
     // (the room's panel opening or closing, the title moving below the picture, fullscreen)
-    new MutationObserver(() => placeDock()).observe(playerPage, { attributes: true, attributeFilter: ["class", "hidden"] });
+    new MutationObserver(mutations => {
+        if (inPlaceDock) return;
+        const hasRelevant = mutations.some(m => {
+            if (m.type === "attributes" && m.attributeName === "hidden") return true;
+            if (m.type === "attributes" && m.attributeName === "class") {
+                const oldVal = (m.oldValue || "").replace(/\bcall-dock-\S+/g, "").trim();
+                const newVal = (playerPage.className || "").replace(/\bcall-dock-\S+/g, "").trim();
+                return oldVal !== newVal;
+            }
+            return false;
+        });
+        if (hasRelevant) placeDock();
+    }).observe(playerPage, { attributes: true, attributeOldValue: true, attributeFilter: ["class", "hidden"] });
     unitFloatBtn.addEventListener("click", () => {
         call.unitFloat = !!call.dock;
         // Floated from the bottom of the screen: from where it was, not where it floated before
