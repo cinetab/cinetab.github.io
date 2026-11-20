@@ -509,7 +509,7 @@
             showTab("queue");
             renderQueue();
             roomTitle.textContent = "Queue";
-            roomState.textContent = "Upcoming videos";
+            if (stateText) stateText.textContent = "Upcoming videos";
         } else if (show && room) {
             panel.classList.remove("solo-queue");
             if (activeTab === "chat") {
@@ -912,6 +912,7 @@
         renderCameras();
         showPanel(true);
         renderState();
+        openedFromHome = false;
     };
 
     const toggleLeaveMenu = show => {
@@ -922,6 +923,7 @@
     };
 
     const closeRoomUI = () => {
+        together.openPanel = null;
         // Picture in picture with everyone: out of the room, it closes
         if (pipCall && window.documentPictureInPicture && window.documentPictureInPicture.window) window.documentPictureInPicture.window.close();
         toggleLeaveMenu(false);
@@ -1733,8 +1735,8 @@
     const callFlipBtn = callButton("room-call-media room-call-flip-btn", "Switch camera (front / back)");
     callFlipBtn.firstChild.className = "fa-solid fa-camera-rotate";
     callFlipBtn.hidden = true;
-    callFlipBtn.addEventListener("click", flipCamera);
-    if (flipBtn) flipBtn.addEventListener("click", flipCamera);
+    callFlipBtn.addEventListener("click", () => flipCamera());
+    if (flipBtn) flipBtn.addEventListener("click", () => flipCamera());
     callMicBtn.addEventListener("click", toggleMicrophone);
     micButtons.push(callMicBtn);
     camButtons.push(callCamBtn);
@@ -6457,8 +6459,15 @@
         hideOverlay();
         closeRoomUI();
         if (playerPage.hidden) return;
-        if (openedFromHome && !currentFile) history.back();
-        else if (!hasMedia()) uploadOverlay.classList.remove("hidden");
+        if (openedFromHome && !currentFile) {
+            openedFromHome = false;
+            history.back();
+        } else if (!hasMedia()) {
+            openedFromHome = false;
+            uploadOverlay.classList.remove("hidden");
+        } else {
+            openedFromHome = false;
+        }
     };
 
     const ended = ([title, text]) => {
@@ -6734,8 +6743,9 @@
     });
 
     const toPlayer = () => {
-        openedFromHome = !!homePage && !homePage.hidden;
-        helpOverlay.classList.add("hidden");
+        if (homePage && !homePage.hidden) openedFromHome = true;
+        if (helpOverlay) helpOverlay.classList.add("hidden");
+        if (uploadOverlay) uploadOverlay.classList.add("hidden");
         showPlayer();
     };
 
@@ -6798,13 +6808,56 @@
         (empty || joinForm.querySelector('button[type="submit"]')).focus();
     };
 
-    document.querySelectorAll(".room-create-open").forEach(button => button.addEventListener("click", () => openCreate()));
-    document.querySelectorAll(".room-join-open").forEach(button => button.addEventListener("click", () => openJoin()));
-    // Also handle dynamically created buttons (e.g. in the mobile video details panel) via delegation
+    // Handle all create and join room triggers seamlessly via delegation
     document.addEventListener("click", e => {
-        if (e.target.closest(".room-create-open") && !e.target.closest("[data-room-listener]")) openCreate();
-        if (e.target.closest(".room-join-open") && !e.target.closest("[data-room-listener]")) openJoin();
-    }, true);
+        const createBtn = e.target.closest(".room-create-open");
+        if (createBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            openCreate();
+            return;
+        }
+        const joinBtn = e.target.closest(".room-join-open");
+        if (joinBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            openJoin();
+            return;
+        }
+    });
+
+    const joinCodeInput = field(joinForm, "code");
+    if (joinCodeInput) {
+        joinCodeInput.addEventListener("input", () => {
+            joinError.hidden = true;
+            const raw = joinCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+            let formatted = raw;
+            if (raw.length > 6) formatted = `${raw.slice(0, 3)}-${raw.slice(3, 6)}-${raw.slice(6, 9)}`;
+            else if (raw.length > 3) formatted = `${raw.slice(0, 3)}-${raw.slice(3, 6)}`;
+            if (joinCodeInput.value !== formatted && raw.length <= 9) {
+                joinCodeInput.value = formatted;
+            }
+        });
+        joinCodeInput.addEventListener("paste", () => {
+            setTimeout(() => {
+                const text = joinCodeInput.value.trim();
+                if (text.includes("join=") || text.includes("#")) {
+                    const params = new URLSearchParams(text.includes("#") ? text.split("#")[1] : text);
+                    const code = params.get("join");
+                    const pw = params.get("pw");
+                    if (code) {
+                        const norm = Signaling.normalizeCode(code);
+                        joinCodeInput.value = Signaling.isValidCode(norm) ? Signaling.formatCode(norm) : code;
+                    }
+                    if (pw) field(joinForm, "password").value = pw;
+                }
+            }, 0);
+        });
+    }
+    const joinPasswordInput = field(joinForm, "password");
+    if (joinPasswordInput) {
+        joinPasswordInput.addEventListener("input", () => joinError.hidden = true);
+    }
     overlay.querySelectorAll(".room-cancel").forEach(button => button.addEventListener("click", closeDialog));
     createForm.querySelector(".room-new-password").addEventListener("click", () => field(createForm, "password").value = Signaling.newPassword());
 
@@ -6858,10 +6911,7 @@
         renderRooms();
     };
     together.onPlayer = placeToasts;
-    together.openPanel = () => {
-        if (!room) panel.classList.add("solo-queue");
-        showPanel(panel.hidden || !!panelClosing);
-    };
+    together.openPanel = null;
     together.toggleQueue = () => {
         if (panel.hidden || panelClosing) {
             if (!room) panel.classList.add("solo-queue");

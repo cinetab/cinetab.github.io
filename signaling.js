@@ -172,25 +172,30 @@ const Signaling = (() => {
         };
 
         const start = () => {
-            ws = new WebSocket(url, "mqtt");
-            ws.binaryType = "arraybuffer";
-            ws.onopen = () => {
-                const clientId = mqttString(`cinetab-${newId()}`);
-                // Protocol "MQTT" level 4, clean session, keep-alive 30 s
-                ws.send(mqttPacket(0x10, concat(mqttString("MQTT"), new Uint8Array([4, 2, 0, 30]), clientId)));
-            };
-            ws.onmessage = e => {
-                buffer = concat(buffer, new Uint8Array(e.data));
-                parse();
-            };
-            ws.onclose = () => {
-                const wasReady = ready;
-                ready = false;
-                buffer = new Uint8Array(0);
-                clearInterval(pingTimer);
+            try {
+                ws = new WebSocket(url, "mqtt");
+                ws.binaryType = "arraybuffer";
+                ws.onopen = () => {
+                    const clientId = mqttString(`cinetab-${newId()}`);
+                    // Protocol "MQTT" level 4, clean session, keep-alive 30 s
+                    ws.send(mqttPacket(0x10, concat(mqttString("MQTT"), new Uint8Array([4, 2, 0, 30]), clientId)));
+                };
+                ws.onmessage = e => {
+                    buffer = concat(buffer, new Uint8Array(e.data));
+                    parse();
+                };
+                ws.onerror = () => {};
+                ws.onclose = () => {
+                    const wasReady = ready;
+                    ready = false;
+                    buffer = new Uint8Array(0);
+                    clearInterval(pingTimer);
+                    if (!closed) retryTimer = setTimeout(start, Math.min(30000, 1000 * 2 ** attempt++));
+                    if (wasReady) onChange();
+                };
+            } catch (err) {
                 if (!closed) retryTimer = setTimeout(start, Math.min(30000, 1000 * 2 ** attempt++));
-                if (wasReady) onChange();
-            };
+            }
         };
         start();
 
@@ -315,36 +320,41 @@ const Signaling = (() => {
         };
 
         const start = () => {
-            ws = new WebSocket(url);
-            ws.onopen = () => ws.send(JSON.stringify(["REQ", subscription, { kinds: [NOSTR_KIND], "#t": [tag], since: Math.floor(Date.now() / 1000) - 30 }]));
-            ws.onmessage = e => {
-                let message;
-                try {
-                    message = JSON.parse(e.data);
-                } catch (error) {
-                    return;
-                }
-                if (!Array.isArray(message)) return;
-                if (message[0] === "EOSE" && message[1] === subscription && !ready) {
-                    ready = true;
-                    attempt = 0;
-                    queue.forEach(sendNow);
-                    queue = [];
-                    onChange();
-                } else if (message[0] === "EVENT" && message[1] === subscription) {
-                    const event = message[2];
-                    if (!event || event.kind !== NOSTR_KIND || typeof event.content !== "string" || event.content.length > MAX_MESSAGE * 2) return;
+            try {
+                ws = new WebSocket(url);
+                ws.onopen = () => ws.send(JSON.stringify(["REQ", subscription, { kinds: [NOSTR_KIND], "#t": [tag], since: Math.floor(Date.now() / 1000) - 30 }]));
+                ws.onmessage = e => {
+                    let message;
                     try {
-                        onPayload(fromBase64(event.content));
-                    } catch (error) {}
-                }
-            };
-            ws.onclose = () => {
-                const wasReady = ready;
-                ready = false;
+                        message = JSON.parse(e.data);
+                    } catch (error) {
+                        return;
+                    }
+                    if (!Array.isArray(message)) return;
+                    if (message[0] === "EOSE" && message[1] === subscription && !ready) {
+                        ready = true;
+                        attempt = 0;
+                        queue.forEach(sendNow);
+                        queue = [];
+                        onChange();
+                    } else if (message[0] === "EVENT" && message[1] === subscription) {
+                        const event = message[2];
+                        if (!event || event.kind !== NOSTR_KIND || typeof event.content !== "string" || event.content.length > MAX_MESSAGE * 2) return;
+                        try {
+                            onPayload(fromBase64(event.content));
+                        } catch (error) {}
+                    }
+                };
+                ws.onerror = () => {};
+                ws.onclose = () => {
+                    const wasReady = ready;
+                    ready = false;
+                    if (!closed) retryTimer = setTimeout(start, Math.min(30000, 1000 * 2 ** attempt++));
+                    if (wasReady) onChange();
+                };
+            } catch (err) {
                 if (!closed) retryTimer = setTimeout(start, Math.min(30000, 1000 * 2 ** attempt++));
-                if (wasReady) onChange();
-            };
+            }
         };
         start();
 

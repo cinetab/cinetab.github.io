@@ -4,6 +4,17 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.3] - 2026-11-20
+
+### Room & Connectivity Fixes
+- Resolved `ReferenceError: Cannot access 'flipCamera' before initialization` which halted `room.js` startup and prevented click event listeners from registering
+- Restored seamless Create Room and Join Room dialog launch across all triggers (header, hero, how-it-works, CTA banner, and player)
+- Automated room code input formatting (`ABC-DEF-GHJ`) with instant validation and clipboard/link paste extraction
+- Wrapped WebSocket signaling connections in `try/catch` handlers in `connectBroker` and `connectRelay` to prevent unhandled socket failures
+
+### UI & Styling Polish
+- Added Windows 11 Fluent Acrylic glass styling (`backdrop-filter: blur(...)`, translucent glass gradient sheen, fine border highlights, and inset depth shadows) to the player settings sheet (`.player-sheet-box`), player popup menus (`.popup-menu`), and profile edit dialog (`.room-sheet-card`)
+
 ## [1.6.2] - 2026-11-20
 
 ### Home Page Redesign
@@ -778,6 +789,7 @@ that tab with sound in Google Meet, Zoom or Microsoft Teams to watch together. N
 - `CineTab-Player-v1.0.0.html`: the player in one self-contained file that runs from disk with no
   server and no internet
 
+[1.6.3]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.3
 [1.6.2]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.2
 [1.6.1]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.1
 [1.6.0]: https://github.com/cinetab/cinetab.github.io/releases/tag/v1.6.0
