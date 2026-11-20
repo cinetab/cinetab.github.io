@@ -197,6 +197,8 @@
     const camButtons = [camBtn];
     let syncHoverControls = null;
     const remoteVoiceAudio = new Map();
+    // The host: each guest's voice as it arrives, to pass on to the others
+    const voiceTracks = new Map();
     let reopening = null;
     let homeBarDismissed = false;
     const createIntro = createText.textContent;
@@ -1489,14 +1491,38 @@
         return channel;
     };
 
+    // Voices that the browser wouldn't play yet (no tap on the page since it opened, e.g. after it
+    // reloaded and rejoined by itself): played at the next tap or key, with a note saying so
+    const blockedVoices = new Set();
+    const playVoice = audio => audio.play().then(() => blockedVoices.delete(audio)).catch(() => {
+        if (!audio.srcObject) return;
+        if (!blockedVoices.size) toast("Tap anywhere to hear the others");
+        blockedVoices.add(audio);
+    });
+    const unblockVoices = () => {
+        if (blockedVoices.size) [...blockedVoices].forEach(audio => audio.srcObject ? playVoice(audio) : blockedVoices.delete(audio));
+        if (voiceMix && voiceMix.ctx.state === "suspended") voiceMix.ctx.resume().catch(() => {});
+    };
+    document.addEventListener("pointerdown", unblockVoices, true);
+    document.addEventListener("keydown", unblockVoices, true);
+
     const attachRemoteVoice = (peer, track) => {
         const oldAudio = remoteVoiceAudio.get(peer);
-        if (oldAudio) oldAudio.remove();
+        if (oldAudio) {
+            oldAudio.srcObject = null;
+            oldAudio.remove();
+            blockedVoices.delete(oldAudio);
+        }
         const audio = new Audio();
         audio.autoplay = true;
         audio.srcObject = new MediaStream([track]);
         remoteVoiceAudio.set(peer, audio);
-        audio.play().catch(() => {});
+        playVoice(audio);
+        // The host passes this guest's voice on to everyone else (below)
+        if (room && room.role === "host") {
+            voiceTracks.set(peer, track);
+            syncVoices();
+        }
     };
 
     // Collects every network address before sending connection details, so one message is enough
@@ -1574,7 +1600,9 @@
             audio.srcObject = null;
             audio.remove();
             remoteVoiceAudio.delete(peer);
+            blockedVoices.delete(audio);
         }
+        voiceTracks.delete(peer);
     };
 
     const renderMic = () => {
@@ -1596,9 +1624,93 @@
         peer.voiceSender.replaceTrack(track).catch(() => {});
     };
 
+    // ---------- Voices for everyone. Guests are connected to the host only, so the host passes the
+    // voices on: each guest hears a mix of the host's mic and every other guest's voice (never
+    // their own), made in the host's browser; with no other guest, just the host's mic as it is.
+    // Someone still waiting to be let in hears nobody. Made again whenever someone comes, goes,
+    // is let in, or turns their mic on or off.
+    const syncVoices = () => {
+        if (!room || room.role !== "host") return;
+        const mine = micEnabled && micStream ? micStream.getAudioTracks()[0] || null : null;
+        const inRoom = guests();
+        room.peers.forEach(peer => {
+            if (!peer.voiceSender) return;
+            let track = null;
+            if (peer.status === "admitted") {
+                const others = inRoom.filter(other => other !== peer).map(other => voiceTracks.get(other))
+                    .filter(voice => voice && voice.readyState === "live");
+                track = others.length ? mixFor(peer, [mine, ...others].filter(Boolean)) || mine : mine;
+            }
+            if (peer.voiceSent === track) return;
+            peer.voiceSent = track;
+            peer.voiceSender.replaceTrack(track).catch(() => {});
+        });
+        tidyVoiceMix(mine);
+    };
+    // One mix for each guest who hears more than the host: a Web Audio destination fed by the
+    // voices' sources (each made once, and shared by every mix it's in)
+    let voiceMix = null;
+    const mixFor = (peer, tracks) => {
+        if (!voiceMix) {
+            const Context = window.AudioContext || window.webkitAudioContext;
+            if (!Context) return null;
+            voiceMix = { ctx: new Context({ latencyHint: "interactive" }), sources: new Map(), outs: new Map() };
+        }
+        const { ctx, sources, outs } = voiceMix;
+        if (ctx.state === "suspended") ctx.resume().catch(() => {});
+        let out = outs.get(peer);
+        if (!out) {
+            out = { dest: ctx.createMediaStreamDestination(), inputs: new Set() };
+            outs.set(peer, out);
+        }
+        const wanted = new Set(tracks.map(track => {
+            let node = sources.get(track);
+            if (!node) {
+                node = ctx.createMediaStreamSource(new MediaStream([track]));
+                sources.set(track, node);
+            }
+            return node;
+        }));
+        out.inputs.forEach(node => {
+            if (wanted.has(node)) return;
+            try {
+                node.disconnect(out.dest);
+            } catch (e) {}
+            out.inputs.delete(node);
+        });
+        wanted.forEach(node => {
+            if (out.inputs.has(node)) return;
+            node.connect(out.dest);
+            out.inputs.add(node);
+        });
+        return out.dest.stream.getAudioTracks()[0] || null;
+    };
+    // (the mixes of guests who've gone or don't need one, and voices no longer there)
+    const tidyVoiceMix = mine => {
+        if (!voiceMix) return;
+        voiceMix.outs.forEach((out, peer) => {
+            const used = room && room.peers.get(peer.id) === peer && peer.voiceSent === out.dest.stream.getAudioTracks()[0];
+            if (used) return;
+            out.inputs.forEach(node => {
+                try {
+                    node.disconnect(out.dest);
+                } catch (e) {}
+            });
+            voiceMix.outs.delete(peer);
+        });
+        const live = new Set([mine, ...voiceTracks.values()].filter(Boolean));
+        voiceMix.sources.forEach((node, track) => {
+            if (live.has(track) && track.readyState === "live") return;
+            try {
+                node.disconnect();
+            } catch (e) {}
+            voiceMix.sources.delete(track);
+        });
+    };
+
     const syncMicrophone = () => {
         if (!room) return;
-        if (room.role === "host") room.peers.forEach(syncMicrophonePeer);
+        if (room.role === "host") syncVoices();
         else syncMicrophonePeer(room.peer);
         reportMicrophone();
     };
@@ -1794,13 +1906,14 @@
                 else if (saved.dockPos === "top") call.dockPos = "side";
             }
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
+            if (finite(saved.stripH, 40, 2000)) call.stripH = saved.stripH;
             if (saved.sizes && typeof saved.sizes === "object") ["landscape", "portrait"].forEach(key => {
                 const size = saved.sizes[key];
                 if (size && finite(size.w, 60, 6000) && finite(size.h, 60, 6000)) call.sizes[key] = { w: size.w, h: size.h };
             });
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ v: 2, ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, dockPos: call.dockPos, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ v: 2, ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, dockPos: call.dockPos, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}), ...(call.stripH ? { stripH: call.stripH } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1971,8 +2084,21 @@
     const unitFloatBtn = el("button", "room-unit-only room-mic-btn room-unit-float");
     unitFloatBtn.type = "button";
     unitFloatBtn.append(el("i"));
+    // Minimized: everyone's video back, from the call bar
+    const unitExpandBtn = el("button", "room-unit-only room-mic-btn room-unit-expand");
+    unitExpandBtn.type = "button";
+    unitExpandBtn.title = "Show everyone's video";
+    unitExpandBtn.setAttribute("aria-label", unitExpandBtn.title);
+    unitExpandBtn.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
     roomFoot.insertBefore(unitPeopleBtn, leaveWrap);
+    roomFoot.insertBefore(unitExpandBtn, leaveWrap);
     roomFoot.insertBefore(unitFloatBtn, leaveWrap);
+    // On the call itself, floating or docked: minimize it (to its call bar)
+    const unitMinBtn = el("button", "room-call-unit-min");
+    unitMinBtn.type = "button";
+    unitMinBtn.title = "Minimize";
+    unitMinBtn.setAttribute("aria-label", "Minimize the video call");
+    unitMinBtn.append(el("i", "fa-solid fa-minus"));
     // (also a computer's window made as narrow as a phone: the phone's call window)
     const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px), (orientation: portrait) and (max-width: 600px)");
     const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
@@ -2051,7 +2177,13 @@
     callDockEdge.setAttribute("aria-label", "Panel width (drag, or arrow keys)");
     // (its menus open from its buttons: computers' Layout and Leave menus beside them)
     callWinBtns.append(callLayoutMenu, callLeaveMenu);
-    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
+    // A phone held upright, docked at the bottom: a grip on the strip's top edge - dragged up, the
+    // videos grow taller (down, shorter); a tap makes them taller, or back to their own height
+    const callStripGrip = el("button", "room-call-strip-grip");
+    callStripGrip.type = "button";
+    callStripGrip.title = "Drag to make the videos taller or shorter (tap: taller / back)";
+    callStripGrip.setAttribute("aria-label", "Video call height (drag, or tap)");
+    callWin.append(callStripGrip, unitMinBtn, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
@@ -2083,6 +2215,13 @@
     const callMinH = () => !callWin.classList.contains("mini") ? CALL_MIN_H : callWin.classList.contains("unit") ? 100 : 120;
     // (pinned left: wide enough for its buttons on two rows)
     const DOCK_MIN_W = 180;
+    // (a phone's strip: its videos from 72 px tall up to half the screen)
+    const STRIP_MIN_H = 72;
+    const stripDefaultH = () => {
+        const tile = parseFloat(getComputedStyle(callWin).getPropertyValue("--strip-tile")) || 112;
+        return tile * 0.75;
+    };
+    const stripMaxH = () => Math.max(STRIP_MIN_H + 20, Math.round(innerHeight * 0.45));
     const dockMaxW = () => Math.max(DOCK_MIN_W, Math.min(560, playerPage.getBoundingClientRect().width * 0.45));
     const within = (value, min, max) => Math.max(min, Math.min(value, max));
     const callOrient = page => page.width >= page.height ? "landscape" : "portrait";
@@ -2136,6 +2275,8 @@
             ["width", "height", "--tile", "--cols", "--rows"].forEach(name => callWin.style.removeProperty(name));
             // Docked beside the video: the width its edge was dragged to, within what leaves the
             // video room
+            if (call.dock === "strip" && call.stripH) callWin.style.setProperty("--strip-tile-h", `${Math.round(within(call.stripH, STRIP_MIN_H, stripMaxH()))}px`);
+            else callWin.style.removeProperty("--strip-tile-h");
             const side = call.dock === "side";
             const width = side && call.dockW ? Math.round(within(call.dockW, DOCK_MIN_W, dockMaxW())) : 0;
             if (width) callWin.style.setProperty("--dock-w", `${width}px`);
@@ -2479,7 +2620,7 @@
         // Your camera on and your video showing: your mic and camera buttons are on your video
         // (pointed at, on a computer; always, on a touch screen), not in the bar
         // (pinned with the room's panel open, the dock below the video keeps them)
-        const ownOnVideo = camEnabled && !alone && call.dock !== "rail"
+        const ownOnVideo = camEnabled && !alone && call.dock !== "rail" && !(unit && call.dock === "strip")
             && (call.dock === "bottom" ? callWin.classList.contains("has-video") && !call.collapsed : !folded);
         callWin.classList.toggle("own-ctl", ownOnVideo);
         unitPeopleBtn.disabled = alone;
@@ -2491,6 +2632,9 @@
         unitFloatBtn.title = call.dock ? "Float it: drag it anywhere" : phoneSideways.matches ? "Dock it on the left" : "Dock it at the bottom";
         unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
         unitFloatBtn.hidden = !call.dock && !call.dockable;
+        // (minimize on the call, restore in its bar; docked at the bottom, a chevron down)
+        unitExpandBtn.hidden = !(unit && call.collapsed && !alone);
+        unitMinBtn.firstChild.className = `fa-solid ${call.dock === "strip" ? "fa-chevron-down" : "fa-minus"}`;
         // Hide 3-dot more menu; pin and minimize buttons are shown directly in the bar
         callMoreBtn.hidden = true;
         showCallMore(false);
@@ -2534,6 +2678,11 @@
     callWin.addEventListener("pointerdown", showCallNames);
 
     unitPeopleBtn.addEventListener("click", () => callFoldBtn.click());
+    unitExpandBtn.addEventListener("click", () => call.collapsed && callFoldBtn.click());
+    unitMinBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!call.collapsed) callFoldBtn.click();
+    });
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -2550,6 +2699,54 @@
         clearTimeout(call.motionTimer);
         call.motionTimer = setTimeout(() => callWin.classList.remove("dock-moving"), 400);
     };
+
+    // The strip's grip (a phone held upright): dragged, or tapped
+    callStripGrip.addEventListener("pointerdown", e => {
+        if (call.dock !== "strip" || e.button > 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            callStripGrip.setPointerCapture(e.pointerId);
+        } catch (err) {}
+        const grid = callGrid.firstElementChild;
+        call.stripSizing = { id: e.pointerId, y0: e.clientY, h: grid ? grid.getBoundingClientRect().height : stripDefaultH(), moved: false };
+        callWin.classList.add("strip-sizing");
+    });
+    callStripGrip.addEventListener("pointermove", e => {
+        const sizing = call.stripSizing;
+        if (!sizing || sizing.id !== e.pointerId) return;
+        if (Math.abs(e.clientY - sizing.y0) > 6) sizing.moved = true;
+        if (!sizing.moved) return;
+        call.stripH = Math.round(within(sizing.h + sizing.y0 - e.clientY, STRIP_MIN_H, stripMaxH()));
+        layoutCall();
+    });
+    const endStripSizing = e => {
+        const sizing = call.stripSizing;
+        if (!sizing || sizing.id !== e.pointerId) return;
+        call.stripSizing = null;
+        callWin.classList.remove("strip-sizing");
+        if (!sizing.moved && e.type === "pointerup") {
+            // (a tap: twice as tall, or back to its own height)
+            const base = stripDefaultH();
+            const tall = call.stripH && call.stripH > base * 1.3;
+            call.stripH = tall ? null : Math.round(Math.min(base * 2, stripMaxH()));
+            callWin.classList.add("strip-moving");
+            clearTimeout(call.stripTimer);
+            call.stripTimer = setTimeout(() => callWin.classList.remove("strip-moving"), 350);
+            layoutCall();
+        }
+        saveCall();
+    };
+    callStripGrip.addEventListener("pointerup", endStripSizing);
+    callStripGrip.addEventListener("pointercancel", endStripSizing);
+    callStripGrip.addEventListener("keydown", e => {
+        const step = { ArrowUp: 12, ArrowDown: -12 }[e.key];
+        if (!step || call.dock !== "strip") return;
+        e.preventDefault();
+        call.stripH = Math.round(within((call.stripH || stripDefaultH()) + step, STRIP_MIN_H, stripMaxH()));
+        layoutCall();
+        saveCall();
+    });
 
     // Its long edge, dragged with a mouse: the column follows it, and the video beside it
     callDockEdge.addEventListener("pointerdown", e => {
@@ -3613,6 +3810,7 @@
         const wasIn = peer.status === "admitted";
         room.peers.delete(peer.id);
         closePeer(peer);
+        syncVoices();
         renderRequests();
         if (wasIn) {
             const sharing = room.presenter === peer;
@@ -3630,6 +3828,7 @@
         const wasIn = peer.status === "admitted";
         send(peer, { t: "denied", reason });
         peer.status = "refused";
+        syncVoices();
         renderRequests();
         if (room.presenter === peer) clearPresenter();
         if (wasIn) {
@@ -3649,6 +3848,7 @@
             }
         }
         peer.status = "admitted";
+        syncVoices();
         peer.ticket ||= Signaling.newId();
         room.tickets.add(peer.ticket);
         trackTicket(peer.ticket);
@@ -3875,7 +4075,7 @@
                 if (!peer.mediaStream.getTracks().includes(event.track)) peer.mediaStream.addTrack(event.track);
             };
             pendingTracks.forEach(event => peer.pc.ontrack(event));
-            syncMicrophonePeer(peer);
+            syncVoices();
             const answer = await peer.pc.createAnswer();
             await peer.pc.setLocalDescription({ type: "answer", sdp: tuneAudio(answer.sdp) });
             await gathered(peer.pc);
@@ -4468,6 +4668,9 @@
         const target = Math.max(0, Math.min(expectedTime(), end));
         const playing = !state.paused;
         if (yt.loaded !== id) {
+            // (a guest: the new video's place is on its way - load it there, not at the old one's)
+            if (room.awaitState && now() - room.awaitState < 2500) return;
+            room.awaitState = 0;
             yt.loaded = id;
             yt.error = null;
             // YouTube's captions as the remembered setting says (not with a room's subtitle file)
@@ -4486,8 +4689,30 @@
         const current = player.getPlayerState();
         const at = player.getCurrentTime() || 0;
         if (player.getPlaybackRate() !== state.rate) player.setPlaybackRate(state.rate);
+        // Stuck: buffering without moving for a while (a stalled connection, more often on a
+        // phone, sometimes after a jump): the video loaded again where everyone is
+        if (current === YT.BUFFERING) {
+            if (!yt.stuckSince || Math.abs(at - yt.stuckAt) > 0.3) {
+                yt.stuckSince = now();
+                yt.stuckAt = at;
+            } else if (now() - yt.stuckSince > 6000) {
+                yt.stuckSince = 0;
+                yt.lastSeek = yt.started = now();
+                yt.cuedAt = target;
+                ytMine();
+                cropYouTube(false);
+                if (playing) player.loadVideoById({ videoId: id, startSeconds: target });
+                else player.cueVideoById({ videoId: id, startSeconds: target });
+                return;
+            }
+        } else yt.stuckSince = 0;
         if (playing) {
-            if (current === YT.PAUSED || current === YT.CUED || (current === YT.ENDED && target < end - 1)) {
+            // (not started yet while everyone plays: asked again every few seconds; a browser that
+            // won't start it without a tap gets its note, below)
+            const unstarted = current === YT.UNSTARTED && now() - (yt.kickAt || 0) > 3000;
+            if (current === YT.PAUSED || current === YT.CUED || unstarted || (current === YT.ENDED && target < end - 1)) {
+                if (unstarted) yt.kickAt = now();
+                if (unstarted && Math.abs(at - target) > 2) player.seekTo(target, true);
                 ytMine();
                 player.playVideo();
             } else if (current === YT.PLAYING && Math.abs(at - target) > 2 && now() - yt.lastSeek > 4000) {
@@ -5712,6 +5937,8 @@
                     rows[k].classList.add("in-playlist");
                     rows[k].classList.toggle("folded", !open);
                     rows[k].classList.toggle("playlist-end", k === j);
+                    // (its place in the playlist: 1, 2, 3…)
+                    rows[k].dataset.n = String(k - i + 1);
                 }
             }
             i = j + 1;
@@ -6422,11 +6649,17 @@
                 return rememberRoom();
             }
             case "state":
+                // (the new video's place has come: it can load, there)
+                guest.awaitState = 0;
                 return applyState(message);
             case "file": {
                 const file = validFile(message.file);
                 const old = guest.file;
                 const other = mediaKey(file) !== mediaKey(old);
+                // Another YouTube video: its place (the start, or where everyone is) comes in the
+                // next message. Until then (a moment), it isn't loaded - not at the last video's
+                // place, which would start it mid-way and then jump back to the start
+                if (other && file && file.yt) guest.awaitState = now();
                 const changed = other || (!!file && (file.duration !== old.duration || file.stream !== old.stream));
                 guest.file = file;
                 // Subtitles belong to the video they were loaded for

@@ -4,6 +4,42 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.8] - 2026-11-21
+
+### Queue
+- A playlist's videos, opened, are one rounded card with its row: each numbered (a play mark for
+  the one on), a larger picture, the title on up to two lines; the one playing with an accent bar
+  and a tint, those played dimmed; buttons and drag handle when pointed at
+
+### Fixed
+- Voices in a room with more than one guest: guests can hear each other now. Guests connect to
+  the host only, and nothing passed one guest's voice on to the others, so each guest heard only
+  the host - and after a host left and the room carried on with a guest hosting it (the old host
+  coming back as a guest), people couldn't hear each other at all. The host's browser now passes
+  every voice on: each guest hears a mix of the host and every other guest (never themselves);
+  with no other guest, the host's mic as before. Remade as people come, go, are let in, or turn
+  their mic on or off. Someone still waiting to be let in no longer hears the host
+- A voice the browser wouldn't play yet (a page that rejoined by itself, without a tap) plays at
+  the next tap or key, with a note saying so, instead of staying silent
+- In a room, a YouTube player that stalls (buffering without moving for 6 seconds, which happens
+  on weak connections, more often on phones and after a jump) loads the video again where
+  everyone is, and one that hasn't started while everyone plays is started again - it used to stay
+  frozen while the others went on
+- In a room, a guest's video no longer starts in the middle and then jumps back to the start when
+  the room moves to another YouTube video (next, previous, a new one): the new video used to load
+  at the last one's place until its own place arrived a moment later. It now waits that moment and
+  starts where it should - the start, or where everyone is when joining
+
+### Video call
+- Phones held upright, docked at the bottom: your mic and camera stay in the call bar below the
+  videos, not on your own video
+- Its height: a grip on the strip's top edge - drag it up for taller videos (down for shorter),
+  from 72 px up to half the screen, or tap it for twice the height (and back). Remembered
+- Phones: a minimize button on the call itself, floating or docked (a "-" at its top left; docked
+  at the bottom, a chevron beside the height grip); minimized it's just the call bar, with a
+  button in it to show everyone's video again. Minimized at the bottom, the videos and the grip
+  now really go (they used to stay)
+
 ## [1.6.7] - 2026-11-21
 
 ### Queue

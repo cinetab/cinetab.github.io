@@ -12392,3 +12392,260 @@ body > .room-toasts {
     gap: clamp(10px, 4vw, 40px);
   }
 }
+
+/* =================== PHONES UPRIGHT, DOCKED AT THE BOTTOM: ITS HEIGHT =================== */
+/* A grip on the strip's top edge, like a sheet's: dragged up the videos grow taller (down,
+   shorter), from 72 px up to half the screen; a tap makes them twice as tall, or back (room.js:
+   --strip-tile-h). Mic and camera stay in the call bar below, not on your video. */
+.room-call-strip-grip {
+  display: none;
+}
+
+.room-call.unit.docked.strip > .room-call-strip-grip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.room-call.unit.docked.strip > .room-call-strip-grip::before {
+  content: "";
+  width: 38px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.32);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.room-call.unit.docked.strip > .room-call-strip-grip:is(:hover, :focus-visible)::before,
+.room-call.unit.strip-sizing > .room-call-strip-grip::before {
+  width: 46px;
+  background: #3e97fd;
+}
+
+.room-call-strip-grip:focus-visible {
+  outline: none;
+}
+
+/* (room for the grip above the videos) */
+.player-page > .room-call.unit.docked.strip {
+  padding-top: 10px;
+}
+
+.room-call.unit.docked.strip.strip-moving .room-call-tile {
+  transition: height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-call.unit.docked.strip.strip-moving .room-call-tile {
+    transition: none;
+  }
+}
+
+/* =================== PHONES: MINIMIZE THE CALL, FLOATING OR DOCKED =================== */
+/* On the call itself while everyone's video shows: floating or docked on the left, a small "-" at
+   its top left (clear of the mic badges at the right); docked at the bottom, a chevron at the
+   right of its top row, beside the height grip. Minimized, it's the call bar alone, with a button
+   in it that shows everyone again (room.js). */
+.room-call-unit-min {
+  display: none;
+}
+
+.room-call.unit:not(.collapsed):not(.no-people) > .room-call-unit-min {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.room-call.unit:not(.collapsed):not(.no-people) > .room-call-unit-min:active {
+  transform: scale(0.9);
+  background: rgba(62, 151, 253, 0.6);
+}
+
+.room-call.unit > .room-call-unit-min i {
+  line-height: 1;
+}
+
+/* (floating: just inside the card's corner) */
+.room-call.unit.mini:not(.collapsed) > .room-call-unit-min {
+  top: 8px;
+  left: 8px;
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+}
+
+/* (docked at the bottom: in a row of its own above the videos, at the right) */
+.player-page > .room-call.unit.docked.strip:not(.collapsed):not(.no-people) {
+  padding-top: 30px;
+}
+
+.room-call.unit.docked.strip:not(.collapsed):not(.no-people) > .room-call-unit-min {
+  top: 3px;
+  left: auto;
+  right: 12px;
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.room-call.unit.docked.strip > .room-call-strip-grip {
+  top: 4px;
+}
+
+/* (the call bar's restore button, while minimized) */
+.room-call.unit .room-unit-expand[hidden] {
+  display: none !important;
+}
+
+/* Minimized (or nobody's video yet), docked at the bottom: just the call bar - no videos, no grip */
+.room-call.docked.strip:is(.collapsed, .no-people) .room-call-grid,
+.room-call.unit.docked.strip:is(.collapsed, .no-people) > .room-call-strip-grip {
+  display: none;
+}
+
+.player-page > .room-call.unit.docked.strip:is(.collapsed, .no-people) {
+  padding-top: 0;
+}
+
+/* =================== QUEUE: A PLAYLIST'S VIDEOS, ONE CARD =================== */
+/* Opened, the playlist's row and its videos are one rounded card: each video numbered (its place
+   in the playlist; a play mark for the one on), a larger picture, its title on up to two lines;
+   the one playing with an accent bar and a tint, those played dimmed; its buttons (play, move,
+   remove) and drag handle when pointed at. */
+.room-queue-group.open .room-queue-group-head {
+  border-bottom-color: transparent;
+  border-radius: 14px 14px 0 0;
+}
+
+.room-queue-item.in-playlist {
+  margin: -4px 0 0;
+  padding: 6px 10px 6px 4px;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 0;
+  border-bottom: 0;
+  border-left-width: 1px;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.025);
+  animation: playlistOpen 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.room-queue-item.in-playlist.playlist-end {
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 14px 14px;
+}
+
+.room-queue-group.current + .room-queue-item.in-playlist,
+.room-queue-group.current ~ .room-queue-item.in-playlist {
+  border-color: rgba(62, 151, 253, 0.28);
+}
+
+.room-queue-item.in-playlist:hover,
+.room-queue-item.in-playlist:focus-within {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* its number, or a play mark for the one on */
+.room-queue-item.in-playlist::before {
+  content: attr(data-n);
+  flex-shrink: 0;
+  width: 22px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: #7c7c8c;
+}
+
+.room-queue-item.in-playlist.current::before {
+  content: "\f04b";
+  font: 900 9px "Font Awesome 6 Free";
+  color: #3e97fd;
+}
+
+.room-queue-item.in-playlist.current {
+  background: linear-gradient(90deg, rgba(62, 151, 253, 0.16), rgba(62, 151, 253, 0.05));
+  box-shadow: inset 3px 0 0 #3e97fd;
+}
+
+.room-queue-item.in-playlist.played {
+  opacity: 0.55;
+}
+
+.room-queue-item.in-playlist.played:hover {
+  opacity: 1;
+}
+
+/* the drag handle only when pointed at (the row still drags) */
+.room-queue-item.in-playlist .room-queue-grip {
+  display: none;
+}
+
+.room-queue-item.in-playlist .room-queue-cover {
+  width: 88px;
+  height: 50px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.room-queue-item.in-playlist .room-queue-cover .room-queue-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+.room-queue-item.in-playlist .room-queue-info {
+  gap: 2px;
+}
+
+.room-queue-item.in-playlist .room-queue-info b {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.room-queue-item.in-playlist.current .room-queue-info b {
+  font-weight: 600;
+  color: #fff;
+}
+
+/* ("Added by" is the same for a whole playlist: only "Now playing" stays) */
+.room-queue-item.in-playlist:not(.current) .room-queue-info small {
+  display: none;
+}
+
+.room-queue-item.in-playlist .room-queue-actions {
+  right: 8px;
+}
