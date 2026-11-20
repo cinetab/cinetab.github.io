@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.6.3">
+  <meta name="version" content="1.6.4">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.6.3",
+      "softwareVersion": "1.6.4",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -390,7 +390,7 @@
       </a>
       <p>Made for movie nights. Your files stay on your device.</p>
       <p class="footer-meta">
-        <span class="app-version" title="The version of CineTab you're using">v1.6.3</span>
+        <span class="app-version" title="The version of CineTab you're using">v1.6.4</span>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
         &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -436,16 +436,15 @@
       <div class="video-title-container">
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
-        <button type="button" class="player-top-stop" id="player-top-stop" title="Stop video" aria-label="Stop video" hidden><i class="fa-solid fa-stop"></i></button>
         <!-- Phones held upright, in a room: the room's name here, the video's title below it -->
         <span class="top-room-name" hidden></span>
       </div>
       <!-- A YouTube video watched on your own: when it ends, its YouTube Mix plays next (youtube.js) -->
-      <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-label">Autoplay</span><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
+      <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
       <!-- Search and commands: YouTube, a pasted link, or anything the player does (script.js) -->
       <button class="player-search-btn" title="Search and commands (Ctrl+K or /)" aria-label="Search YouTube, or run a command" aria-keyshortcuts="Control+K /"><i class="fa-solid fa-magnifying-glass"></i></button>
-      <button class="player-queue-btn" title="Video Queue (Q)" aria-label="Queue"><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
-      <button class="share-help-btn" title="How to watch together (R)"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
+      <button class="player-queue-btn" title="Video queue (Q)" aria-label="Video queue"><i class="fa-solid fa-list-ol"></i></button>
+      <button class="share-help-btn" title="How to watch together (R)" aria-label="Watch together"><i class="fa-solid fa-users"></i><span class="share-help-count" hidden></span></button>
     </div>
 
     <!-- Center Feedback Badge Animation -->
@@ -546,7 +545,7 @@
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
             <dt><kbd>Q</kbd></dt><dd>Queue panel: show / hide</dd>
             <dt><kbd>R</kbd></dt><dd>Room panel: show / hide (outside a room: Watch together)</dd>
-            <dt><kbd>D</kbd></dt><dd>Video call window: pin it to the side / float it again</dd>
+            <dt><kbd>D</kbd></dt><dd>Video call window: dock it (sidebar or strip above the video) / float it again</dd>
             <dt><kbd>Shift</kbd>+<kbd>N</kbd><kbd>P</kbd></dt><dd>Next / previous video in a YouTube playlist or queue</dd>
             <dt><kbd>Ctrl</kbd>+<kbd>K</kbd><kbd>/</kbd></dt><dd>Search YouTube, paste a link, or run a command (a time like 1:23, a speed like 1.5x)</dd>
             <dt><kbd>?</kbd></dt><dd>This list</dd>
@@ -612,9 +611,9 @@
                 <button type="button" class="room-input-btn room-new-password" title="Make a new random password"><i class="fa-solid fa-rotate"></i></button>
               </span>
             </label>
-            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> Hide my IP address from guests (sends everything through a relay server)</label>
-            <label class="room-check room-localnet"><input type="checkbox" name="localnet"> <span>Friends are on the same Wi-Fi (campus, office, hostel): help their devices find mine <small>Such Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off.</small></span></label>
-            <label class="room-check"><input type="checkbox" name="remember" checked> Remember this room in this browser, so it's one click to open again (saves the code and password here)</label>
+            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> <span>Hide my IP address from guests <small>Sends everything through a relay server.</small></span></label>
+            <label class="room-check room-localnet" title="Campus, office or hostel Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off."><input type="checkbox" name="localnet"> <span>Friends are on the same Wi-Fi <small>Campus, office or hostel Wi-Fi often hides devices from each other: this helps theirs find mine. Your browser asks to use the microphone; it stays off.</small></span></label>
+            <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to open it again (saves the code and password in this browser).</small></span></label>
             <div class="convert-actions">
               <button type="submit"><i class="fa-solid fa-door-open"></i> Create room</button>
               <button type="button" class="secondary-btn room-cancel">Cancel</button>
@@ -636,9 +635,9 @@
               </span>
             </div>
             <div class="room-avatar-grid" hidden></div>
-            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> Hide my IP address from the host (sends everything through a relay server)</label>
-            <label class="room-check room-localnet"><input type="checkbox" name="localnet"> <span>I'm on the same Wi-Fi as the host (campus, office, hostel): help our devices find each other <small>Such Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off.</small></span></label>
-            <label class="room-check"><input type="checkbox" name="remember" checked> Remember this room in this browser, so it's one click to join next time (saves the code and password here)</label>
+            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> <span>Hide my IP address from the host <small>Sends everything through a relay server.</small></span></label>
+            <label class="room-check room-localnet" title="Campus, office or hostel Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off."><input type="checkbox" name="localnet"> <span>I'm on the same Wi-Fi as the host <small>Campus, office or hostel Wi-Fi often hides devices from each other: this helps ours find each other. Your browser asks to use the microphone; it stays off.</small></span></label>
+            <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to join next time (saves the code and password in this browser).</small></span></label>
             <p class="room-error" hidden></p>
             <div class="convert-actions">
               <button type="submit"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
@@ -689,8 +688,11 @@
       </div>
       <ul class="video-controls">
         <li class="options left">
-          <button class="volume" title="Mute (M)"><i class="fa-solid fa-volume-high"></i></button>
-          <input type="range" class="volume-slider" min="0" max="1" step="any" value="1" title="Volume (Up / Down arrows)">
+          <!-- Volume: the slider opens out beside the button while pointed at (or focused) -->
+          <div class="volume-group">
+            <button class="volume" title="Mute (M)"><i class="fa-solid fa-volume-high"></i></button>
+            <input type="range" class="volume-slider" min="0" max="1" step="any" value="1" title="Volume (Up / Down arrows)" aria-label="Volume">
+          </div>
           <div class="video-timer">
             <p class="current-time">00:00</p>
             <p class="separator"> / </p>
@@ -736,7 +738,7 @@
 
           <!-- More: the picture's shape and a volume boost -->
           <div class="popup-menu-wrapper more-content">
-            <button class="more-btn" title="More: picture shape, ambient mode, volume boost" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <button class="more-btn" title="More: picture shape, ambient mode, volume boost, keyboard shortcuts" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             <div class="popup-menu more-options">
               <div class="menu-header"><span>Picture</span><span class="aspect-current">Fit</span></div>
               <ul class="option-chips aspect-options">
@@ -760,9 +762,9 @@
                 <li data-boost="3" title="Up to 300% volume (quiet videos)">300%</li>
               </ul>
               <p class="more-note" hidden></p>
+              <button type="button" class="more-row shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i><span>Keyboard shortcuts</span><kbd>?</kbd></button>
             </div>
           </div>
-          <button class="shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i></button>
           <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
           <!-- Phones and tablets: everything above in one settings sheet -->
           <button class="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="dialog"><i class="fa-solid fa-gear"></i></button>
@@ -807,8 +809,6 @@
   <!-- ============ ROOM: PANEL ============ -->
   <!-- Watch-together room: chat, people, invite and settings, one at a time (room.js) -->
   <aside class="room-panel" hidden aria-label="Watch-together room">
-    <!-- On its left edge: slides the panel away (R does too, and the Room button brings it back) -->
-    <button class="room-icon-btn room-hide-btn" title="Hide the panel, you stay in the room (R)" aria-label="Hide the room panel"><i class="fa-solid fa-chevron-right"></i></button>
     <header class="room-head">
       <div class="room-head-text">
         <h2 class="room-title"></h2>
@@ -822,7 +822,6 @@
       <span class="room-now-text"><b class="room-now-title">Nothing is playing</b><small class="room-now-meta"></small></span>
       <button type="button" class="room-icon-btn room-now-yt" title="Search YouTube or paste a link, to play for everyone" aria-label="Search YouTube or paste a link, to play for everyone"><i class="fa-brands fa-youtube"></i></button>
       <button type="button" class="room-icon-btn primary room-now-share" title="Share a video" aria-label="Share a video"><i class="fa-solid fa-file-video"></i></button>
-      <button type="button" class="room-icon-btn danger room-now-stop" title="Stop video for everyone" aria-label="Stop video for everyone" hidden><i class="fa-solid fa-stop"></i></button>
       <!-- A YouTube playlist: the video before and after this one -->
       <div class="room-now-list" hidden>
         <button type="button" class="room-small-btn room-now-prev" title="Previous video in the playlist, for everyone"><i class="fa-solid fa-backward-step"></i> Previous</button>
@@ -842,9 +841,13 @@
       <nav class="room-tabs" role="tablist" aria-label="Room">
         <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next"><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
+        <!-- Not in a room: start or join one (only then) -->
+        <button class="room-tab-btn" role="tab" data-tab="together" title="Create or join a room"><i class="fa-solid fa-users"></i><span>Watch together</span></button>
         <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room, and inviting more people"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
       </nav>
+      <!-- At the end of the tabs: slides the panel away (R does too; the top bar's buttons bring it back) -->
+      <button class="room-icon-btn room-hide-btn" title="Hide the panel (R)" aria-label="Hide the panel"><i class="fa-solid fa-angles-right"></i></button>
     </div>
 
     <ul class="room-requests"></ul>
@@ -860,6 +863,41 @@
         <input class="room-chat-input" maxlength="500" autocomplete="off" placeholder="Send a message to everyone" aria-label="Chat message">
         <button type="submit" class="room-send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
       </form>
+    </section>
+
+    <!-- Not in a room (the Watch together button opens this): create a room, join one with its code
+         or invite link, or open a remembered one again; or share the tab on a video call instead -->
+    <section class="room-tab room-tab-together" data-tab="together" role="tabpanel" hidden>
+      <!-- Creating or joining from the player: the form itself comes here (room.js), not a dialog -->
+      <div class="together-form" hidden>
+        <div class="together-form-head">
+          <button type="button" class="room-icon-btn together-back" title="Back (Esc)" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+          <b class="together-form-title">Create a room</b>
+        </div>
+      </div>
+      <div class="together-hero">
+        <span class="together-hero-icon" aria-hidden="true"><i class="fa-solid fa-users"></i></span>
+        <h3>Watch together</h3>
+        <p>A private room: synced playback, chat and video call. Peer-to-peer, nothing is uploaded.</p>
+      </div>
+      <button type="button" class="together-action room-create-open">
+        <span class="together-action-icon" aria-hidden="true"><i class="fa-solid fa-plus"></i></span>
+        <span class="together-action-text"><b>Create a room</b><small>Invite friends with a link, QR code or code</small></span>
+        <i class="fa-solid fa-chevron-right together-action-go" aria-hidden="true"></i>
+      </button>
+      <form class="together-join" novalidate>
+        <label class="together-label" for="together-join-code">Join a room</label>
+        <div class="together-join-row">
+          <input id="together-join-code" name="code" maxlength="300" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code or invite link" aria-label="Room code or invite link">
+          <button type="submit" class="together-join-btn"><i class="fa-solid fa-right-to-bracket"></i> <span>Join</span></button>
+        </div>
+        <small class="together-hint">The host shares the code and password, or a link with both.</small>
+      </form>
+      <div class="together-recent" hidden>
+        <p class="room-section-title">Your rooms</p>
+        <ul class="together-rooms"></ul>
+      </div>
+      <button type="button" class="together-other" title="How to watch together on Google Meet, Zoom or Teams"><i class="fa-solid fa-display"></i> <span>Or share this tab on a video call</span></button>
     </section>
 
     <!-- The YouTube queue: reorder, play one now, remove; drop a link on it to add one -->

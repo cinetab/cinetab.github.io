@@ -109,7 +109,6 @@
     nowTitle = nowBar.querySelector(".room-now-title"),
     nowMeta = nowBar.querySelector(".room-now-meta"),
     nowShareBtn = nowBar.querySelector(".room-now-share"),
-    nowStopBtn = nowBar.querySelector(".room-now-stop"),
     nowIcon = nowBar.querySelector(".room-now-icon i"),
     nowYtBtn = nowBar.querySelector(".room-now-yt"),
     nowList = nowBar.querySelector(".room-now-list"),
@@ -129,7 +128,7 @@
     queueEmpty = queueTab.querySelector(".room-queue-empty"),
     queueCount = queueTab.querySelector(".room-queue-count"),
     queueList = queueTab.querySelector(".room-queue"),
-    playerStopBtns = document.querySelectorAll(".player-stop-btn, .player-top-stop"),
+    playerStopBtns = document.querySelectorAll(".player-stop-btn"),
     prevTrackBtn = document.querySelector(".container .prev-track"),
     nextTrackBtn = document.querySelector(".container .next-track"),
     settingInputs = hostSettings.querySelectorAll("[data-setting]"),
@@ -152,7 +151,7 @@
     camBtn = panel.querySelector(".room-cam-btn"),
     flipBtn = panel.querySelector(".room-flip-btn"),
     profileSheet = panel.querySelector(".room-sheet"),
-    shareLabel = shareHelpBtn.querySelector("span"),
+    shareCount = shareHelpBtn.querySelector(".share-help-count"),
     badge = el("b", "room-badge");
 
     badge.hidden = true;
@@ -289,8 +288,56 @@
 
     // ---------- Dialogs over the player
 
+    // ---------- In the player, out of a room: Create a room and Join a room aren't a dialog over the
+    // video - the form comes into the side panel's Watch together tab (compact: no intro, the
+    // options' details in their tooltips), with a Back button. Elsewhere it's the dialog.
+    const panelFormSlot = panel.querySelector(".together-form");
+    const togetherTab = panel.querySelector(".room-tab-together");
+    const statusView = overlay.querySelector('[data-view="status"]');
+    let panelForm = null;
+    const closePanelForm = () => {
+        if (!panelForm) return;
+        panelForm.classList.remove("in-panel");
+        panelForm.hidden = true;
+        statusView.before(panelForm);
+        panelForm = null;
+        panelFormSlot.hidden = true;
+        togetherTab.classList.remove("form-open");
+    };
+    const showPanelForm = form => {
+        if (panelForm !== form) closePanelForm();
+        panelForm = form;
+        form.classList.add("in-panel");
+        form.hidden = false;
+        if (form.parentNode !== panelFormSlot) panelFormSlot.append(form);
+        panelFormSlot.querySelector(".together-form-title").textContent = form === createForm ? createTitle.textContent : "Join a room";
+        panelFormSlot.hidden = false;
+        togetherTab.classList.add("form-open");
+        togetherTab.scrollTop = 0;
+        hideOverlay();
+        showTab("together");
+        if (panel.hidden || panelClosing) showPanel(true);
+    };
+    panel.querySelector(".together-back")?.addEventListener("click", () => closeDialog());
+    // (Esc: back, before the player's own Esc handling - unless the avatar choice is open)
+    document.addEventListener("keydown", e => {
+        if (e.key !== "Escape" || !panelForm || panel.hidden || playerPage.hidden) return;
+        if (!panel.contains(document.activeElement) && document.activeElement !== document.body) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const avatars = panelForm.querySelector(".room-avatar-grid");
+        if (avatars && !avatars.hidden) avatars.hidden = true;
+        else closeDialog();
+    }, true);
+
     // `onClose` runs for the × button and Esc
     const showView = (name, onClose = hideOverlay) => {
+        const form = name === "create" ? createForm : name === "join" ? joinForm : null;
+        if (form && panelFormSlot && !room && !playerPage.hidden) {
+            closeAction = onClose;
+            return showPanelForm(form);
+        }
+        closePanelForm();
         views.forEach(view => view.hidden = view.dataset.view !== name);
         closeAction = onClose;
         // On small screens a dialog gets the whole screen, unless the room's chat is open beside it
@@ -465,8 +512,15 @@
 
     const waitingCount = () => room && room.role === "host" ? [...room.peers.values()].filter(peer => peer.status === "waiting").length : 0;
 
+    // (the call dock's chat button: its own badge, made with the call window below)
+    let callChatBadge = null;
     const updateBadges = () => {
         const waiting = waitingCount();
+        if (callChatBadge) {
+            const unseen = panel.hidden ? chatUnread + waiting : 0;
+            callChatBadge.hidden = !unseen;
+            callChatBadge.textContent = unseen > 9 ? "9+" : unseen;
+        }
         chatBadge.hidden = !chatUnread;
         chatBadge.textContent = chatUnread > 9 ? "9+" : chatUnread;
         peopleBadge.hidden = !waiting;
@@ -491,6 +545,12 @@
         });
         tabPanels.forEach(section => section.hidden = section.dataset.tab !== tab);
         playerPage.classList.toggle("queue-open", !panel.hidden && tab === "queue");
+        // (not in a room: the Watch together button shows pressed while its tab is open)
+        playerPage.classList.toggle("together-open", !panel.hidden && !room && tab === "together");
+        if (!room) {
+            roomTitle.textContent = tab === "together" ? "Watch together" : "Queue";
+            if (stateText) stateText.textContent = tab === "together" ? "Create or join a room" : "Upcoming videos";
+        }
         if (tab === "chat") {
             chatUnread = 0;
             scrollChat();
@@ -502,14 +562,16 @@
         panel.hidden = !show;
         playerPage.classList.toggle("room-open", show);
         playerPage.classList.toggle("queue-open", show && activeTab === "queue");
+        playerPage.classList.toggle("together-open", show && !room && activeTab === "together");
+        playerPage.classList.toggle("solo-panel", !room);
         roomToggle.setAttribute("aria-expanded", String(show));
         roomToggle.title = show ? "Hide the panel" : "Show the panel";
         if (show && !room) {
+            // Out of a room the panel has two tabs: the queue, and Watch together
             panel.classList.add("solo-queue");
-            showTab("queue");
+            showTab(activeTab === "together" ? "together" : "queue");
             renderQueue();
-            roomTitle.textContent = "Queue";
-            if (stateText) stateText.textContent = "Upcoming videos";
+            renderTogetherRooms();
         } else if (show && room) {
             panel.classList.remove("solo-queue");
             if (activeTab === "chat") {
@@ -804,7 +866,9 @@
     // panel itself starts with what's playing)
     const renderRoomButton = () => {
         if (!room) return;
-        shareLabel.textContent = `${room.title || "Room"} · ${room.memberCount || 1}`;
+        // (an icon and how many are in the room: no words on the player's top bar)
+        shareCount.textContent = String(room.memberCount || 1);
+        shareCount.hidden = false;
         shareHelpBtn.setAttribute("aria-label", `${room.title || "Room"}, ${room.memberCount || 1} in the room: show or hide the room panel (R)`);
     };
 
@@ -931,7 +995,9 @@
         panel.classList.add("solo-queue");
         chatUnread = 0;
         updateBadges();
-        shareLabel.textContent = "Watch together";
+        shareCount.textContent = "";
+        shareCount.hidden = true;
+        shareHelpBtn.setAttribute("aria-label", "Watch together");
         shareHelpBtn.title = "How to watch together (R)";
         chatList.replaceChildren();
         lastMessage = null;
@@ -1672,15 +1738,20 @@
     // floating; a phone held upright in fullscreen, with the room's panel closed, floats it);
     // `dockW`: the docked column's width (px) dragged to by its long edge (none: its own)
     // `unitFloat`: on a phone, floating instead of docked
-    const call = { x: 0, y: 0, pos: null, collapsed: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: false, dock: null, dockPos: "side", dockable: true, dockW: null, unitFloat: false };
+    // Computers: `docked` false floats it; docked, `dockPos` is where - "bottom" (the dock over the
+    // bottom of the video, the usual), "side" (pinned left of the video) or "top" (above it)
+    const call = { x: 0, y: 0, pos: null, collapsed: false, drag: null, tiles: new Map(), sizes: {}, touches: new Map(), pinch: null, sizing: null, docked: true, dock: null, dockPos: "bottom", dockable: true, dockW: null, unitFloat: false };
     try {
         const saved = JSON.parse(storage.get(CALL_KEY) || "null");
         if (saved && typeof saved === "object") {
             if (finite(saved.x, 0, 1) && finite(saved.y, 0, 1)) call.pos = { x: saved.x, y: saved.y };
             call.collapsed = saved.collapsed === true;
-            call.docked = saved.docked === true;
             call.unitFloat = saved.unitFloat === true;
-            if (saved.dockPos === "top" || saved.dockPos === "side") call.dockPos = saved.dockPos;
+            // (from before the dock: it starts in the dock once)
+            if (saved.v === 2) {
+                call.docked = saved.docked !== false;
+                if (["bottom", "side", "top"].includes(saved.dockPos)) call.dockPos = saved.dockPos;
+            }
             if (finite(saved.dockW, 100, 2000)) call.dockW = saved.dockW;
             if (saved.sizes && typeof saved.sizes === "object") ["landscape", "portrait"].forEach(key => {
                 const size = saved.sizes[key];
@@ -1688,7 +1759,7 @@
             });
         }
     } catch (e) {}
-    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, dockPos: call.dockPos, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
+    const saveCall = () => storage.set(CALL_KEY, JSON.stringify({ v: 2, ...(call.pos || {}), collapsed: call.collapsed, docked: call.docked, dockPos: call.dockPos, unitFloat: call.unitFloat, sizes: call.sizes, ...(call.dockW ? { dockW: call.dockW } : {}) }));
 
     const callWin = el("section", "room-call");
     callWin.hidden = true;
@@ -1712,19 +1783,67 @@
     callPipBtn.firstChild.className = "fa-solid fa-clone";
     callPipBtn.hidden = !("documentPictureInPicture" in window) || isTouch;
     callPipBtn.addEventListener("click", () => together.pip && together.pip());
-    const callDockBtn = callButton("room-call-dock", "Pin to side");
-    callDockBtn.firstChild.className = "fa-solid fa-thumbtack";
     const callFoldBtn = callButton("room-call-fold", "Minimize");
     callFoldBtn.firstChild.className = "fa-solid fa-minus";
-    // Docked: switch between left side panel and top panel (videos stacked horizontally)
-    const callPosBtn = callButton("room-call-pos", "Move video call to top of player");
-    callPosBtn.firstChild.className = "fa-solid fa-arrow-up";
-    callPosBtn.hidden = true;
-    callPosBtn.addEventListener("click", () => {
-        call.dockPos = call.dock === "top" ? "side" : "top";
+    // Computers: one Layout button for where the call goes - a window floating over the video, a
+    // sidebar on its left, or a strip above it (phones have their own call bar: below)
+    const CALL_LAYOUTS = [
+        { mode: "bottom", icon: "fa-arrows-down-to-line", text: "Dock on the video" },
+        { mode: "side", icon: "fa-table-columns", text: "Pin to the left" },
+        { mode: "top", icon: "fa-window-maximize", text: "Pin above the video" },
+        { mode: "float", icon: "fa-window-restore", text: "Floating window" }
+    ];
+    const callLayoutBtn = callButton("room-call-layout", "Call layout");
+    callLayoutBtn.setAttribute("aria-haspopup", "menu");
+    callLayoutBtn.setAttribute("aria-expanded", "false");
+    const callLayoutMenu = el("div", "room-call-menu room-call-layout-menu");
+    callLayoutMenu.hidden = true;
+    callLayoutMenu.setAttribute("role", "menu");
+    callLayoutMenu.setAttribute("aria-label", "Call layout");
+    const layoutOptions = CALL_LAYOUTS.map(layout => {
+        const button = el("button", "room-call-menu-opt");
+        button.type = "button";
+        button.dataset.mode = layout.mode;
+        button.setAttribute("role", "menuitemradio");
+        button.append(el("i", `fa-solid ${layout.icon}`), el("span", null, layout.text), el("i", "fa-solid fa-check room-call-menu-check"));
+        callLayoutMenu.append(button);
+        return button;
+    });
+    const callLayout = () => call.docked ? call.dockPos : "float";
+    // (below the button; above it when there's no room below)
+    const showCallLayout = open => {
+        callLayoutMenu.hidden = !open;
+        callLayoutBtn.setAttribute("aria-expanded", String(open));
+        // (the dock stays up while it's open)
+        setTimeout(() => placeBottomDock());
+        if (!open) return;
+        callLayoutMenu.classList.remove("up");
+        const box = callLayoutBtn.getBoundingClientRect();
+        const page = playerPage.getBoundingClientRect();
+        callLayoutMenu.classList.toggle("up", box.bottom + 8 + callLayoutMenu.offsetHeight > page.bottom - 4 && box.top - 8 - callLayoutMenu.offsetHeight >= page.top);
+    };
+    const setCallLayout = mode => {
+        if (mode === "float") call.docked = false;
+        else {
+            call.docked = true;
+            call.dockPos = mode;
+            call.collapsed = false;
+        }
         saveCall();
         placeDock(true);
+    };
+    callLayoutBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        showCallLeave(false);
+        showCallLayout(callLayoutMenu.hidden);
     });
+    layoutOptions.forEach(option => option.addEventListener("click", e => {
+        e.stopPropagation();
+        showCallLayout(false);
+        if (option.dataset.mode !== callLayout()) setCallLayout(option.dataset.mode);
+    }));
+    document.addEventListener("click", e => !callLayoutMenu.hidden && !callLayoutMenu.contains(e.target) && showCallLayout(false));
+    document.addEventListener("keydown", e => e.key === "Escape" && !callLayoutMenu.hidden && showCallLayout(false));
     // Folded up: a camera with a live dot in front of the number, so the small pill stands out
     const callLive = el("span", "room-call-live");
     callLive.setAttribute("aria-hidden", "true");
@@ -1753,6 +1872,7 @@
     const showCallLeave = open => {
         callLeaveMenu.hidden = !open;
         callLeaveBtn.setAttribute("aria-expanded", String(open));
+        setTimeout(() => placeBottomDock());
     };
     const callLeaveOption = (className, icon, text, target) => {
         const button = el("button", `room-leave-opt ${className}`);
@@ -1769,11 +1889,29 @@
         callLeaveOption("leave-end", "fa-door-closed", "End room", leaveEndBtn));
     callLeaveBtn.addEventListener("click", e => {
         e.stopPropagation();
+        showCallLayout(false);
         showCallLeave(callLeaveMenu.hidden);
     });
     document.addEventListener("click", e => !callLeaveMenu.hidden && !callLeaveMenu.contains(e.target) && showCallLeave(false));
     document.addEventListener("keydown", e => e.key === "Escape" && !callLeaveMenu.hidden && showCallLeave(false));
-    callBar.append(callLive, callTitle, callControls, callPipBtn, callPosBtn, callDockBtn, callFoldBtn, callLeaveBtn);
+    // The title bar (computers): how many, your mic and camera; then the window's own buttons
+    // Chat (and the room's panel): opens it on Chat, or closes it; unread messages and people
+    // waiting show on it while it's closed
+    const callChatBtn = callButton("room-call-chat", "Chat and the room (R)");
+    callChatBtn.firstChild.className = "fa-solid fa-message";
+    callChatBadge = el("b", "room-call-badge");
+    callChatBadge.hidden = true;
+    callChatBtn.append(callChatBadge);
+    callChatBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        if (panel.hidden || panelClosing) {
+            showTab(chatUnread || !waitingCount() ? "chat" : "people");
+            showPanel(true);
+        } else showPanel(false);
+    });
+    const callWinBtns = el("div", "room-call-winbtns");
+    callWinBtns.append(callChatBtn, callPipBtn, callLayoutBtn, callFoldBtn, callLeaveBtn);
+    callBar.append(callLive, callTitle, callControls, callWinBtns);
     callWin.classList.toggle("has-pip", !callPipBtn.hidden);
 
     // On a phone, in the call bar: everyone's video shown or folded away (with how many are in
@@ -1863,7 +2001,9 @@
     callDockEdge.type = "button";
     callDockEdge.title = "Drag to make the panel wider or narrower (double-click: back to its size)";
     callDockEdge.setAttribute("aria-label", "Panel width (drag, or arrow keys)");
-    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge, callLeaveMenu, callMoreMenu);
+    // (its menus open from its buttons: computers' Layout and Leave menus beside them)
+    callWinBtns.append(callLayoutMenu, callLeaveMenu);
+    callWin.append(callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
@@ -1873,7 +2013,19 @@
     // width, upright
     const CALL_MIN_W = 140;
     // (a phone's floating one: its three buttons below everyone)
-    const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W : 150;
+    // (a phone's: as wide as its call bar, so none of its buttons are cut off)
+    const footWidth = () => {
+        if (roomFoot.parentNode !== callWin) return 0;
+        const style = getComputedStyle(roomFoot);
+        const shown = [...roomFoot.children].filter(child => child.getClientRects().length);
+        return shown.reduce((sum, child) => {
+            const own = getComputedStyle(child);
+            return sum + child.offsetWidth + parseFloat(own.marginLeft) + parseFloat(own.marginRight);
+        }, parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + Math.max(0, shown.length - 1) * (parseFloat(style.columnGap) || 0)) + 2;
+    };
+    // (a phone's small floating window, just the videos: its call bar is a pill outside it)
+    const callMinW = () => !callWin.classList.contains("unit") ? CALL_MIN_W
+        : callWin.classList.contains("mini") ? 96 : Math.max(150, Math.ceil(footWidth()));
     const CALL_MIN_H = 88;
     const DOCK_MIN_W = 140;
     const dockMaxW = () => Math.max(DOCK_MIN_W, Math.min(560, playerPage.getBoundingClientRect().width * 0.45));
@@ -1891,7 +2043,8 @@
     // The size that fits everyone: one under another when the screen is wider than tall (a
     // computer, a phone held sideways), side by side when it's taller (a phone held upright)
     const fittingCallSize = (page, count, landscape) => {
-        const tile = !isTouch ? 200 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
+        // (a computer's: wide enough for its whole title bar on one line)
+        const tile = !isTouch ? 232 : landscape ? Math.min(150, page.width * 0.2) : Math.min(112, (page.width - 48) / 3);
         const tall = tile * 3 / 4;
         const chrome = callChrome();
         return landscape
@@ -1943,9 +2096,40 @@
         callWin.classList.toggle("big", fit.size >= 150);
     };
 
+    // ---------- The dock (computers): centred over the bottom of the video. While the player's
+    // controls show (or it's pointed at, or one of its menus is open) it sits just above them;
+    // when they hide, so do its buttons - and with nobody's camera on, the whole dock - leaving
+    // only everyone's video, low on the picture. Placed by the page's styles from these numbers,
+    // so it moves (and grows upwards) on the compositor, without work here every frame.
+    const dockAwake = () => container.classList.contains("show-controls") || callWin.matches(":hover")
+        || !!callWin.querySelector(":focus-visible") || !callLayoutMenu.hidden || !callLeaveMenu.hidden;
+    const placeBottomDock = () => {
+        if (callWin.hidden || call.dock !== "bottom") return;
+        const page = playerPage.getBoundingClientRect();
+        const picture = container.getBoundingClientRect();
+        if (!picture.width || !page.width) return;
+        const awake = dockAwake();
+        const controls = container.querySelector(".wrapper");
+        const style = callWin.style;
+        callWin.classList.toggle("asleep", !awake);
+        style.setProperty("--dock-cx", `${Math.round(picture.left - page.left + picture.width / 2)}px`);
+        style.setProperty("--dock-b", `${Math.round(page.bottom - picture.bottom + 14)}px`);
+        style.setProperty("--dock-lift", `${awake && controls ? controls.offsetHeight : 0}px`);
+        style.setProperty("--dock-maxw", `${Math.max(260, Math.round(picture.width - 28))}px`);
+        style.setProperty("--dock-tile-h", `${Math.round(within(picture.height * 0.19, 72, 150))}px`);
+    };
+    new MutationObserver(placeBottomDock).observe(container, { attributes: true, attributeFilter: ["class"] });
+    if ("ResizeObserver" in window) new ResizeObserver(() => placeBottomDock()).observe(container);
+    ["pointerenter", "pointerleave", "focusin", "focusout"].forEach(type => callWin.addEventListener(type, () => setTimeout(placeBottomDock)));
+    // Pointed at, it keeps the player's controls up too (so it doesn't drop below them)
+    callWin.addEventListener("pointermove", e => {
+        if (call.dock === "bottom" && e.pointerType !== "touch") container.dispatchEvent(new PointerEvent("pointermove", { pointerType: "mouse" }));
+    });
+
     // Where it is: where it was left (as a share of the room it has to move in), or at first the
     // top right of the picture, below its title bar
     const placeCall = () => {
+        if (call.dock === "bottom") return placeBottomDock();
         // (while it's pinched or resized, it stays where the gesture holds it; placed again after;
         // docked, the page's layout places it)
         if (callWin.hidden || call.pinch || call.sizing || call.dock) return;
@@ -1957,6 +2141,10 @@
         if (call.pos) {
             x = call.pos.x * (page.width - width);
             y = call.pos.y * (page.height - height);
+        } else if (callWin.classList.contains("mini")) {
+            // (a phone's small window: the bottom right corner, like picture in picture)
+            x = page.width - width - 12;
+            y = page.height - height - 16;
         } else if (callWin.classList.contains("unit")) {
             x = (page.width - width) / 2;
             y = page.height - height - 12;
@@ -2112,7 +2300,7 @@
         // On a button (a phone's call bar is nearly all buttons): a drag once it moves a little,
         // and then the button isn't pressed
         const onButton = !!e.target.closest("button");
-        call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y, x0: e.clientX, y0: e.clientY, live: !onButton };
+        call.drag = { id: e.pointerId, dx: e.clientX - call.x, dy: e.clientY - call.y, x0: e.clientX, y0: e.clientY, live: !onButton, target: e.target };
         if (onButton) return;
         callWin.setPointerCapture(e.pointerId);
         callWin.classList.add("dragging");
@@ -2155,6 +2343,9 @@
         call.drag = null;
         if (!drag.live) return;
         callWin.classList.remove("dragging");
+        // A tap (not a drag) on a phone's small floating window: its call bar shows, or hides
+        if (e.type === "pointerup" && callWin.classList.contains("mini") && !roomFoot.contains(drag.target)
+            && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 8) showUnitBar(!callWin.classList.contains("bar-open"));
         // Dragged from a button: not a press
         if (drag.fromButton) {
             call.swallowClick = true;
@@ -2171,11 +2362,41 @@
         e.stopPropagation();
     }, true);
 
+    // ---------- A phone's floating call, with everyone's video: a small picture in picture window,
+    // just the videos. A tap on it shows its call bar as a pill below it (above it, low on the
+    // screen) for a few seconds; minimized, or with nobody's video yet, it's the bar itself.
+    let unitBarTimer = null;
+    const showUnitBar = open => {
+        clearTimeout(unitBarTimer);
+        if (open) {
+            const box = callWin.getBoundingClientRect();
+            const page = playerPage.getBoundingClientRect();
+            callWin.classList.toggle("bar-up", box.bottom + 70 > page.bottom && box.top - 70 > page.top);
+            // (kept on the screen: moved across when the window is near an edge)
+            const wide = roomFoot.offsetWidth;
+            const left = box.left + box.width / 2 - wide / 2;
+            const fits = Math.max(page.left + 8, Math.min(left, page.right - 8 - wide));
+            callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
+            unitBarTimer = setTimeout(function hide() {
+                if (leavePopover && !leavePopover.hidden) unitBarTimer = setTimeout(hide, 2000);
+                else showUnitBar(false);
+            }, 4500);
+        }
+        callWin.classList.toggle("bar-open", open);
+    };
+    // (its buttons used: it stays a while longer)
+    roomFoot.addEventListener("pointerdown", () => callWin.classList.contains("bar-open") && showUnitBar(true));
+
     const renderCallButtons = () => {
         // Docked, it doesn't fold up (it can float again, and fold up there); a phone's does
         const unit = callWin.classList.contains("unit");
         const folded = call.collapsed && (!call.dock || unit);
         const alone = callWin.classList.contains("no-people");
+        const mini = unit && !call.dock && !call.collapsed && !alone;
+        if (mini !== callWin.classList.contains("mini")) {
+            callWin.classList.toggle("mini", mini);
+            showUnitBar(false);
+        }
         unitPeopleBtn.disabled = alone;
         unitChevron.className = `fa-solid ${call.collapsed ? "fa-chevron-up" : "fa-chevron-down"} room-unit-chevron`;
         unitPeopleBtn.title = alone ? "Just you: turn your camera on to see yourself" : call.collapsed ? "Show everyone's video" : "Fold everyone's video away";
@@ -2189,25 +2410,32 @@
         callMoreBtn.hidden = true;
         showCallMore(false);
         callWin.classList.toggle("collapsed", folded);
-        callFoldBtn.hidden = !!call.dock;
-        callFoldBtn.firstChild.className = `fa-solid ${call.collapsed ? "fa-up-right-and-down-left-from-center" : "fa-minus"}`;
-        callFoldBtn.title = call.collapsed ? "Show everyone" : "Minimize";
+        // The dock (computers): everyone's video above its buttons once a camera is on; its
+        // minimize button folds them away (and shows them again)
+        const bottom = call.dock === "bottom";
+        const videos = callWin.classList.contains("has-video");
+        callWin.classList.toggle("expanded", bottom && videos && !call.collapsed);
+        callFoldBtn.hidden = bottom ? !videos : !!call.dock;
+        callFoldBtn.firstChild.className = `fa-solid ${bottom ? (call.collapsed ? "fa-chevron-up" : "fa-chevron-down")
+            : call.collapsed ? "fa-up-right-and-down-left-from-center" : "fa-minus"}`;
+        callFoldBtn.title = bottom ? (call.collapsed ? "Show everyone's video" : "Hide everyone's video") : call.collapsed ? "Show everyone" : "Minimize";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
-        callDockBtn.hidden = !call.dock && !call.dockable;
-        callDockBtn.firstChild.className = `fa-solid ${call.dock ? "fa-up-right-from-square" : "fa-thumbtack"}`;
-        callDockBtn.title = call.dock ? "Float over the video" : "Pin to side";
-        callDockBtn.setAttribute("aria-label", callDockBtn.title);
-        callDockBtn.setAttribute("aria-pressed", String(!!call.dock));
-        // Option to switch video call between left side and top of the video player
-        const canDockSwitch = !!call.dock && !unit && !isUprightPhone();
-        callPosBtn.hidden = !canDockSwitch;
-        if (canDockSwitch) {
-            const isTop = call.dock === "top";
-            callPosBtn.firstChild.className = `fa-solid ${isTop ? "fa-arrow-left" : "fa-arrow-up"}`;
-            callPosBtn.title = isTop ? "Move video call to side panel" : "Move video call to top of player";
-            callPosBtn.setAttribute("aria-label", callPosBtn.title);
-        }
+        callChatBtn.hidden = unit;
+        // Layout (computers): the button shows where it is now; the menu ticks it. Where it can't be
+        // docked (a tablet held upright), only floating is offered.
+        const layout = callLayout();
+        const current = CALL_LAYOUTS.find(item => item.mode === layout);
+        callLayoutBtn.hidden = unit;
+        callLayoutBtn.firstChild.className = `fa-solid ${current.icon}`;
+        callLayoutBtn.title = `Layout: ${current.text.toLowerCase()} (D)`;
+        callLayoutBtn.setAttribute("aria-label", `Call layout: ${current.text}`);
+        layoutOptions.forEach(option => {
+            option.setAttribute("aria-checked", String(option.dataset.mode === layout));
+            option.hidden = (option.dataset.mode === "side" || option.dataset.mode === "top") && !call.dockable && option.dataset.mode !== layout;
+        });
+        callWin.dataset.layout = layout;
+        if (unit) showCallLayout(false);
     };
     // Small pictures show names for a few seconds (when it appears, someone joins or leaves, or
     // it's touched or pointed at), then just the pictures and mics; large ones always show them
@@ -2301,12 +2529,18 @@
             call.dockable = upright || !uprightTouch.matches;
             const wanted = unit ? !call.unitFloat : call.docked;
             let dock = null;
-            if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
-                if (upright) dock = "strip";
-                else if (call.dockPos === "top") dock = "top";
-                else dock = "side";
+            if (!unit) {
+                // Computers: the dock over the bottom of the video, or pinned left of it or above
+                // it (where the page has room for that, and there's someone to show: else the dock)
+                const pinned = (call.dockPos === "side" || call.dockPos === "top") && call.dockable
+                    && !callWin.classList.contains("no-people");
+                if (wanted && !callWin.hidden && !playerPage.hidden) dock = pinned ? call.dockPos : "bottom";
+            } else if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
+                // Phones: a strip at the bottom held upright, a column on the left held sideways
+                dock = upright ? "strip" : "side";
             }
-            callWin.classList.toggle("docked", !!dock);
+            callWin.classList.toggle("bottom", dock === "bottom");
+            callWin.classList.toggle("docked", !!dock && dock !== "bottom");
             callWin.classList.toggle("side", dock === "side");
             callWin.classList.toggle("top", dock === "top");
             callWin.classList.toggle("strip", dock === "strip");
@@ -2325,7 +2559,9 @@
                 if (moving && videoWas && videoWas.width > 0) {
                     glidePlayer(videoWas);
                     const at = callWin.style.transform || "translate(0px, 0px)";
-                    callWin.animate(dock === "side" ? [{ opacity: 0, transform: "translateX(-24px)" }, { opacity: 1, transform: "none" }]
+                    // (the dock keeps its own transform: it rises in with scale and opacity)
+                    if (dock === "bottom") callWin.animate([{ opacity: 0, scale: "0.92" }, { opacity: 1, scale: "1" }], { duration: 260, easing: PANEL_EASE });
+                    else callWin.animate(dock === "side" ? [{ opacity: 0, transform: "translateX(-24px)" }, { opacity: 1, transform: "none" }]
                         : dock === "top" ? [{ opacity: 0, transform: "translateY(-16px)" }, { opacity: 1, transform: "none" }]
                         : dock === "strip" ? [{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }]
                         : [{ opacity: 0, transform: `${at} scale(0.94)` }, { opacity: 1, transform: `${at} scale(1)` }],
@@ -2355,17 +2591,6 @@
         call.unitFloat = !!call.dock;
         // Floated from the bottom of the screen: from where it was, not where it floated before
         if (call.unitFloat) call.pos = null;
-        saveCall();
-        placeDock(true);
-    });
-    callDockBtn.addEventListener("click", () => {
-        if (unitMode()) {
-            call.unitFloat = !!call.dock;
-            if (call.unitFloat) call.pos = null;
-        } else {
-            call.docked = !call.dock;
-            if (call.docked) call.collapsed = false;
-        }
         saveCall();
         placeDock(true);
     });
@@ -2405,7 +2630,7 @@
         if (callWin.classList.contains("unit")) {
             if (!call.dock && !call.dockable) return "It can't be pinned here (fullscreen, held upright)";
             unitFloatBtn.click();
-        } else callDockBtn.click();
+        } else setCallLayout(call.docked ? "float" : call.dockPos);
         return null;
     };
     together.callDocked = () => !callWin.hidden && !!call.dock;
@@ -2557,12 +2782,14 @@
         callWin.classList.toggle("no-people", !people.length);
         unitCount.textContent = String(Math.max(1, people.length));
         const wasHidden = callWin.hidden;
-        callWin.hidden = !people.length && !unit;
+        // (a computer's is the dock all through a room too: your mic, camera and the rest)
+        callWin.hidden = !people.length && !unit && !room;
+        callWin.classList.toggle("has-video", people.some(person => !!person.track));
         // Someone came or went: everyone's name again for a moment
         const who = people.map(person => person.key).join();
         if (people.length && (wasHidden || who !== call.who)) showCallNames();
         call.who = who;
-        callCount.textContent = String(people.length);
+        callCount.textContent = String(Math.max(1, people.length));
         callTitle.title = people.length === 1 ? "Just you in the room" : `${people.length} in the room`;
         callTitle.setAttribute("aria-label", callTitle.title);
         const keep = new Set(people.map(person => person.key));
@@ -5022,10 +5249,8 @@
         nowShareBtn.setAttribute("aria-label", nowShareBtn.title);
         const shareSpan = nowShareBtn.querySelector("span");
         if (shareSpan) shareSpan.remove();
-        nowStopBtn.hidden = !on || !(allowed || mine);
-        nowStopBtn.title = mine && !youtube ? "Stop sharing your video" : "Stop video for everyone";
-        nowStopBtn.setAttribute("aria-label", nowStopBtn.title);
-        updateStopButtons(!nowStopBtn.hidden, nowStopBtn.title);
+        // Stop: only the player's own button, beside play / pause
+        updateStopButtons(on && (allowed || mine), mine && !youtube ? "Stop sharing your video" : "Stop video for everyone");
         // YouTube links: for anyone who may share videos (no Chrome or Edge needed)
         nowYtBtn.hidden = !allowed;
         if (!allowed) closeYouTubeForm();
@@ -5403,7 +5628,7 @@
         return [
             { label: micEnabled ? "Turn the microphone off" : "Turn the microphone on", icon: micEnabled ? "fa-microphone-slash" : "fa-microphone", words: "mic microphone mute unmute talk voice", run: toggleMicrophone },
             { label: camEnabled ? "Turn the camera off" : "Turn the camera on", icon: camEnabled ? "fa-video-slash" : "fa-video", words: "camera cam video webcam face", run: () => camEnabled ? disableCamera() : enableCamera() },
-            !callWin.hidden && { label: call.dock ? "Float the video call window" : "Pin the video call window to the side", icon: call.dock ? "fa-up-right-from-square" : "fa-table-columns", keys: ["D"], words: "pin unpin dock float call video window side panel", run: () => together.toggleCallDock() },
+            !callWin.hidden && { label: call.dock ? "Float the video call window" : "Dock the video call window", icon: call.dock ? "fa-up-right-from-square" : "fa-arrows-down-to-line", keys: ["D"], words: "pin unpin dock float call video window side panel", run: () => together.toggleCallDock() },
             { label: "Invite people: copy the room's link", icon: "fa-link", words: "invite share link copy friends join", run: () => copy(inviteLink(), "Invite link") },
             { label: "Chat", icon: "fa-message", words: "chat message talk write", run: panelTo("chat") },
             { label: "People in the room", icon: "fa-user-group", words: "people members guests who invite qr code", run: panelTo("people") },
@@ -5611,7 +5836,6 @@
     };
 
     nowShareBtn.addEventListener("click", shareVideo);
-    nowStopBtn.addEventListener("click", stopVideo);
     together.stopVideo = stopVideo;
 
     renderQueue();
@@ -6456,6 +6680,11 @@
     };
 
     const closeDialog = () => {
+        // (the form in the side panel: back to Watch together - or home, if that's where it began)
+        if (panelForm) {
+            closePanelForm();
+            if (!openedFromHome || currentFile) return;
+        }
         hideOverlay();
         closeRoomUI();
         if (playerPage.hidden) return;
@@ -6671,7 +6900,74 @@
             return li;
         }));
         renderHomeBar();
+        renderTogetherRooms();
     };
+
+    // ---------- The panel's Watch together tab (not in a room): create a room, join one with its
+    // code or invite link, or open a remembered one again with one click
+    function renderTogetherRooms() {
+        const recent = panel.querySelector(".together-recent");
+        const list = panel.querySelector(".together-rooms");
+        if (!recent || !list || room) return;
+        const rooms = savedRooms().slice(0, 4);
+        recent.hidden = !rooms.length;
+        list.replaceChildren(...rooms.map(item => {
+            const host = item.role === "host";
+            const button = el("button", "together-room");
+            button.type = "button";
+            button.dataset.room = item.code;
+            button.title = host ? "Open this room again with the same code and password" : "Join this room (its host needs to have it open)";
+            const text = el("span", "together-room-text");
+            text.append(el("b", null, roomLabel(item)), el("small", null, `${Signaling.formatCode(item.code)} · ${host ? "you host it" : "you joined"}`));
+            const icon = el("span", `together-room-icon${host ? " host" : ""}`);
+            icon.append(el("i", `fa-solid ${host ? "fa-crown" : "fa-door-open"}`));
+            button.append(icon, text, el("span", "together-room-go", host ? "Open" : "Join"));
+            const li = el("li");
+            li.append(button);
+            return li;
+        }));
+    }
+    panel.querySelector(".together-rooms")?.addEventListener("click", e => {
+        const button = e.target.closest("button[data-room]");
+        const item = button && savedRooms().find(saved => saved.code === button.dataset.room);
+        if (item) reopen(item);
+        else renderTogetherRooms();
+    });
+    const togetherJoin = panel.querySelector(".together-join");
+    if (togetherJoin) {
+        const codeInput = field(togetherJoin, "code");
+        // A code (typed or pasted, any case, with or without dashes), or a whole invite link
+        // (its password comes along too)
+        const readJoin = text => {
+            text = text.trim();
+            const hash = text.includes("#") ? text.split("#")[1] : text.includes("join=") ? text : "";
+            if (hash) {
+                const params = new URLSearchParams(hash);
+                if (params.get("join")) return { code: params.get("join"), password: params.get("pw") || "" };
+            }
+            return { code: text, password: "" };
+        };
+        codeInput.addEventListener("input", () => {
+            const value = codeInput.value;
+            if (/[#=/:]/.test(value)) return;
+            const raw = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+            if (raw.length > 9) return;
+            const formatted = raw.length > 6 ? `${raw.slice(0, 3)}-${raw.slice(3, 6)}-${raw.slice(6)}` : raw.length > 3 ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw;
+            if (formatted !== value) codeInput.value = formatted;
+        });
+        togetherJoin.addEventListener("submit", e => {
+            e.preventDefault();
+            const join = readJoin(codeInput.value);
+            codeInput.value = "";
+            openJoin(join);
+        });
+    }
+    panel.querySelector(".together-other")?.addEventListener("click", () => {
+        const help = document.querySelector("#help-overlay");
+        if (!help) return;
+        mainVideo.pause();
+        help.classList.remove("hidden");
+    });
 
     roomList?.addEventListener("click", e => {
         const button = e.target.closest("button[data-room]");
@@ -6927,6 +7223,16 @@
         if (!room) panel.classList.add("solo-queue");
         showTab("queue");
         showPanel(true);
+    };
+    // Not in a room, the Watch together button: the panel's Watch together tab (pressed again
+    // while it's showing, the panel closes)
+    together.toggleTogether = () => {
+        if (room) return showPanel(true);
+        panel.classList.add("solo-queue");
+        if (!panel.hidden && !panelClosing && activeTab === "together") return showPanel(false);
+        showTab("together");
+        if (panel.hidden || panelClosing) showPanel(true);
+        else renderTogetherRooms();
     };
     // Initialize right panel as solo-queue outside room
     panel.classList.add("solo-queue");

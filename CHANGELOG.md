@@ -4,6 +4,50 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.4] - 2026-11-20
+
+### Video call: a dock on computers, a picture in picture window on phones
+- Computers: the call bar left the bottom of the room's panel. In a room, a rounded dock sits
+  centred over the bottom of the video, just above the player's controls: how many are in the
+  room, mic, camera (red while off), chat (with unread messages and people waiting as a badge),
+  picture in picture, layout, and a red leave button (Just leave / End room)
+- The dock hides with the player's controls and comes back with them (or when pointed at); a
+  camera turned on grows it into a card with everyone's video above its buttons, and with the
+  controls hidden only the videos stay, low on the picture. Its chevron hides or shows the videos
+- Layout menu: Dock on the video (the new default), Pin to the left, Pin above the video, or
+  Floating window; pinned or floating it keeps the dock's round buttons, centred below everyone,
+  and its menus open from them. `D` floats it or puts it back where it was pinned
+- Phones: floating with everyone's video is now a small picture in picture window (bottom right at
+  first, dragged anywhere, pinched to resize); a tap shows its call bar as a pill beside it, kept
+  on the screen, which hides by itself after a few seconds. Minimized it's the bar itself
+- Phones: no title bar; the call bar is the only bar, docked or floating; upright, the strip's
+  videos are centred; sideways, Leave spans the column's last row; buttons press in on touch
+- Phones: fixed the floating window's leave button, whose menu never appeared; room notices show
+  at the top of the screen instead of over the call bar
+
+### Player
+- Autoplay, Queue and Watch together in the top bar are icon-only round buttons (names in their
+  tooltips); in a room, Watch together shows how many are in it as a small badge
+- The Stop button is only beside play / pause: removed the one next to the video's title and the
+  one in the room panel
+- Long video titles use the free space in the top bar instead of being cut short
+- Keyboard shortcuts moved from the control bar into the More menu (`?` still opens them)
+- Volume: just the button until it's pointed at (or focused); then the slider opens out beside it
+
+### Watch together, outside a room
+- The Watch together button opens the side panel on a new Watch together tab (beside Queue)
+  instead of the long how-to popup: Create a room, Join a room with a code or a pasted invite link
+  (its password comes along), your remembered rooms to open again in one click, and a link to the
+  video-call guide. Pressed again, the panel closes. The offline player keeps the guide.
+- In the player, Create a room and Join a room open inside that tab instead of a dialog over the
+  video: a compact form (no intro text; each option one short line, its details in a tooltip),
+  with Back (or Esc) to return. Started from the home page, Back goes home as before
+- The Queue tab's Watch together card stays at the bottom of the tab
+
+### Side panel
+- The hide-panel button moved inside the panel, at the end of the tab row, instead of hanging off
+  its left edge
+
 ## [1.6.3] - 2026-11-20
 
 ### Room & Connectivity Fixes

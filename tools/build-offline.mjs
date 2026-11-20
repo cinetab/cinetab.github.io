@@ -118,7 +118,6 @@ const build = async () => {
     swap(`<title>CineTab - Movie Night Together</title>`, `<title>CineTab Player</title>`);
     swap(`<body>`, `<body class="watching">`);
     swap(`<div class="player-page" hidden>`, `<div class="player-page">`);
-    swap(`        <button class="player-back" title="Back to home"><i class="fa-solid fa-arrow-left"></i></button>\n`, "");
     swap(`<button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>`,
         `<span class="player-home" title="CineTab Player v${version}"><img src="logo.svg" alt="CineTab" width="26" height="26"></span>`);
 

@@ -34,7 +34,6 @@ helpOverlay = document.querySelector("#help-overlay"),
 shareHelpBtn = container.querySelector(".share-help-btn"),
 playerQueueBtn = container.querySelector(".player-queue-btn"),
 playerStopBtn = container.querySelector(".player-stop-btn"),
-playerTopStopBtn = container.querySelector(".player-top-stop"),
 closeHelpBtn = document.querySelector("#close-help-btn"),
 homePage = document.querySelector(".home"),
 playerPage = document.querySelector(".player-page"),
@@ -925,7 +924,6 @@ const updatePlayerStop = () => {
     if (together.updateStop) together.updateStop(hasMedia);
     else {
         if (playerStopBtn) playerStopBtn.hidden = !hasMedia;
-        if (playerTopStopBtn) playerTopStopBtn.hidden = !hasMedia;
     }
 };
 window.updatePlayerStop = updatePlayerStop;
@@ -935,7 +933,6 @@ const onStopClick = () => {
     else unloadPlayer();
 };
 if (playerStopBtn) playerStopBtn.addEventListener("click", onStopClick);
-if (playerTopStopBtn) playerTopStopBtn.addEventListener("click", onStopClick);
 
 const playSaved = async key => {
     const saved = await Converter.openSaved(key);
@@ -970,6 +967,9 @@ renderSavedList();
 // Watch Together Help
 shareHelpBtn.addEventListener("click", () => {
     if (together.openPanel) return together.openPanel();
+    // Not in a room: the side panel's Watch together tab (create or join a room). The offline
+    // player has no rooms: just how to share the tab on a video call.
+    if (together.toggleTogether) return together.toggleTogether();
     mainVideo.pause();
     helpOverlay.classList.remove("hidden");
 });
@@ -1005,9 +1005,12 @@ closeButton(uploadOverlay).addEventListener("click", () => {
     else uploadOverlay.classList.add("hidden");
 });
 
-// Keyboard shortcuts list (button, or ?)
+// Keyboard shortcuts list (the More menu, or ?)
 const toggleShortcuts = () => shortcutsOverlay.classList.toggle("hidden");
-shortcutsBtn.addEventListener("click", toggleShortcuts);
+shortcutsBtn.addEventListener("click", () => {
+    closePopups();
+    toggleShortcuts();
+});
 
 document.addEventListener("keydown", e => {
     if (e.key !== "Escape" || playerPage.hidden) return;

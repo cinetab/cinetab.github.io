@@ -5777,12 +5777,6 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.18);
 }
 
-/* On desktop floating window: mic/cam controls are cleanly accessed on tile hover.
-   On mobile/unit mode and docked views: controls are shown directly in the bar! */
-.room-call:not(.unit):not(.docked) .room-call-bar .room-call-controls {
-  display: none !important;
-}
-
 .room-call-controls {
   display: flex;
   align-items: center;
@@ -6328,10 +6322,6 @@ body > .room-toasts {
 .room-now .room-now-yt:hover,
 .room-now .room-now-yt[aria-expanded="true"] {
   color: #ff4e45;
-}
-
-.room-now .room-now-stop {
-  font-size: 12px;
 }
 
 /* A YouTube playlist: previous / next for everyone */
@@ -9234,64 +9224,9 @@ body > .room-toasts {
 }
 
 /* =================== A PHONE'S FLOATING CALL WINDOW =================== */
-/* Floating, a phone's call window shows participant count, pin, minimize, and leave buttons
-   directly in the bar. Pin and minimize are shown properly, not hidden in a 3-dot menu.
-   Mic and camera switching are accessible on hovering/tapping your own video tile. */
+/* (no title bar or ⋮ on a phone: its call bar below everyone holds every button) */
 .room-call-more,
 .room-call-more-menu {
-  display: none !important;
-}
-
-.room-call.unit:not(.docked) .room-call-bar {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  min-height: 34px;
-  padding: 4px 6px 0 10px;
-  gap: 6px;
-}
-
-/* Show the pin, minimize, and leave buttons properly in the bar */
-.room-call.unit:not(.docked) .room-call-bar > .room-call-btn {
-  display: grid !important;
-  width: 28px;
-  height: 28px;
-  font-size: 12px;
-}
-
-.room-call.unit:not(.docked) .room-call-bar > .room-call-btn[hidden] {
-  display: none !important;
-}
-
-/* Mobile floating call window: quick touch controls right in the bar */
-.room-call.unit:not(.docked) .room-call-bar .room-call-controls {
-  display: flex !important;
-  align-items: center;
-  gap: 4px;
-}
-
-.room-call.unit:not(.docked) .room-call-controls .room-call-btn {
-  display: grid !important;
-  width: 28px;
-  height: 28px;
-  font-size: 11px;
-  border-radius: 50%;
-}
-
-.room-call.unit:not(.docked) .room-call-controls .room-call-btn[hidden] {
-  display: none !important;
-}
-
-.room-call.unit:not(.docked) .room-call-title i {
-  display: inline;
-}
-
-.room-call.unit:not(.docked) .room-call-grid {
-  margin: 4px 6px 0;
-}
-
-/* On floating call window, the bottom bar is hidden to save space (mic/cam on own video hover) */
-.room-call.unit:not(.docked) .room-foot {
   display: none !important;
 }
 
@@ -9305,29 +9240,6 @@ body > .room-toasts {
   right: calc(50% - 5px);
 }
 
-/* Minimized: compact pill showing count, pin, expand, and leave */
-.room-call.unit:not(.docked).collapsed {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px 4px 12px;
-  border-radius: 999px;
-  width: auto;
-}
-
-.room-call.unit:not(.docked).collapsed .room-call-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  min-height: auto;
-}
-
-.room-call-btn.room-call-dock[aria-pressed="true"] {
-  background: rgba(62, 151, 253, 0.35);
-  color: #72b5ff;
-}
 
 /* The ⋮ menu: inside the window's width, below its top (or above it, low on the screen) */
 .room-call.unit:not(.docked) .room-call-more-menu:not([hidden]) {
@@ -9480,260 +9392,21 @@ body > .room-toasts {
   }
 }
 
-/* Docked call panel at top of video player */
-.player-page.call-dock-top {
-  gap: 10px;
-  padding: 10px 14px;
-  box-sizing: border-box;
-}
 
-.player-page.call-dock-top:not(.room-open) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
 
-.player-page.call-dock-top:not(.room-open) > .room-call.docked.top {
-  width: 100%;
-  max-width: calc((100vh - 120px) * 16 / 9);
-  flex-shrink: 0;
-}
-
-.player-page.call-dock-top:not(.room-open) > .container {
-  width: 100%;
-  max-width: calc((100vh - 120px) * 16 / 9);
-}
-
-/* When room panel is open on the right:
-   Two columns: Column 1 has call on top and container below; Column 2 has right panel */
-.player-page.call-dock-top.room-open {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--panel-w, 360px);
-  grid-template-rows: auto minmax(0, 1fr);
-  align-items: center;
-  justify-items: center;
-  gap: 8px 14px;
-  padding: 12px;
-}
-
-.player-page.call-dock-top.room-open > .room-call.docked.top {
-  grid-column: 1;
-  grid-row: 1;
-  width: 100%;
-  max-width: calc((100vh - 120px) * 16 / 9);
-  align-self: end;
-  margin: 0;
-}
-
-.player-page.call-dock-top.room-open > .container {
-  grid-column: 1;
-  grid-row: 2;
-  width: 100%;
-  max-width: calc((100vh - 120px) * 16 / 9);
-  align-self: start;
-}
-
-.player-page.call-dock-top.room-open > .room-panel {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  height: 100%;
-  max-height: 100%;
-  align-self: stretch;
-  margin: 0;
-}
-
-.room-call.docked.top {
-  order: -1;
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center;
-  background: #17171c;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 4px 8px;
-  gap: 8px;
-  height: 68px;
-  min-height: 54px;
-  max-height: 76px;
-  box-sizing: border-box;
-  overflow: hidden;
-  transition: background 0.3s ease, border-color 0.3s ease;
-}
-
-.room-call.docked.top .room-call-bar {
-  display: flex !important;
-  flex-direction: row;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 4px;
-  padding: 0 4px;
-}
-
-.room-call.docked.top .room-call-controls {
-  display: flex !important;
-  align-items: center;
-  gap: 4px;
-}
-
-.room-call.docked.top .room-call-controls .room-call-btn {
-  display: grid !important;
-  width: 28px;
-  height: 28px;
-  font-size: 11px;
-  border-radius: 50%;
-}
-
-.room-call.docked.top .room-call-controls .room-call-btn[hidden] {
+/* Out of a room the panel has two tabs: the Queue, and Watch together (create or join a room) */
+.room-panel.solo-queue .room-tab-btn:not([data-tab="queue"]):not([data-tab="together"]) {
   display: none !important;
 }
 
-/* Flip camera button (Google Meet style) */
-.room-flip-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.room-foot .room-flip-btn {
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  justify-content: center;
-  font-size: 14px;
-  border-radius: 50%;
-}
-
-.room-foot .room-flip-btn span {
-  display: none;
-}
-
-.room-call.docked.top .room-call-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #fff;
-  margin-right: 2px;
-}
-
-.room-call.docked.top .room-call-title i {
-  color: #3e97fd;
-}
-
-.room-call.docked.top .room-call-grid {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 2px;
-  margin: 0;
-  max-height: none;
-  scrollbar-width: thin;
-}
-
-.room-call.docked.top .room-call-tile {
-  flex: 0 0 auto;
-  width: 92px;
-  height: 58px;
-  aspect-ratio: 16 / 10;
-  border-radius: 6px;
-  overflow: hidden;
-  position: relative;
-  background: #0f0f12;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-}
-
-.room-call.docked.top .room-call-tile video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
-}
-
-.room-call.docked.top .room-call-tile .room-call-name {
-  position: absolute;
-  bottom: 2px;
-  left: 3px;
-  right: 3px;
-  font-size: 10px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.65);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.room-call.docked.top .room-call-tile .room-tile-hover-controls {
-  gap: 4px;
-}
-
-.room-call.docked.top .room-call-tile .room-tile-hover-btn {
-  width: 24px;
-  height: 24px;
-  font-size: 10px;
-}
-
-.room-call.docked.top.collapsed {
-  width: auto !important;
-  max-width: fit-content;
-  height: 36px;
-  min-height: auto;
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-
-.room-call.docked.top.collapsed .room-call-grid {
-  display: none !important;
-}
-
-/* Call dock position switch button & docked bar controls */
-.room-call-btn.room-call-pos {
-  display: grid;
-  place-items: center;
-  color: #c4c4d0;
-  transition: all 0.2s ease;
-}
-
-.room-call-btn.room-call-pos:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.room-call.unit.docked.side .room-call-bar {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px 0;
-  gap: 4px;
-}
-
-.room-call.unit.docked .room-call-bar > .room-call-btn {
-  display: grid !important;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  font-size: 12px;
-}
-
-.room-call.unit.docked .room-call-bar > .room-call-btn[hidden] {
-  display: none !important;
-}
-
-/* Solo Queue panel (active even when not connected to a room) */
-.room-panel.solo-queue .room-tab-btn:not([data-tab="queue"]) {
-  display: none !important;
-}
-
-.room-panel.solo-queue .room-tab-btn[data-tab="queue"] {
+.room-panel.solo-queue .room-tab-btn:is([data-tab="queue"], [data-tab="together"]) {
   border-bottom: none;
-  pointer-events: none;
+}
+
+/* In a room, there's no Watch together tab */
+.room-panel:not(.solo-queue) .room-tab-btn[data-tab="together"],
+.room-panel:not(.solo-queue) .room-tab-together {
+  display: none !important;
 }
 
 .room-panel.solo-queue .room-tabbar {
@@ -9827,30 +9500,6 @@ body > .room-toasts {
   transform: scale(1.08);
 }
 
-.player-top-stop {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin-left: 6px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 90, 82, 0.4);
-  background: rgba(255, 90, 82, 0.15);
-  color: #ff6b6b;
-  cursor: pointer;
-  font-size: 10px;
-  transition: all 0.2s ease;
-}
-
-.player-top-stop:hover {
-  background: #ff5a52;
-  color: #fff;
-  border-color: #ff5a52;
-  transform: scale(1.08);
-}
-
-.player-top-stop[hidden],
 .player-stop-btn[hidden] {
   display: none !important;
 }
@@ -9908,3 +9557,1603 @@ body > .room-toasts {
 }
 
 /* =================== /WATCH TOGETHER ROOMS =================== */
+
+/* =================== PLAYER TOP BAR: ROUND ICON BUTTONS, NO WORDS =================== */
+/* Search, Queue and Watch together are the same round glass buttons (their names are in their
+   tooltips and aria-labels). In a room, Watch together shows how many are in it as a small number
+   at its corner; unread messages / people waiting are the red badge at the other corner. */
+.top-bar {
+  --tb-btn: 38px;
+}
+
+.top-bar :is(.player-search-btn, .player-queue-btn, .share-help-btn) {
+  position: relative;
+  width: var(--tb-btn);
+  height: var(--tb-btn);
+  padding: 0;
+  gap: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.top-bar :is(.player-search-btn, .player-queue-btn, .share-help-btn):hover {
+  border-color: #3e97fd;
+  background: #3e97fd;
+  color: #fff;
+}
+
+.top-bar :is(.player-search-btn, .player-queue-btn, .share-help-btn):active {
+  transform: scale(0.94);
+}
+
+.top-bar :is(.player-search-btn, .player-queue-btn, .share-help-btn):focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+/* Open (the queue panel / the room's panel): blue, like a pressed button */
+.player-page.queue-open .top-bar .player-queue-btn,
+.player-page.room-open:not(.solo-panel) .top-bar .share-help-btn,
+.player-page.together-open .top-bar .share-help-btn {
+  color: #9ccaff;
+  border-color: rgba(62, 151, 253, 0.65);
+  background: rgba(62, 151, 253, 0.3);
+}
+
+/* In a room: how many are in it */
+.top-bar .share-help-btn .share-help-count {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #111116;
+  border-radius: 9px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #3e97fd;
+}
+
+.top-bar .share-help-btn .share-help-count[hidden] {
+  display: none;
+}
+
+.top-bar .share-help-btn .room-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid #111116;
+  font-size: 9.5px;
+}
+
+.top-bar .share-help-btn .room-badge[hidden] {
+  display: none;
+}
+
+/* The title takes the bar's free space (it was capped at 80% of a box that shrank to fit it) */
+.top-bar .video-title-container {
+  flex: 1 1 auto;
+}
+
+.top-bar .video-title {
+  min-width: 0;
+  max-width: none;
+}
+
+/* Autoplay: just the switch (its play / pause knob says what it does; the tooltip says it too) */
+.yt-autoplay {
+  padding: 8px 6px;
+}
+
+@media screen and (max-width: 600px), (pointer: coarse) and (max-height: 500px) {
+  .top-bar {
+    --tb-btn: 34px;
+  }
+  .top-bar :is(.player-search-btn, .player-queue-btn, .share-help-btn) {
+    font-size: 13px;
+  }
+}
+
+/* =================== CALL WINDOW: SHARED =================== */
+.room-call-btn[hidden],
+.room-mic-btn[hidden] {
+  display: none !important;
+}
+
+.room-foot .room-flip-btn {
+  border-radius: 50%;
+}
+
+/* =================== CALL WINDOW ON A COMPUTER (room.js: not .unit) =================== */
+/* One title bar in every layout: how many are in the room, your mic and camera (red while off, as
+   in a meeting), then the window's own buttons: picture in picture, Layout, minimize and leave.
+   Layout opens a small menu: a floating window, a sidebar left of the video, or a strip above it. */
+.room-call:not(.unit) .room-call-bar {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 36px;
+  padding: 5px 0;
+}
+
+.room-call:not(.unit) .room-call-title {
+  flex: 0 0 auto;
+  padding: 0 6px 0 2px;
+}
+
+.room-call:not(.unit) .room-call-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 11.5px;
+}
+
+.room-call-winbtns {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* Mic or camera off: red */
+.room-call-controls .room-call-media:not(.active):not(.room-call-flip-btn) {
+  color: #fff;
+  background: #ea4335;
+}
+
+.room-call-controls .room-call-media:not(.active):not(.room-call-flip-btn):hover {
+  background: #d93025;
+}
+
+/* The Layout button while its menu is open */
+.room-call-btn.room-call-layout[aria-expanded="true"] {
+  color: #fff;
+  background: #3e97fd;
+}
+
+/* Minimized (floating): a pill with the count, your mic and camera, show-everyone and leave */
+.room-call.collapsed:not(.unit) :is(.room-call-pip, .room-call-layout) {
+  display: none !important;
+}
+
+/* Its menus: Layout, and Leave's Just leave / End room. Below the title bar, at its right; above
+   the window when it's low on the screen (.up) */
+.room-call-menu,
+.room-call:not(.unit) .room-call-leave-menu {
+  position: absolute;
+  top: 40px;
+  right: 6px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(22, 22, 28, 0.97);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  animation: roomLeavePopIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+  cursor: default;
+}
+
+.room-call-menu {
+  min-width: 210px;
+}
+
+.room-call-menu.up {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom right;
+}
+
+.room-call-menu[hidden],
+.room-call-leave-menu[hidden] {
+  display: none !important;
+}
+
+.room-call-menu-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: left;
+  color: #d6d6e2;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-call-menu-opt:hover,
+.room-call-menu-opt:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.room-call-menu-opt[hidden] {
+  display: none;
+}
+
+.room-call-menu-opt > i:first-child {
+  width: 16px;
+  text-align: center;
+  color: #9a9aab;
+}
+
+.room-call-menu-check {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+  color: #3e97fd;
+  visibility: hidden;
+}
+
+.room-call-menu-opt[aria-checked="true"] {
+  color: #fff;
+}
+
+.room-call-menu-opt[aria-checked="true"] > i:first-child {
+  color: #3e97fd;
+}
+
+.room-call-menu-opt[aria-checked="true"] .room-call-menu-check {
+  visibility: visible;
+}
+
+/* Sidebar: wide enough for the whole title bar on one line */
+.room-call.docked.side:not(.unit) {
+  --dock-w: 220px;
+}
+
+/* --- Strip above the video: the title bar, then everyone side by side (scrolling across when
+   there are many). The strip and the video are one column, the same width, centred; the room's
+   panel (when open) is a second column beside both. The video keeps 16:9 in what's left. --- */
+.player-page.call-dock-top {
+  --strip-tile-h: 92px;
+  --strip-h: calc(var(--strip-tile-h) + 52px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  justify-items: center;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+
+@media (min-height: 1000px) {
+  .player-page.call-dock-top {
+    --strip-tile-h: 120px;
+  }
+}
+
+.player-page.call-dock-top.room-open {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 14px;
+}
+
+.player-page.call-dock-top > .room-call.docked.top,
+.player-page.call-dock-top > .container {
+  grid-column: 1;
+  width: 100%;
+  max-width: calc((100vh - var(--strip-h) - 34px) * 16 / 9);
+  max-width: calc((100dvh - var(--strip-h) - 34px) * 16 / 9);
+}
+
+.player-page.call-dock-top > .room-call.docked.top {
+  grid-row: 1;
+  align-self: end;
+}
+
+.player-page.call-dock-top > .container {
+  grid-row: 2;
+  align-self: start;
+}
+
+.player-page.call-dock-top > .container.fullscreen {
+  height: auto;
+  border-radius: 12px;
+}
+
+.player-page.call-dock-top > .room-panel {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  align-self: stretch;
+  height: auto;
+  max-height: 100%;
+}
+
+.room-call.docked.top {
+  --tile: calc(var(--strip-tile-h) * 4 / 3);
+  order: -1;
+  padding: 0 8px 8px;
+  border-radius: 12px;
+}
+
+.room-call.docked.top .room-call-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: safe center;
+  gap: 8px;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+
+.room-call.docked.top .room-call-tile {
+  flex: 0 0 auto;
+  height: var(--strip-tile-h);
+  aspect-ratio: 4 / 3;
+  scroll-snap-align: start;
+}
+
+/* =================== CALL WINDOW ON A PHONE (room.js: .unit) =================== */
+/* No title bar: the call bar below everyone is the only bar, the same docked or floating - how
+   many (folds everyone's video away), mic, camera, flip, dock / float, and leave as a red round
+   button (Just leave / End room above it). Your avatar and name are in People. */
+.room-call.unit .room-call-bar {
+  display: none !important;
+}
+
+.room-call.unit .room-foot {
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.room-call.unit .room-me {
+  display: none;
+}
+
+.room-call.unit .room-unit-people {
+  order: -1;
+  margin-left: 0;
+  margin-right: 4px;
+}
+
+.room-call.unit .room-leave-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+}
+
+.room-call.unit .room-leave-btn span {
+  display: none;
+}
+
+/* Floating: smaller buttons, so the window stays small */
+.room-call.unit:not(.docked) .room-foot {
+  gap: 6px;
+  padding: 7px 8px;
+}
+
+.room-call.unit:not(.docked) .room-foot :is(.room-mic-btn, .room-leave-btn) {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.room-call.unit:not(.docked) .room-unit-people {
+  height: 34px;
+  padding: 0 10px;
+  margin-right: 2px;
+}
+
+.room-call.unit:not(.docked) .room-call-grid {
+  margin: 7px 7px 0;
+}
+
+/* Held sideways, docked: the column's buttons in a grid below everyone (the people button spans
+   the top row) */
+.room-call.unit.side .room-foot {
+  justify-content: initial;
+}
+
+.room-call.unit.side .room-unit-people {
+  margin-right: 0;
+}
+
+.room-call.unit.side .room-leave-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+
+/* Narrow phones held upright: a little tighter */
+@media (max-width: 380px) {
+  .room-call.unit.docked.strip .room-foot {
+    gap: 6px;
+    padding: 8px 6px;
+  }
+  .room-call.unit.docked.strip .room-foot :is(.room-mic-btn, .room-leave-btn) {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Phones: room notices at the top, clear of the call bar at the bottom */
+@media (pointer: coarse) and (max-width: 900px), screen and (max-width: 600px) {
+  /* (as specific as the placements above it, which it replaces on phones) */
+  :is(body, .player-page, .player-page.room-open) > .room-toasts {
+    top: max(12px, env(safe-area-inset-top));
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* Out of a room, with the queue open: the Watch together button isn't pressed (the older room-open
+   rule would show it so) */
+.player-page.room-open.solo-panel:not(.together-open) .top-bar .share-help-btn:not(:hover) {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* =================== CONTROL BAR: VOLUME AND MORE =================== */
+/* Volume: just the button; pointed at (or focused, e.g. tapped), the slider opens out beside it.
+   (The group has no box of its own, so every layout places the button and slider as before;
+   :hover and :focus-within still follow the page's structure.) */
+.options .volume-group {
+  display: contents;
+}
+
+.options .volume-group input.volume-slider {
+  width: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), margin 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease;
+}
+
+.options .volume-group:is(:hover, :focus-within) input.volume-slider,
+.options .volume-group input.volume-slider:active {
+  width: 72px;
+  margin: 0 8px 0 2px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options .volume-group input.volume-slider {
+    transition: none;
+  }
+}
+
+/* More menu: Keyboard shortcuts as its last row (not a button of its own in the control bar) */
+.options .more-options button.more-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: calc(100% - 12px);
+  height: auto;
+  min-height: 38px;
+  margin: 8px 6px 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: #ddd;
+  background: transparent;
+}
+
+.options .more-options button.more-row::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -5px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.options .more-options button.more-row:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  transform: none;
+}
+
+.options .more-options button.more-row > i {
+  width: 16px;
+  font-size: 14px;
+  text-align: center;
+  color: #9a9aab;
+}
+
+.options .more-options button.more-row kbd {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 11px;
+  text-align: center;
+  color: #b8b8c6;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* =================== ROOM PANEL: THE WATCH TOGETHER TAB (not in a room) =================== */
+/* What a room is in a line; Create a room as the main action; Join with a code or invite link;
+   your remembered rooms, one click to open again; and, last, the video-call way (the guide) */
+.room-tab.room-tab-together {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 14px 14px;
+}
+
+.room-tab.room-tab-together[hidden] {
+  display: none;
+}
+
+.together-hero {
+  padding: 12px 6px 2px;
+  text-align: center;
+}
+
+.together-hero-icon {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 10px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 17px;
+  font-size: 21px;
+  color: #fff;
+  background: linear-gradient(135deg, #3e97fd, #7b5cff);
+  box-shadow: 0 8px 24px rgba(62, 151, 253, 0.32);
+}
+
+.together-hero h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.together-hero p {
+  margin: 0 auto;
+  max-width: 290px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #9a9aab;
+}
+
+/* Create a room */
+.together-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(62, 151, 253, 0.45);
+  border-radius: 14px;
+  font: inherit;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(62, 151, 253, 0.2), rgba(123, 92, 255, 0.16));
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.together-action:hover {
+  border-color: #3e97fd;
+  background: linear-gradient(135deg, rgba(62, 151, 253, 0.32), rgba(123, 92, 255, 0.26));
+}
+
+.together-action:active {
+  transform: scale(0.99);
+}
+
+.together-action:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+.together-action-icon {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 15px;
+  color: #fff;
+  background: #3e97fd;
+}
+
+.together-action-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.together-action-text b {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.together-action-text small {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #b9c3d6;
+}
+
+.together-action-go {
+  font-size: 12px;
+  color: #9ccaff;
+}
+
+/* Join a room */
+.together-join {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.together-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.together-join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.together-join-row input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.25);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.together-join-row input::placeholder {
+  letter-spacing: normal;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.together-join-row input:focus {
+  border-color: #3e97fd;
+  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.2);
+}
+
+.together-join-btn {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.together-join-btn:hover,
+.together-join-btn:focus-visible {
+  background: #3e97fd;
+  outline: none;
+}
+
+.together-hint {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #8f8f9e;
+}
+
+/* Your rooms (remembered in this browser) */
+.together-recent .room-section-title {
+  margin-bottom: 8px;
+}
+
+.together-rooms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.together-room {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  font: inherit;
+  text-align: left;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.together-room:hover,
+.together-room:focus-visible {
+  border-color: rgba(62, 151, 253, 0.5);
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+
+.together-room-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #c9c9d6;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.together-room-icon.host {
+  color: #f5c451;
+}
+
+.together-room-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.together-room-text b,
+.together-room-text small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.together-room-text b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.together-room-text small {
+  font-size: 11px;
+  color: #8f8f9e;
+}
+
+.together-room-go {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3e97fd;
+}
+
+/* The other way: share this tab on a video call (the guide) */
+.together-other {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #9a9aab;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.together-other:hover,
+.together-other:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+/* =================== CALL DOCK ON A COMPUTER (room.js: .room-call.bottom) =================== */
+/* In a room, the call bar isn't at the foot of the room's panel any more: it's this dock, a
+   rounded bar centred over the bottom of the video - how many are in the room, your mic, camera
+   (and camera switch), then chat, picture in picture, layout, hide videos and leave. It rises just
+   above the player's controls while they show and hides with them. A camera turned on grows it
+   into a card with everyone's video above its buttons; with the controls hidden, only the videos
+   stay, low on the picture. Layout pins it left of the video or above it, or floats it. */
+.room-panel > .room-foot,
+.player-page > .room-foot {
+  display: none !important;
+}
+
+.room-call.bottom:not(.unit) {
+  --dock-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  left: var(--dock-cx, 50%);
+  top: auto;
+  bottom: var(--dock-b, 16px);
+  z-index: 62;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--dock-maxw, 90vw);
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  background: rgba(18, 18, 24, 0.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: default;
+  transform: translate(-50%, calc(-1 * var(--dock-lift, 0px)));
+  transition: transform 0.32s var(--dock-ease), left 0.3s var(--dock-ease), opacity 0.22s ease,
+    border-radius 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.room-call.bottom.expanded:not(.unit) {
+  border-radius: 22px;
+}
+
+/* Asleep (the player's controls hidden): just the buttons - out of sight; everyone's video stays */
+.room-call.bottom.asleep:not(.expanded):not(.unit) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 12px) scale(0.96);
+}
+
+.room-call.bottom.asleep.expanded:not(.unit) {
+  border-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.room-call.bottom .room-call-edge,
+.room-call.bottom .room-call-dock-edge {
+  display: none;
+}
+
+/* Its buttons, below the videos */
+.room-call.bottom:not(.unit) .room-call-bar {
+  order: 2;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 6px;
+  min-height: 0;
+  max-height: 64px;
+  padding: 0;
+  overflow: visible;
+  transition: max-height 0.3s var(--dock-ease), opacity 0.2s ease;
+}
+
+.room-call.bottom.asleep.expanded:not(.unit) .room-call-bar {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.room-call.bottom:not(.unit) .room-call-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  font-size: 15px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.room-call.bottom:not(.unit) .room-call-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.room-call.bottom:not(.unit) .room-call-btn:active {
+  transform: scale(0.92);
+}
+
+.room-call.bottom:not(.unit) .room-call-btn:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+.room-call.bottom:not(.unit) .room-call-title {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 12px 0 13px;
+  gap: 7px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.room-call.bottom:not(.unit) .room-call-title i {
+  font-size: 12px;
+}
+
+.room-call.bottom:not(.unit) .room-call-title b {
+  font-size: 14px;
+}
+
+.room-call.bottom:not(.unit) .room-call-controls {
+  gap: 6px;
+}
+
+.room-call.bottom:not(.unit) .room-call-winbtns {
+  gap: 6px;
+  margin-left: 2px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Leave: red, a little wider */
+.room-call.bottom:not(.unit) .room-call-leave {
+  width: 54px;
+  border-radius: 20px;
+  background: #ea4335;
+}
+
+.room-call.bottom:not(.unit) .room-call-leave:hover,
+.room-call.bottom:not(.unit) .room-call-leave[aria-expanded="true"] {
+  background: #d93025;
+}
+
+/* Everyone's video: side by side above the buttons (scrolling across when there are many) */
+.room-call.bottom:not(.unit) .room-call-grid {
+  display: none;
+}
+
+.room-call.bottom.expanded:not(.unit) .room-call-grid {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  max-width: 100%;
+  max-height: none;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  animation: dockVideosIn 0.3s var(--dock-ease);
+}
+
+.room-call.bottom.asleep.expanded:not(.unit) .room-call-grid {
+  margin-bottom: 0;
+}
+
+.room-call.bottom.expanded:not(.unit) .room-call-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.room-call.bottom.expanded:not(.unit) .room-call-tile {
+  flex: 0 0 auto;
+  width: auto;
+  height: var(--dock-tile-h, 104px);
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes dockVideosIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A player menu open (speed, more): the dock steps aside so it isn't in the way */
+.player-page:has(.container .show:is(.speed-options, .more-options)) .room-call.bottom:not(.unit):not(.expanded) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Chat: the room's panel, with unread messages and people waiting as a red number */
+.room-call-chat {
+  position: relative;
+}
+
+.player-page.room-open .room-call-btn.room-call-chat {
+  color: #9ccaff;
+  background: rgba(62, 151, 253, 0.3);
+}
+
+.room-call-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #16161c;
+  border-radius: 9px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #ea4335;
+}
+
+.room-call-badge[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-call.bottom:not(.unit),
+  .room-call.bottom:not(.unit) .room-call-bar {
+    transition: opacity 0.15s ease;
+  }
+  .room-call.bottom.expanded:not(.unit) .room-call-grid {
+    animation: none;
+  }
+}
+
+/* Pinned (left of the video, above it) or floating, on a computer: the dock's buttons, the same
+   round ones, centred below everyone (on two rows where it's narrow) */
+.room-call:not(.unit):not(.bottom) .room-call-bar {
+  order: 2;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px 0 2px;
+}
+
+.room-call:not(.unit):not(.bottom):not(.collapsed) {
+  padding-top: 6px;
+}
+
+.room-call:not(.unit):not(.bottom) .room-call-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.room-call:not(.unit):not(.bottom) .room-call-btn:active {
+  transform: scale(0.92);
+}
+
+.room-call:not(.unit):not(.bottom) .room-call-title {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.room-call:not(.unit):not(.bottom) .room-call-winbtns {
+  gap: 6px;
+  margin-left: 0;
+}
+
+.room-call:not(.unit):not(.bottom) .room-call-leave {
+  width: 44px;
+  border-radius: 16px;
+  background: #ea4335;
+}
+
+.room-call:not(.unit):not(.bottom) .room-call-leave:hover {
+  background: #d93025;
+}
+
+/* (minimized, floating: one row in its pill) */
+.room-call.collapsed:not(.unit) .room-call-bar {
+  flex-wrap: nowrap;
+  padding: 4px 0;
+}
+
+/* Pinned left: everyone at the top of the column, the buttons at its foot */
+.room-call.docked.side:not(.unit) .room-call-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+}
+
+/* Their menus (layout; leave or end) open from the buttons: upwards, or downwards pinned above the
+   video. (Phones use the call bar's own.) */
+.room-call-winbtns {
+  position: relative;
+}
+
+.room-call:not(.unit) .room-call-menu,
+.room-call:not(.unit) .room-call-leave-menu,
+.room-call:not(.unit) .room-call-menu.up {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 10px);
+  transform-origin: bottom right;
+}
+
+.room-call.top:not(.unit) .room-call-menu,
+.room-call.top:not(.unit) .room-call-leave-menu {
+  top: calc(100% + 10px);
+  bottom: auto;
+  transform-origin: top right;
+}
+
+.room-call.unit .room-call-winbtns .room-call-leave-menu {
+  display: none !important;
+}
+
+/* Pinned left: room notices clear of the column */
+@media (pointer: fine), (min-width: 901px) {
+  .player-page.call-dock-side > .room-toasts {
+    left: 256px;
+  }
+}
+
+/* =================== PHONES: THE CALL, REDESIGNED FOR TOUCH =================== */
+/* Floating, with everyone's video: a small picture in picture window (the bottom right corner at
+   first; dragged anywhere, pinched larger or smaller) - just the videos. A tap shows its call bar
+   as a pill just below it (above it when it's low on the screen), which goes again by itself. */
+.room-call.unit.mini {
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(18, 18, 24, 0.6);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.room-call.unit.mini.bar-open {
+  border-color: rgba(62, 151, 253, 0.55);
+}
+
+.room-call.unit.mini .room-call-grid {
+  margin: 0;
+}
+
+.room-call.unit.mini .room-call-tile {
+  border-radius: 14px;
+}
+
+.room-call.unit.mini .room-call-name {
+  max-width: calc(100% - 12px);
+  font-size: 10.5px;
+}
+
+.room-call.unit.mini > .room-foot {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(18, 18, 24, 0.92);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(calc(-50% + var(--bar-dx, 0px)), -8px) scale(0.94);
+  transform-origin: top center;
+  transition: opacity 0.18s ease, transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.room-call.unit.mini.bar-up > .room-foot {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translate(calc(-50% + var(--bar-dx, 0px)), 8px) scale(0.94);
+  transform-origin: bottom center;
+}
+
+.room-call.unit.mini.bar-open > .room-foot {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(calc(-50% + var(--bar-dx, 0px)), 0);
+}
+
+.room-call.unit.mini > .room-foot :is(.room-mic-btn, .room-leave-btn) {
+  width: 38px;
+  height: 38px;
+  font-size: 14px;
+}
+
+.room-call.unit.mini > .room-foot .room-unit-people {
+  height: 38px;
+}
+
+/* Upright, docked: everyone's video centred in the strip */
+.room-call.unit.docked.strip .room-call-grid {
+  justify-content: safe center;
+}
+
+/* Sideways, docked: Leave across the column's last row, a red pill */
+.room-call.unit.docked.side:not(.collapsed):not(.no-people) .room-leave-wrap {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+.room-call.unit.docked.side:not(.collapsed):not(.no-people) .room-leave-btn {
+  width: 100%;
+  border-radius: 999px;
+}
+
+/* Buttons in the phone's call bar: a quick press-in */
+.room-call.unit .room-foot :is(button) {
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.room-call.unit .room-foot :is(button):active {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-call.unit.mini > .room-foot {
+    transition: opacity 0.12s ease;
+  }
+}
+
+/* The small window's pill: Leave's menu opens above it at its right end (inside the screen) */
+.room-call.unit.mini .room-leave-popover {
+  right: -6px;
+  translate: none;
+  transform-origin: bottom right;
+}
+
+.room-call.unit.mini .room-leave-popover::after {
+  right: 20px;
+}
+
+/* =================== SIDE PANEL: HIDE BUTTON, QUEUE CARD, CREATE / JOIN IN THE PANEL =================== */
+/* Hide the panel: a quiet button at the end of the tabs, inside the panel (not hanging off its edge) */
+.room-tabbar > .room-hide-btn {
+  position: static;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #9a9aab;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.room-tabbar > .room-hide-btn:hover,
+.room-tabbar > .room-hide-btn:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.room-tabbar > .room-tabs {
+  margin: 0;
+}
+
+/* The options' checkboxes: a short label, the details on a line below it */
+.room-check > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-check > span small {
+  font-size: 11.5px;
+  color: #8f8f9e;
+}
+
+/* Out of a room, the queue's Watch together card sits at the bottom of the tab */
+.room-panel.solo-queue .room-tab-queue:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-panel.solo-queue .room-tab-queue > * {
+  flex-shrink: 0;
+}
+
+.room-panel.solo-queue .room-tab-queue > .queue-solo-card {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+}
+
+.room-panel.solo-queue .room-tab-queue > .queue-solo-card:not(:first-child) {
+  margin-top: auto;
+}
+
+.room-panel.solo-queue .room-tab-queue > .room-queue-more {
+  margin-bottom: 14px;
+}
+
+.queue-solo-card {
+  justify-content: space-between;
+  background: rgba(30, 40, 60, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.queue-solo-card p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.queue-solo-card .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Creating or joining from the player: the form in the Watch together tab, compact */
+.room-tab-together.form-open > :not(.together-form) {
+  display: none !important;
+}
+
+.together-form[hidden] {
+  display: none;
+}
+
+.together-form-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.together-form-head b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.together-back {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.room-view.in-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  animation: togetherFormIn 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.room-view.in-panel[hidden] {
+  display: none;
+}
+
+@keyframes togetherFormIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* (no big icon, heading or intro: the panel's own heading says what it is) */
+.room-view.in-panel > i:first-child,
+.room-view.in-panel > h2,
+.room-view.in-panel > p:not(.room-error):not(.privacy-note) {
+  display: none;
+}
+
+.room-view.in-panel .room-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b8b8c6;
+}
+
+.room-view.in-panel .room-field small {
+  font-weight: 400;
+  color: #8f8f9e;
+}
+
+.room-view.in-panel .room-field input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.25);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.room-view.in-panel .room-field input:focus {
+  border-color: #3e97fd;
+  box-shadow: 0 0 0 3px rgba(62, 151, 253, 0.2);
+}
+
+.room-view.in-panel .room-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-view.in-panel .room-input-row input {
+  flex: 1;
+}
+
+.room-view.in-panel .room-avatar-btn,
+.room-view.in-panel .room-input-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  color: #c9c9d6;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.room-view.in-panel .room-avatar-btn {
+  position: relative;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  transition: transform 0.15s ease;
+}
+
+.room-view.in-panel .room-avatar-btn:hover {
+  transform: scale(1.06);
+}
+
+.room-view.in-panel .room-avatar-grid {
+  margin: 0;
+}
+
+/* Options: one short line each (the details are in their tooltips) */
+.room-view.in-panel .room-check {
+  margin: 0;
+  font-size: 12.5px;
+  color: #d0d0dc;
+}
+
+.room-view.in-panel .room-check > span small {
+  display: none;
+}
+
+.room-view.in-panel .room-error {
+  margin: 0;
+  font-size: 12px;
+}
+
+.room-view.in-panel .convert-actions {
+  display: flex;
+  margin: 2px 0 0;
+}
+
+.room-view.in-panel .convert-actions .room-cancel {
+  display: none;
+}
+
+.room-view.in-panel .convert-actions button[type="submit"] {
+  flex: 1;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #3e97fd, #6a6cff);
+  box-shadow: 0 6px 18px rgba(62, 151, 253, 0.3);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.room-view.in-panel .convert-actions button[type="submit"]:hover {
+  filter: brightness(1.08);
+}
+
+.room-view.in-panel .convert-actions button[type="submit"]:active {
+  transform: scale(0.98);
+}
+
+.room-view.in-panel .privacy-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  color: #8f8f9e;
+}
+
+.room-view.in-panel .room-check-network {
+  align-self: center;
+  margin: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  color: #8fb8ff;
+  background: transparent;
+  cursor: pointer;
+}
+
+.room-view.in-panel .room-check-network:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-view.in-panel {
+    animation: none;
+  }
+}
