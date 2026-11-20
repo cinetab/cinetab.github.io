@@ -398,19 +398,26 @@
     const toastPhone = matchMedia("(pointer: coarse) and (max-width: 900px), screen and (max-width: 600px)");
     const placeToastBox = () => {
         const inPlayer = toasts.parentNode === playerPage && !playerPage.hidden;
-        const box = inPlayer ? container.getBoundingClientRect() : null;
+        // (where the video is laid out, not where it is mid-way through gliding there; the player
+        // page fills the screen, so its offsets are the screen's)
+        const box = inPlayer ? { left: container.offsetLeft, top: container.offsetTop, width: container.offsetWidth,
+            height: container.offsetHeight, bottom: container.offsetTop + container.offsetHeight } : null;
         toasts.classList.toggle("placed", !!(box && box.width));
         if (!box || !box.width) return;
         const style = toasts.style;
         if (toastPhone.matches) {
             const bar = container.querySelector(".top-bar");
-            const barBox = bar && bar.getBoundingClientRect();
-            const below = barBox && barBox.height && barBox.bottom <= box.top + box.height / 2 ? barBox.bottom : box.top;
+            const barBottom = bar && bar.offsetHeight ? box.top + bar.offsetTop + bar.offsetHeight : 0;
+            const below = barBottom && barBottom <= box.top + box.height / 2 ? barBottom : box.top;
             style.setProperty("--toast-x", `${Math.round(box.left + box.width / 2)}px`);
             style.setProperty("--toast-y", `${Math.round(Math.max(below + 6, 8))}px`);
             style.setProperty("--toast-w", `${Math.round(Math.max(200, box.width - 24))}px`);
         } else {
+            // (the video's bottom left, just above its controls)
+            const controls = container.querySelector(".wrapper");
+            const lift = controls ? controls.offsetHeight : 64;
             style.setProperty("--toast-left", `${Math.round(Math.max(24, box.left + 12))}px`);
+            style.setProperty("--toast-bottom", `${Math.round(Math.max(24, innerHeight - box.bottom + lift + 8))}px`);
         }
     };
     window.addEventListener("resize", () => toasts.parentNode === playerPage && placeToastBox());
@@ -2471,7 +2478,9 @@
         }
         // Your camera on and your video showing: your mic and camera buttons are on your video
         // (pointed at, on a computer; always, on a touch screen), not in the bar
-        const ownOnVideo = camEnabled && !alone && (call.dock === "bottom" ? callWin.classList.contains("has-video") && !call.collapsed : !folded);
+        // (pinned with the room's panel open, the dock below the video keeps them)
+        const ownOnVideo = camEnabled && !alone && call.dock !== "rail"
+            && (call.dock === "bottom" ? callWin.classList.contains("has-video") && !call.collapsed : !folded);
         callWin.classList.toggle("own-ctl", ownOnVideo);
         unitPeopleBtn.disabled = alone;
         unitChevron.className = `fa-solid ${call.collapsed ? "fa-chevron-up" : "fa-chevron-down"} room-unit-chevron`;
@@ -2632,6 +2641,8 @@
             call.dock = dock;
             renderCallButtons();
             if (was !== dock) {
+                // (room notices follow the video to its new place)
+                requestAnimationFrame(placeToastBox);
                 // Docked, the page's layout places it (not where it floated)
                 if (dock) callWin.style.removeProperty("transform");
                 layoutCall();
@@ -2873,8 +2884,22 @@
         // (a computer's is the dock all through a room too: your mic, camera and the rest)
         callWin.hidden = !people.length && !unit && !room;
         callWin.classList.toggle("has-video", people.some(person => !!person.track));
+        // A camera turned on - yours, or the first in the call: everyone's video shows (not folded
+        // away from before, here or on a phone)
+        const myVideo = people.some(person => person.me && !!person.track);
+        const anyVideo = people.some(person => !!person.track);
+        if (call.collapsed && ((myVideo && !call.myVideo) || (anyVideo && !call.anyVideo))) {
+            call.collapsed = false;
+            saveCall();
+        }
+        call.myVideo = myVideo;
+        call.anyVideo = anyVideo;
         // Someone came or went: everyone's name again for a moment
         const who = people.map(person => person.key).join();
+        // Someone joined or left (or turned their camera on): where everyone was, so they glide to
+        // their new places (still centred) instead of jumping
+        const flipFrom = !wasHidden && who !== call.who && !calmer()
+            ? new Map([...call.tiles].map(([key, tile]) => [key, tile.el.getBoundingClientRect()])) : null;
         if (people.length && (wasHidden || who !== call.who)) showCallNames();
         call.who = who;
         callCount.textContent = String(Math.max(1, people.length));
@@ -2987,6 +3012,23 @@
         layoutCall();
         placeCall();
         renderPipCall();
+        if (flipFrom) flipTiles(flipFrom);
+    };
+    // Each one from where it was to where it is now; a new one fades and grows in
+    const flipTiles = from => {
+        call.tiles.forEach((tile, key) => {
+            const now = tile.el.getBoundingClientRect();
+            if (!now.width) return;
+            const was = from.get(key);
+            if (!was || !was.width) {
+                tile.el.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }], { duration: 280, easing: PANEL_EASE });
+                return;
+            }
+            const dx = was.left - now.left;
+            const dy = was.top - now.top;
+            if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+            tile.el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: 320, easing: PANEL_EASE });
+        });
     };
     // A phone turned: docked at the bottom, or on the left
     [phoneUpright, phoneSideways].forEach(query => query.addEventListener && query.addEventListener("change", () => {

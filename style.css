@@ -457,16 +457,59 @@ body.watching {
   display: none;
 }
 
+/* One line: too long for it, the title glides slowly to its end and back, pausing at each end
+   (script.js: .scrolling, --marquee-d / --marquee-t), its edges fading out as it moves */
 .player-meta-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
+  margin: 0;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 15.5px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
   color: #fff;
+}
+
+.player-meta-title .meta-title-text {
+  display: inline-block;
+  will-change: auto;
+}
+
+.player-meta-title.scrolling {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent);
+}
+
+.player-meta-title.scrolling .meta-title-text {
+  padding-left: 2px;
+  will-change: transform;
+  animation: metaTitleGlide var(--marquee-t, 10s) ease-in-out infinite alternate;
+}
+
+@keyframes metaTitleGlide {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  82%,
+  100% {
+    transform: translateX(var(--marquee-d, 0px));
+  }
+}
+
+/* Less motion: still one line, cut short with "…" (tap it to see the whole title, or rename it) */
+@media (prefers-reduced-motion: reduce) {
+  .player-meta-title.scrolling {
+    text-overflow: ellipsis;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .player-meta-title.scrolling .meta-title-text {
+    display: inline;
+    animation: none;
+  }
 }
 
 .player-meta-title .title-input {
@@ -5887,7 +5930,7 @@ body > .room-toasts {
 
 @media (hover: hover) and (pointer: fine) {
   .room-call-tile.me:hover .room-call-tile-hover,
-  .room-call-tile.me:focus-within .room-call-tile-hover,
+  .room-call-tile.me:has(:focus-visible) .room-call-tile-hover,
   .room-call-tile.me.hover-active .room-call-tile-hover {
     opacity: 1;
     visibility: visible;
@@ -10703,7 +10746,8 @@ body > .room-toasts {
 .room-call.docked.side:not(.unit) .room-call-grid {
   flex: 1 1 auto;
   min-height: 0;
-  align-content: start;
+  /* everyone in the middle of the column (from the top, once they fill it) */
+  align-content: safe center;
 }
 
 /* Their menus (layout; leave or end) open from the buttons: upwards, or downwards pinned above the
@@ -11183,11 +11227,11 @@ body > .room-toasts {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .room-call.own-ctl .room-call-tile.me:is(:hover, :focus-within, .hover-active) .room-call-tile-hover {
+  .room-call.own-ctl .room-call-tile.me:is(:hover, :has(:focus-visible), .hover-active) .room-call-tile-hover {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
   }
   /* (its name and mic badge step aside while the buttons show) */
-  .room-call.own-ctl .room-call-tile.me:is(:hover, :focus-within) :is(.room-call-name, .room-call-mic) {
+  .room-call.own-ctl .room-call-tile.me:is(:hover, :has(:focus-visible)) :is(.room-call-name, .room-call-mic) {
     opacity: 0;
   }
 }
@@ -11251,9 +11295,9 @@ body > .room-toasts {
   margin-inline: auto;
 }
 
-.room-call:not(.docked):not(.bottom) .room-call-tile.camera video,
-.room-call.docked.side .room-call-tile.portrait.camera video {
-  object-fit: contain;
+/* (every call video fills its card - cropped to the card's shape, never letterboxed) */
+.room-call .room-call-tile.camera video {
+  object-fit: cover;
 }
 
 /* =================== A COMPUTER'S FLOATING CALL: JUST THE VIDEOS, BUTTONS ON HOVER =================== */
@@ -11313,7 +11357,7 @@ body > .room-toasts {
   bottom: -12px;
 }
 
-.room-call.mini:not(.unit):is(:hover, :focus-within, .bar-open):not(.dragging):not(.resizing) .room-call-bar {
+.room-call.mini:not(.unit):is(:hover, :has(:focus-visible), .bar-open):not(.dragging):not(.resizing) .room-call-bar {
   opacity: 1;
   pointer-events: auto;
   transform: translate(calc(-50% + var(--bar-dx, 0px)), 0);
@@ -11431,19 +11475,23 @@ body > .room-toasts {
 }
 
 /* =================== CALL PINNED TO THE SIDE, WITH THE ROOM'S PANEL OPEN (room.js: .rail) =================== */
-/* No empty space: the video in the middle, as large as it fits; everyone's video in a row above
-   the room's panel (scrolling across when there are many), the panel as it is below it; and the
-   call's buttons as a dock centred below the video. (The call window's own box steps aside -
-   display: contents - so its videos and its buttons are placed by the page's grid; nothing moves
-   in the page, so no video restarts.) With the panel closed, it's the column left of the video. */
+/* No empty space, and nothing over anything: the column left of the video goes, and the video,
+   with everyone's video in a row on top of it and the call's buttons (mic and camera too) as a
+   dock below it, are one column - the same width, centred together - beside the room's panel,
+   which keeps the full height. (The call window's own box steps aside - display: contents - so
+   its videos and its buttons are placed by the page's grid; nothing moves in the page, so no video
+   restarts.) With the panel closed, it's the column left of the video again. */
 .player-page.call-dock-rail {
-  --rail-tile-h: 104px;
+  --rail-tile-h: 96px;
+  --rail-strip-h: calc(var(--rail-tile-h) + 18px);
   --rail-dock-h: 54px;
+  --rail-gap: 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* (the videos, the video and the dock, with equal space above and below them) */
+  grid-template-rows: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
   column-gap: 14px;
-  row-gap: 10px;
+  row-gap: 0;
   align-items: center;
   justify-items: center;
   padding: 12px;
@@ -11451,7 +11499,7 @@ body > .room-toasts {
 
 @media (min-height: 1000px) {
   .player-page.call-dock-rail {
-    --rail-tile-h: 132px;
+    --rail-tile-h: 128px;
   }
 }
 
@@ -11460,19 +11508,19 @@ body > .room-toasts {
 }
 
 .player-page.call-dock-rail {
-  /* The video's size: the column's width, or the height left above the dock (16:9); the video and
-     the dock below it are centred together, so no gap opens between them */
-  --rail-player-w: min(calc(100vw - 38px - var(--panel-w, 360px)), calc((100dvh - 34px - var(--rail-dock-h)) * 16 / 9));
-  --rail-player-h: calc(var(--rail-player-w) * 9 / 16);
+  /* The video's width: the column's, or (16:9) what the height leaves between the videos above it
+     and the dock below it */
+  --rail-player-w: min(calc(100vw - 38px - var(--panel-w, 360px)),
+    calc((100dvh - 24px - var(--rail-strip-h) - var(--rail-dock-h) - 2 * var(--rail-gap)) * 16 / 9));
 }
 
 .player-page.call-dock-rail > .container {
   grid-column: 1;
-  grid-row: 1 / -1;
+  grid-row: 3;
   align-self: center;
   width: 100%;
   max-width: var(--rail-player-w);
-  margin-bottom: calc(var(--rail-dock-h) + 10px);
+  margin: var(--rail-gap) 0;
 }
 
 .player-page.call-dock-rail > .container.fullscreen {
@@ -11482,19 +11530,23 @@ body > .room-toasts {
 
 .player-page.call-dock-rail > .room-panel {
   grid-column: 2;
-  grid-row: 2 / 4;
+  grid-row: 1 / -1;
   align-self: stretch;
   height: auto;
   min-height: 0;
   max-height: none;
 }
 
-/* Everyone's video: a card above the panel, as wide as it */
+/* Everyone's video: a row on top of the video, as wide as it, scrolling across when there are many */
 .room-call.rail > .room-call-grid {
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: stretch;
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: center;
   align-self: end;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--rail-player-w);
+  height: var(--rail-strip-h);
   contain: inline-size;
   display: flex;
   flex-direction: row;
@@ -11533,15 +11585,15 @@ body > .room-toasts {
   opacity: 1;
 }
 
-/* The buttons: the dock, centred below the video */
+/* The buttons: the dock, centred below the video (with your mic and camera in it here) */
 .room-call.rail > .room-call-bar {
   grid-column: 1;
-  grid-row: 1 / -1;
+  grid-row: 4;
   justify-self: center;
-  align-self: center;
+  align-self: start;
   box-sizing: border-box;
   height: var(--rail-dock-h);
-  margin-top: calc(var(--rail-player-h) + 10px);
+  margin: 0;
   position: relative;
   z-index: 5;
   flex-wrap: nowrap;
@@ -11901,6 +11953,7 @@ body > .room-toasts {
    video, held sideways beside it; either way they stay on the video). */
 .player-page.player-page > .room-toasts.placed {
   left: var(--toast-left, 24px);
+  bottom: var(--toast-bottom, 84px);
 }
 
 @media (pointer: coarse) and (max-width: 900px), screen and (max-width: 600px) {
@@ -11955,5 +12008,40 @@ body > .room-toasts {
 @media (prefers-reduced-motion: reduce) {
   .player-page > .room-toasts.placed .room-toast {
     animation: none;
+  }
+}
+
+/* =================== PHONES: THE CALL'S COLUMN STEPPED ASIDE = THE WHOLE SCREEN =================== */
+/* Docked on the left and minimized, a phone's call column slides away after a few seconds without
+   a touch (room.js: .call-idle). With the room's panel closed, the video then takes the whole
+   screen, edge to edge - no padding, no rounded corners, no glow showing round it - and gets them
+   back, in step, as the column slides in again at a touch. */
+.player-page.call-dock-side {
+  transition: padding 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), gap 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.player-page.call-dock-side > .container {
+  transition: border-radius 0.3s ease;
+}
+
+.player-page.player-page.call-dock-side.call-idle:not(.room-open) {
+  gap: 0;
+  padding: 0;
+}
+
+.player-page.call-dock-side.call-idle:not(.room-open) > .container,
+.player-page.call-dock-side.call-idle:not(.room-open) > .container.fullscreen {
+  border-radius: 0;
+}
+
+/* (the column's width exactly, now there's no gap to slide past) */
+.player-page.call-dock-side.call-idle:not(.room-open) > .room-call.unit.docked.side {
+  margin-left: calc(-1 * var(--dock-w));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-page.call-dock-side,
+  .player-page.call-dock-side > .container {
+    transition: none;
   }
 }

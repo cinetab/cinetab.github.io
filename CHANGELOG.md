@@ -4,6 +4,35 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.6] - 2026-11-20
+
+### Player
+- Phones held upright: the video's title below the player is one line. A title too long for it
+  glides slowly to its end and back, pausing at each end, its edges fading, so it can be read
+  whole; a short one stays put (with less motion asked for, it's cut short with "…"). Tapping it
+  still renames it
+
+### Video call
+- Turning your camera on (or the first camera coming on in the call) always shows everyone's
+  video - on phones and computers, docked or floating - instead of opening minimized because it
+  was minimized before
+- Pinned to the side, opening the room's panel now lays out as intended: the column left of the
+  video goes; everyone's video is a row on top of the video (the same width as it), the call's
+  buttons are a dock just below it - with your mic and camera in it - and the three are centred
+  together beside the panel, which keeps the full height. Closing the panel brings the column back
+- Room notices on a computer sit at the video's bottom left, just above its controls, and follow
+  the video when the call's layout changes, so they never cover the call's videos, dock or panels
+- Pinned to the side, everyone's video sits in the middle of the column; when someone joins,
+  leaves or turns their camera on, the others glide to their new places (and a new one fades in)
+  instead of jumping. In other layouts too
+- Every call video fills its card (cropped to the card's shape), never letterboxed
+- Phones: with the call docked on the left and minimized, once its column steps aside the video
+  takes the whole screen, edge to edge (fullscreen or not) - no padding, rounded corners or glow
+  left around it - and gets them back as the column slides in again at a touch
+- A computer's floating call: after it's dragged or resized (or a button in it is clicked), its
+  pill of buttons goes as soon as the pointer leaves - it no longer stays until something else is
+  clicked. Keyboard focus still keeps it up
+
 ## [1.6.5] - 2026-11-20
 
 ### Player

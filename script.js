@@ -278,15 +278,39 @@ videoTitle.addEventListener("click", () => renameTitle());
 // app, and (in a room) the room's name at the top in its place. Not in fullscreen (unless a
 // room's panel is open below the picture) or sideways, where the title stays at the top.
 const metaTitle = document.querySelector(".player-meta-title");
+// One line: a title too long for it glides slowly to its end and back (pausing at each end), so
+// it can be read whole; a short one stays put
+const fitMetaTitle = () => {
+    const line = metaTitle.querySelector(".meta-title-text");
+    if (!line) return;
+    const over = Math.ceil(line.scrollWidth - metaTitle.clientWidth);
+    const moving = metaTitle.clientWidth > 0 && over > 2;
+    metaTitle.classList.toggle("scrolling", moving);
+    if (!moving) return;
+    metaTitle.style.setProperty("--marquee-d", `${-over - 6}px`);
+    // (about 28 px a second, plus the pauses)
+    metaTitle.style.setProperty("--marquee-t", `${Math.max(6, Math.round(over / 28 + 3))}s`);
+};
 const syncMetaTitle = () => {
     if (metaTitle.querySelector("input")) return;
     const title = videoTitle.querySelector("input") ? metaTitle.textContent : videoTitle.textContent;
     const none = title === "No Video Loaded";
     metaTitle.parentNode.classList.toggle("empty", none);
     const text = none ? "" : title;
-    if (metaTitle.textContent !== text) metaTitle.textContent = text;
+    const line = metaTitle.querySelector(".meta-title-text");
+    if (!line || line.textContent !== text || metaTitle.childNodes.length !== 1) {
+        const fresh = document.createElement("span");
+        fresh.className = "meta-title-text";
+        fresh.textContent = text;
+        metaTitle.replaceChildren(fresh);
+        metaTitle.title = text;
+    }
+    fitMetaTitle();
 };
 new MutationObserver(syncMetaTitle).observe(videoTitle, { childList: true, characterData: true, subtree: true });
+// (renamed right there: back to one moving line)
+new MutationObserver(() => !metaTitle.querySelector("input, .meta-title-text") && syncMetaTitle()).observe(metaTitle, { childList: true });
+if ("ResizeObserver" in window) new ResizeObserver(fitMetaTitle).observe(metaTitle);
 syncMetaTitle();
 metaTitle.addEventListener("click", () => renameTitle(metaTitle));
 // (a phone held upright, or a window made as narrow as one: the phone's layout)
