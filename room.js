@@ -4663,11 +4663,34 @@
 
     const queueItem = (id, by) => ({ k: Signaling.newId().slice(0, 10), id, title: "", by });
 
+    // ---------- A playlist's videos in the queue: marked as one playlist (`pl`, its name `plt`), so
+    // the queue shows them under the playlist's name, folded up (like YouTube's app)
+    const playlistTitle = list => fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${list}`)}`)
+        .then(response => response.ok ? response.json() : null)
+        .then(data => data && clean(data.title, 120) || "")
+        .catch(() => "");
+    // `items` from `list` (only when there's more than one): marked, and named once YouTube says
+    const markPlaylist = (items, list, named) => {
+        if (!list || items.length < 2) return;
+        const pl = Signaling.newId().slice(0, 8);
+        items.forEach(item => {
+            item.pl = pl;
+            item.plt = "";
+        });
+        playlistTitle(list).then(title => {
+            if (!title) return;
+            items.forEach(item => item.pl === pl && (item.plt = title));
+            named();
+        });
+    };
+
     // The queue as guests get it
     const queueMessage = () => ({
         t: "queue",
         index: room.yt ? room.yt.index : 0,
-        items: room.yt ? room.yt.queue.map(item => ({ k: item.k, id: item.id, title: item.title, by: item.by.name })) : []
+        shuffled: !!(room.yt && room.yt.shuffled),
+        items: room.yt ? room.yt.queue.map(item => ({ k: item.k, id: item.id, title: item.title, by: item.by.name,
+            ...(item.pl ? { pl: item.pl, plt: item.plt || "" } : {}) })) : []
     });
 
     // Changes to the queue go out together, a moment later
@@ -4678,7 +4701,7 @@
             if (room !== host) return;
             const message = queueMessage();
             broadcast(message);
-            room.queue = { index: message.index, items: message.items };
+            room.queue = { index: message.index, items: message.items, shuffled: message.shuffled };
             renderQueue();
         }, 120);
     };
@@ -4771,14 +4794,22 @@
                 else notice(listMissed(ref));
                 return;
             }
-            if (!ref.id) return startYouTube(ids.map(id => queueItem(id, sharer)), 0);
+            const named = () => room && room.role === "host" && shareQueue();
+            if (!ref.id) {
+                const all = ids.map(id => queueItem(id, sharer));
+                markPlaylist(all, ref.list, named);
+                return startYouTube(all, 0);
+            }
             // Already playing the linked video: the rest of the playlist goes around it
             const y = room.yt;
             const at = ids.indexOf(ref.id);
             const before = at > 0 ? ids.slice(0, at) : [];
             const after = (at >= 0 ? ids.slice(at + 1) : ids).slice(0, QUEUE_MAX - y.queue.length - before.length);
-            y.queue.splice(y.index + 1, 0, ...after.map(id => queueItem(id, sharer)));
-            y.queue.splice(y.index, 0, ...before.map(id => queueItem(id, sharer)));
+            const afterItems = after.map(id => queueItem(id, sharer));
+            const beforeItems = before.map(id => queueItem(id, sharer));
+            markPlaylist([...beforeItems, y.queue[y.index], ...afterItems], ref.list, named);
+            y.queue.splice(y.index + 1, 0, ...afterItems);
+            y.queue.splice(y.index, 0, ...beforeItems);
             y.index += before.length;
             shareFile();
             shareQueue();
@@ -4802,6 +4833,7 @@
         const space = QUEUE_MAX - y.queue.length;
         if (space <= 0) return notice(`The queue is full (${QUEUE_MAX} videos).`);
         const items = ids.slice(0, space).map(id => queueItem(id, sharer));
+        markPlaylist(items, ref.list, () => room && room.role === "host" && room.yt === y && shareQueue());
         const at = where === "end" ? y.queue.length : y.index + 1;
         y.queue.splice(at, 0, ...items);
         if (where === "play") playQueued(at, items[0].id === ref.id ? ref.start : 0);
@@ -4850,6 +4882,14 @@
     // Someone's change to the queue: play one now, move one, or take one out
     const queueOp = (by, message) => {
         const y = room.yt;
+        if (y && message.op === "shuffle") {
+            const on = message.on === true;
+            if (!!y.shuffled === on) return;
+            shuffleQueue(y.queue, y.index, y, on);
+            shareQueue();
+            notice(`${by.name} turned shuffle ${on ? "on" : "off"}`);
+            return;
+        }
         if (!y || typeof message.k !== "string") return;
         const at = y.queue.findIndex(item => item.k === message.k);
         if (at < 0) return;
@@ -5411,6 +5451,7 @@
         prevTrackBtn.hidden = !youtube;
         prevTrackBtn.disabled = !control || !hasPrev;
         prevTrackBtn.title = "Previous video in the queue (Shift + P)";
+        if (together.renderShuffle) together.renderShuffle();
 
         // Playlist / queue indicator in the Now Playing bar
         const showNowList = youtube && (file.yt.count > 1 || autoplayOn());
@@ -5452,10 +5493,11 @@
 
     // YouTube's button (and Find more videos, under the queue) opens the player's search (script.js):
     // one place to find, play and queue videos
-    const openSearch = (query) => {
+    // `search`: YouTube's results for `query` straight away
+    const openSearch = (query, search = false) => {
         if (room && !canShareYouTube()) return;
         closeYouTubeForm();
-        if (together.openSearch) together.openSearch(query);
+        if (together.openSearch) together.openSearch(query, "", search);
     };
     nowYtBtn.addEventListener("click", () => openSearch());
     queueMoreBtn.addEventListener("click", () => openSearch());
@@ -5557,6 +5599,132 @@
 
     // (the queue's search, set up further down; the queue may be drawn before that)
     let filterQueueHook = () => {};
+
+    // ---------- Shuffle, while a playlist plays: a YouTube playlist on your own (YouTube's own
+    // shuffle), or the queue - yours, or a room's (for everyone). In a queue, the videos after the
+    // current one are mixed up: those of its playlist, when it's in one (the playlist stays in one
+    // piece, under its name), otherwise all of them; turned off, they go back in their own order.
+    const shuffleBtn = container.querySelector(".shuffle-btn");
+    const shuffleQueue = (items, index, store, on) => {
+        const current = items[index];
+        const from = index + 1;
+        let to = items.length;
+        if (current && current.pl) {
+            to = from;
+            while (to < items.length && items[to].pl === current.pl) to++;
+        }
+        const part = items.slice(from, to);
+        if (on) {
+            store.unshuffled = items.map(item => item.k);
+            for (let i = part.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [part[i], part[j]] = [part[j], part[i]];
+            }
+        } else if (store.unshuffled) {
+            const order = new Map(store.unshuffled.map((k, i) => [k, i]));
+            const place = item => order.has(item.k) ? order.get(item.k) : 1e9;
+            part.sort((a, b) => place(a) - place(b));
+        }
+        items.splice(from, part.length, ...part);
+        store.shuffled = !!on;
+        if (!on) store.unshuffled = null;
+    };
+    // What shuffle applies to now (null: nothing to shuffle)
+    const shuffleState = () => {
+        if (room) {
+            const queue = room.file && room.file.yt && room.queue;
+            if (!queue || (!queue.shuffled && queue.items.length - queue.index - 1 < 2)) return null;
+            return { kind: "room", on: !!queue.shuffled, can: canShareYouTube() };
+        }
+        const solo = together.solo;
+        if (!solo || !solo.active) return null;
+        if (solo.isList) return { kind: "list", on: solo.shuffled, can: true };
+        if (soloQueue.shuffled || soloQueue.items.length - soloQueue.index - 1 >= 2) return { kind: "queue", on: !!soloQueue.shuffled, can: true };
+        return null;
+    };
+    const renderShuffle = () => {
+        if (!shuffleBtn) return;
+        const state = shuffleState();
+        shuffleBtn.hidden = !state;
+        if (!state) return;
+        shuffleBtn.classList.toggle("active", state.on);
+        shuffleBtn.setAttribute("aria-pressed", String(state.on));
+        shuffleBtn.disabled = !state.can;
+        shuffleBtn.title = !state.can ? `Shuffle is ${state.on ? "on" : "off"} (the host decides)` : state.on ? "Shuffle: on (turn off)" : "Shuffle";
+    };
+    together.renderShuffle = renderShuffle;
+    const toggleShuffle = () => {
+        const state = shuffleState();
+        if (!state || !state.can) return;
+        const on = !state.on;
+        if (state.kind === "list") together.solo.setShuffle(on);
+        else if (state.kind === "queue") {
+            shuffleQueue(soloQueue.items, soloQueue.index, soloQueue, on);
+            saveSoloQueue();
+            renderQueue();
+        } else sendQueueOp({ op: "shuffle", on });
+        showFeedback("fa-shuffle", on ? "Shuffle on" : "Shuffle off");
+        renderShuffle();
+    };
+    together.toggleShuffle = toggleShuffle;
+    if (shuffleBtn) shuffleBtn.addEventListener("click", toggleShuffle);
+
+    // A playlist's videos (one after another in the queue): a row with the playlist's name, its
+    // first video's picture, how many videos (and which is playing, "3 / 25"); a tap unfolds its
+    // videos below it, indented, and folds them up again - like YouTube's app
+    const openPlaylists = new Set();
+    const groupPlaylists = (items, index) => {
+        const rows = [...queueList.querySelectorAll("li[data-k]")];
+        for (let i = 0; i < items.length; ) {
+            const pl = items[i].pl;
+            let j = i;
+            while (pl && j + 1 < items.length && items[j + 1].pl === pl) j++;
+            if (pl && j > i && rows[i]) {
+                const count = j - i + 1;
+                const playing = index >= i && index <= j;
+                const open = openPlaylists.has(pl);
+                const head = el("li", `room-queue-group${playing ? " current" : ""}${open ? " open" : ""}`);
+                head.dataset.pl = pl;
+                const button = el("button", "room-queue-group-head");
+                button.type = "button";
+                button.setAttribute("aria-expanded", String(open));
+                button.title = open ? "Fold the playlist's videos away" : "Show the playlist's videos";
+                const cover = el("span", "room-queue-group-cover");
+                const thumb = el("img");
+                thumb.src = `https://i.ytimg.com/vi/${items[i].id}/mqdefault.jpg`;
+                thumb.alt = "";
+                thumb.loading = "lazy";
+                thumb.draggable = false;
+                const badge = el("span", "room-queue-group-count");
+                badge.append(el("i", "fa-solid fa-list"), String(count));
+                cover.append(thumb, badge);
+                const info = el("span", "room-queue-group-info");
+                const name = items[i].plt || "YouTube playlist";
+                const title = el("b", null, name);
+                title.title = name;
+                info.append(el("small", "room-queue-group-kind", "Playlist"), title,
+                    el("small", null, playing ? `Playing ${index - i + 1} / ${count}` : `${count} videos`));
+                button.append(cover, info, el("i", "fa-solid fa-chevron-down room-queue-group-chevron"));
+                head.append(button);
+                rows[i].before(head);
+                for (let k = i; k <= j; k++) {
+                    rows[k].dataset.pl = pl;
+                    rows[k].classList.add("in-playlist");
+                    rows[k].classList.toggle("folded", !open);
+                    rows[k].classList.toggle("playlist-end", k === j);
+                }
+            }
+            i = j + 1;
+        }
+    };
+    queueList.addEventListener("click", e => {
+        const head = e.target.closest(".room-queue-group-head");
+        if (!head) return;
+        const pl = head.parentNode.dataset.pl;
+        if (openPlaylists.has(pl)) openPlaylists.delete(pl);
+        else openPlaylists.add(pl);
+        renderQueue();
+    });
     const renderQueue = () => {
         const queue = room ? (room.file && room.file.yt && room.queue || { index: 0, items: [] }) : soloQueue;
         const edit = room ? canShareYouTube() : true;
@@ -5628,14 +5796,17 @@
             }
             return li;
         }));
+        groupPlaylists(items, queue.index);
+        renderShuffle();
         // (searching the queue: still only what matches)
         filterQueueHook();
-        // Keep the current video in view when it changes
+        // Keep the current video in view when it changes (its playlist, while that's folded)
         const now = items[queue.index];
         if (now && scrolledTo !== now.k) {
             queueList.dataset.current = now.k;
-            const row = queueList.children[queue.index];
-            if (row && activeTab === "queue") row.scrollIntoView({ block: "nearest" });
+            const row = queueList.querySelector(`li[data-k="${now.k}"]`);
+            const shown = row && row.classList.contains("folded") ? queueList.querySelector(`.room-queue-group[data-pl="${row.dataset.pl}"]`) : row;
+            if (shown && activeTab === "queue") shown.scrollIntoView({ block: "nearest" });
         }
         if (!room && items.length && window.together && together.solo && together.solo.active) {
             const hasNext = queue.index + 1 < items.length;
@@ -5708,13 +5879,16 @@
     queueList.after(queueFilterNote);
     queueFilterSearch.addEventListener("click", () => {
         const val = queueAddInput.value.trim();
-        if (val) openSearch(val);
+        if (val) openSearch(val, true);
     });
+    // Nothing in the queue matching what's typed: a moment after the typing stops, YouTube's
+    // results for it in the search box (typing goes on there)
+    let queueSearchTimer = null;
     const filterQueue = () => {
         if (!queueAddInput) return;
         const value = queueAddInput.value.trim();
         const words = value && !parseYouTube(value) ? value.toLowerCase().split(/\s+/).filter(Boolean) : [];
-        const rows = [...queueList.children];
+        const rows = [...queueList.querySelectorAll("li[data-k]")];
         let found = 0;
         rows.forEach(row => {
             const title = (row.querySelector(".room-queue-info b") || {}).textContent || "";
@@ -5726,6 +5900,19 @@
             row.draggable = !words.length && !!row.dataset.drag;
         });
         const filtering = words.length > 0;
+        queueList.querySelectorAll(".room-queue-group").forEach(head => {
+            head.hidden = filtering && !queueList.querySelector(`li[data-k][data-pl="${head.dataset.pl}"]:not([hidden])`);
+        });
+        clearTimeout(queueSearchTimer);
+        if (filtering && !found && value.length >= 3 && document.activeElement === queueAddInput) {
+            queueSearchTimer = setTimeout(() => {
+                if (queueAddInput.value.trim() === value && document.activeElement === queueAddInput) {
+                    queueAddInput.value = "";
+                    filterQueueHook();
+                    openSearch(value, true);
+                }
+            }, 1100);
+        }
         queueList.classList.toggle("filtered", filtering);
         queueFilterNote.hidden = !filtering;
         if (filtering) {
@@ -5755,7 +5942,12 @@
                     filterQueue();
                 } else showQueueHint(refused);
             } else {
-                openSearch(val);
+                clearTimeout(queueSearchTimer);
+                // (what's in the queue matching: it's there; otherwise YouTube's results at once)
+                const matches = [...queueList.querySelectorAll("li[data-k]")].some(row => !row.hidden);
+                if (!matches) queueAddInput.value = "";
+                filterQueueHook();
+                openSearch(val, true);
             }
         });
     }
@@ -5788,8 +5980,59 @@
     // ---------- For the player's search and commands (script.js): a link or a result queued for
     // everyone (or starting, when nothing's on), whether that's allowed, and the room's own commands
     together.canQueueYouTube = () => room ? canShareYouTube() : true;
+    // A playlist (or a video in one) into your own queue: all its videos, under its name
+    const queueSoloPlaylist = async ref => {
+        toast("Adding the playlist…");
+        let ids = await resolvePlaylist(ref.list);
+        if (room) return;
+        if (!ids || !ids.length) {
+            if (!ref.id) return toast("Couldn't open that playlist. It may be private, or YouTube didn't answer.");
+            ids = [ref.id];
+        } else if (ref.id && ids.includes(ref.id)) ids = ids.slice(ids.indexOf(ref.id));
+        else if (ref.id) ids = [ref.id, ...ids];
+        const items = ids.slice(0, 200).map(id => ({ k: Math.random().toString(36).slice(2), id, title: "", by: "You" }));
+        markPlaylist(items, ref.list, () => {
+            saveSoloQueue();
+            renderQueue();
+        });
+        soloQueue.items.push(...items);
+        saveSoloQueue();
+        renderQueue();
+        toast(items.length > 1 ? `Added ${items.length} videos to the queue` : "Added to queue");
+        soloTitles();
+    };
+    // (their titles, a few at a time)
+    let soloTitleFetches = 0;
+    const soloAsked = new Set();
+    const soloTitles = () => {
+        while (soloTitleFetches < 4) {
+            const item = soloQueue.items.find(entry => !entry.title && !soloAsked.has(entry.k));
+            if (!item) return;
+            soloAsked.add(item.k);
+            soloTitleFetches++;
+            fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${item.id}`)}`)
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    const title = data && clean(data.title, 200);
+                    if (title) {
+                        item.title = title;
+                        saveSoloQueue();
+                        renderQueue();
+                    }
+                })
+                .catch(() => {})
+                .finally(() => {
+                    soloTitleFetches--;
+                    soloTitles();
+                });
+        }
+    };
     together.queueYouTube = (ref, meta = {}) => {
         if (room) return shareYouTubeRef(ref, "end");
+        if (ref && ref.list) {
+            queueSoloPlaylist(ref);
+            return null;
+        }
         if (!ref || !ref.id) return "That isn't a link to a YouTube video.";
         const item = {
             k: Math.random().toString(36).slice(2),
@@ -6208,9 +6451,10 @@
                 if (!Array.isArray(message.items)) return;
                 const items = message.items.slice(0, 500)
                     .filter(item => item && typeof item.k === "string" && YT_ID.test(item.id))
-                    .map(item => ({ k: item.k.slice(0, 16), id: item.id, title: clean(item.title, 200), by: clean(item.by, 30) || "someone" }));
+                    .map(item => ({ k: item.k.slice(0, 16), id: item.id, title: clean(item.title, 200), by: clean(item.by, 30) || "someone",
+                        ...(typeof item.pl === "string" && item.pl ? { pl: item.pl.slice(0, 12), plt: clean(item.plt, 120) } : {}) }));
                 const index = Number.isInteger(message.index) ? Math.max(0, Math.min(items.length - 1, message.index)) : 0;
-                guest.queue = items.length ? { index, items } : null;
+                guest.queue = items.length ? { index, items, shuffled: message.shuffled === true } : null;
                 return renderQueue();
             }
             case "present-end": {

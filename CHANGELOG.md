@@ -4,6 +4,60 @@ All notable changes to CineTab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.7] - 2026-11-21
+
+### Queue
+- Shuffle, while a playlist plays: a button among the player's controls (blue, with a dot, while
+  it's on). A YouTube playlist on your own uses YouTube's own shuffle; in the queue - yours, or a
+  room's, for everyone (the host's, or anyone allowed to change the queue) - the videos after the
+  current one are mixed: those of its playlist when it's in one (the playlist stays together under
+  its name), otherwise all of them. Turned off, they go back in their own order
+- Phones: with previous / next showing, the middle buttons sit closer together, all five on screen
+- A playlist in the queue shows under its name, like YouTube's app: one row with its first video's
+  picture (stacked, with how many videos), the playlist's name, and which video is playing
+  ("Playing 3 / 25"); a tap unfolds its videos below it, indented, and folds them up again.
+  In a room and on your own (guests see it the same way)
+- On your own, a pasted playlist link (or a video in one) now adds the whole playlist to the
+  queue, titles filling in as YouTube gives them
+
+### Search
+- Recently played sits a little lower, its pictures clear of its heading
+- Esc steps back: with something typed or results showing, it goes back to the start (Recently
+  played); pressed again, the search closes
+- Out of a room, a click on a result plays it and the search closes (its buttons: play, or add to
+  the queue); in a room a click still adds it to the queue
+- The "Search YouTube for …" row's YouTube icon is centred on its row, and the row goes once its
+  results show (the Recently played row steps aside then too); results' buttons sit side by side,
+  everything inset evenly
+- The Queue tab's search box: nothing in the queue matching what's typed, a moment after typing
+  stops (or on Enter) the search opens with YouTube's results for it
+
+### Player
+- Phones held upright: a long title below the player rests at its start for a few seconds before
+  it glides along (then rests at its end and slides back); a tap starts it again from the
+  beginning. Renaming it is now a press and hold. The video's details card sits a little lower,
+  clear of the title
+
+### Video call
+- Pinned to the side with the room's panel open: the dock below the video sizes itself to its
+  buttons (full-size, on one row; a second row inside it where the column is too narrow), so none
+  of them spill out of it any more - camera switching included
+- Docked calls on phones, like on computers: everyone's video centred in the column on the left
+  (sideways or fullscreen) and along the strip below the video (upright), gliding to their places
+  as people come and go
+- Cameras of different shapes look even: along a strip every picture is the same height (an
+  upright phone's narrower, a laptop's wider); in a column every picture is as tall as a 4:3 one
+  across the column (a wide camera fills the width, an upright phone's is narrower, centred) -
+  instead of an upright phone's picture growing much taller than the others
+
+### Picture in picture (computers)
+- The floating window's controls work fully: play / pause, back and forward 5 seconds and mute,
+  for your own videos and YouTube alike; a click on the picture plays or pauses; and the
+  player's keys work while the window has the focus (Space or K, arrows, J / L, up / down for
+  volume, M)
+- Its controls hide while the video plays and come back with any movement - also over a YouTube
+  video, where they used to stay hidden once gone; paused (from anywhere), they stay in sight
+
 ## [1.6.6] - 2026-11-20
 
 ### Player

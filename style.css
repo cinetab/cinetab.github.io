@@ -235,7 +235,7 @@ body.watching {
   /* No taller than the screen leaves it: a long description scrolls inside (below) */
   flex-shrink: 1;
   min-height: 0;
-  margin: 2px 12px 12px;
+  margin: 10px 12px 12px;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
@@ -457,8 +457,8 @@ body.watching {
   display: none;
 }
 
-/* One line: too long for it, the title glides slowly to its end and back, pausing at each end
-   (script.js: .scrolling, --marquee-d / --marquee-t), its edges fading out as it moves */
+/* One line: too long for it, the title rests at its start, glides slowly to its end and back
+   (script.js: .scrolling, and the motion itself); its right edge fades where it's cut off */
 .player-meta-title {
   display: block;
   margin: 0;
@@ -478,25 +478,19 @@ body.watching {
 
 .player-meta-title.scrolling {
   text-overflow: clip;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent);
-  mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent);
+  cursor: pointer;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
 }
 
 .player-meta-title.scrolling .meta-title-text {
-  padding-left: 2px;
   will-change: transform;
-  animation: metaTitleGlide var(--marquee-t, 10s) ease-in-out infinite alternate;
 }
 
-@keyframes metaTitleGlide {
-  0%,
-  18% {
-    transform: translateX(0);
-  }
-  82%,
-  100% {
-    transform: translateX(var(--marquee-d, 0px));
-  }
+.player-meta-title {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Less motion: still one line, cut short with "…" (tap it to see the whole title, or rename it) */
@@ -508,7 +502,6 @@ body.watching {
   }
   .player-meta-title.scrolling .meta-title-text {
     display: inline;
-    animation: none;
   }
 }
 
@@ -2016,9 +2009,25 @@ video::cue {
   pointer-events: auto;
 }
 
+/* Hidden while it plays: out of sight, but the overlay still has the pointer (over YouTube's picture
+   too, which would otherwise keep it), so moving brings it back and a click plays or pauses; only
+   its buttons ignore clicks while they can't be seen */
 .pip-player-container.hide-controls .pip-overlay {
   opacity: 0;
+  cursor: none;
+}
+
+.pip-player-container.hide-controls .pip-overlay button {
   pointer-events: none;
+}
+
+.pip-overlay {
+  cursor: pointer;
+}
+
+.pip-overlay button:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
 }
 
 .pip-top-controls {
@@ -8934,7 +8943,8 @@ body > .room-toasts {
   min-height: 0;
   max-height: none;
   grid-template-columns: 1fr;
-  align-content: start;
+  /* everyone in the middle of the column (from the top, once they fill it) */
+  align-content: safe center;
 }
 
 /* Under the video: a strip that scrolls across, tiles snapping into place */
@@ -11290,10 +11300,6 @@ body > .room-toasts {
   aspect-ratio: var(--ar, 4 / 3);
 }
 
-.room-call.docked.side .room-call-tile.portrait {
-  max-height: 46vh;
-  margin-inline: auto;
-}
 
 /* (every call video fills its card - cropped to the card's shape, never letterboxed) */
 .room-call .room-call-tile.camera video {
@@ -11538,7 +11544,7 @@ body > .room-toasts {
 }
 
 /* Everyone's video: a row on top of the video, as wide as it, scrolling across when there are many */
-.room-call.rail > .room-call-grid {
+.room-call.rail:not(.unit) > .room-call-grid {
   grid-column: 1;
   grid-row: 2;
   justify-self: center;
@@ -11566,13 +11572,13 @@ body > .room-toasts {
   animation: railIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.player-page.ambient-on .room-call.rail > .room-call-grid {
+.player-page.ambient-on .room-call.rail:not(.unit) > .room-call-grid {
   background: rgba(23, 23, 28, 0.62);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
 }
 
-.room-call.rail .room-call-tile {
+.room-call.rail:not(.unit) .room-call-tile {
   flex: 0 0 auto;
   height: var(--rail-tile-h);
   width: auto;
@@ -11581,26 +11587,31 @@ body > .room-toasts {
   scroll-snap-align: start;
 }
 
-.room-call.rail .room-call-name {
+.room-call.rail:not(.unit) .room-call-name {
   opacity: 1;
 }
 
 /* The buttons: the dock, centred below the video (with your mic and camera in it here) */
-.room-call.rail > .room-call-bar {
+.room-call.rail:not(.unit) > .room-call-bar {
   grid-column: 1;
   grid-row: 4;
   justify-self: center;
   align-self: start;
   box-sizing: border-box;
-  height: var(--rail-dock-h);
+  width: max-content;
+  max-width: 100%;
+  height: auto;
+  min-height: var(--rail-dock-h);
   margin: 0;
   position: relative;
   z-index: 5;
-  flex-wrap: nowrap;
+  /* (one row; a second inside it - never out of it - where the column is too narrow) */
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 0;
   padding: 6px;
+  overflow: visible;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 28px;
   background: rgba(23, 23, 28, 0.94);
@@ -11608,7 +11619,7 @@ body > .room-toasts {
   animation: railIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.room-call.rail .room-call-btn {
+.room-call.rail:not(.unit) .room-call-btn {
   position: relative;
   width: 40px;
   height: 40px;
@@ -11617,15 +11628,15 @@ body > .room-toasts {
   transition: background 0.15s ease, transform 0.12s ease;
 }
 
-.room-call.rail .room-call-btn:hover {
+.room-call.rail:not(.unit) .room-call-btn:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.room-call.rail .room-call-btn:active {
+.room-call.rail:not(.unit) .room-call-btn:active {
   transform: scale(0.92);
 }
 
-.room-call.rail .room-call-title {
+.room-call.rail:not(.unit) .room-call-title {
   flex: 0 0 auto;
   height: 40px;
   padding: 0 12px 0 13px;
@@ -11634,33 +11645,33 @@ body > .room-toasts {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.room-call.rail .room-call-title b {
+.room-call.rail:not(.unit) .room-call-title b {
   font-size: 14px;
 }
 
-.room-call.rail .room-call-controls {
+.room-call.rail:not(.unit) .room-call-controls {
   gap: 6px;
 }
 
-.room-call.rail .room-call-winbtns {
+.room-call.rail:not(.unit) .room-call-winbtns {
   gap: 6px;
   margin-left: 2px;
   padding-left: 8px;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.room-call.rail .room-call-leave {
+.room-call.rail:not(.unit) .room-call-leave {
   width: 54px;
   border-radius: 20px;
   background: #ea4335;
 }
 
-.room-call.rail .room-call-leave:hover {
+.room-call.rail:not(.unit) .room-call-leave:hover {
   background: #d93025;
 }
 
 /* (nothing else of the window takes a place in the page's grid) */
-.room-call.rail > :is(.room-call-edge, .room-call-resize, .room-call-dock-edge, .room-call-more-menu) {
+.room-call.rail:not(.unit) > :is(.room-call-edge, .room-call-resize, .room-call-dock-edge, .room-call-more-menu) {
   display: none !important;
 }
 
@@ -12043,5 +12054,341 @@ body > .room-toasts {
   .player-page.call-dock-side,
   .player-page.call-dock-side > .container {
     transition: none;
+  }
+}
+
+/* =================== DOCKED CALLS: EVERYONE CENTRED, EVERY CAMERA THE SAME SIZE =================== */
+/* Phones and computers alike. A strip (under the video, upright; the dock; above the video): every
+   picture the same height, each as wide as its camera's shape makes it (a phone's upright is
+   narrow, a laptop's wide), centred along the strip and level with each other. A column (on the
+   left; sideways or fullscreen): every picture as tall as a 4:3 one filling the column's width -
+   a wide camera fills the width, an upright phone's is narrower, centred - and all of them in the
+   middle of the column. When someone comes or goes, they glide to their new places (room.js). */
+.room-call.docked.strip {
+  --strip-tile-h: calc(var(--strip-tile, 112px) * 0.75);
+}
+
+.room-call.docked.strip .room-call-grid {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: safe center;
+  gap: 6px;
+}
+
+.room-call.docked.strip .room-call-tile {
+  flex: 0 0 auto;
+  width: auto;
+  height: var(--strip-tile-h);
+  aspect-ratio: var(--ar, 4 / 3);
+}
+
+.room-call.docked.side {
+  --side-tile-h: calc((var(--dock-w, 200px) - 16px) * 0.75);
+}
+
+.room-call.docked.side .room-call-grid {
+  justify-items: center;
+}
+
+.room-call.docked.side .room-call-tile {
+  width: min(100%, calc(var(--side-tile-h) * var(--ar, 4 / 3)));
+  aspect-ratio: var(--ar, 4 / 3);
+  justify-self: center;
+}
+
+/* =================== SEARCH: ALIGNMENT =================== */
+/* (Font Awesome's own display would put a brand icon at the top of its box: centred in its row) */
+.cmd-list .cmd-item > .cmd-item-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  line-height: 1;
+}
+
+.cmd-list .cmd-item > .cmd-item-icon::before {
+  display: block;
+  line-height: 1;
+}
+
+.cmd-list .cmd-item {
+  padding: 8px 14px 8px 16px;
+}
+
+.cmd-item-info {
+  min-width: 0;
+}
+
+/* Sections: the same inset from the box's edges, the same space between them */
+.cmd-body {
+  gap: 10px;
+  padding: 8px 8px 10px;
+}
+
+.cmd-recent-title,
+.cmd-results .yt-results-head {
+  padding: 0 6px;
+}
+
+.cmd-results .yt-results-head {
+  margin: 2px 0 8px;
+}
+
+/* A result: picture, title and channel, and its buttons side by side, centred on the row */
+.cmd-results .yt-result-list.compact .yt-result {
+  padding: 5px 6px;
+}
+
+.cmd-results .yt-result-list.compact .yt-result-actions {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cmd-results .yt-result-list.compact .yt-act {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.cmd-results .yt-more {
+  display: block;
+  margin: 8px auto 2px;
+}
+
+/* =================== QUEUE: A PLAYLIST UNDER ITS NAME =================== */
+/* A playlist's videos (room.js: groupPlaylists): one row - its first video's picture with a
+   "stack" behind it and how many videos, the playlist's name, and which one is playing - that
+   unfolds its videos below it (indented along a line), and folds them again. Like YouTube's app. */
+.room-queue-group {
+  list-style: none;
+}
+
+.room-queue-group[hidden] {
+  display: none;
+}
+
+.room-queue-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font: inherit;
+  text-align: left;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.room-queue-group-head:hover,
+.room-queue-group-head:focus-visible {
+  border-color: rgba(62, 151, 253, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+
+.room-queue-group.current .room-queue-group-head {
+  border-color: rgba(62, 151, 253, 0.5);
+  background: rgba(62, 151, 253, 0.1);
+}
+
+.room-queue-group.open .room-queue-group-head {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* (the picture, with two cards' edges behind it: a stack, like a playlist's on YouTube) */
+.room-queue-group-cover {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px;
+  height: 36px;
+  margin-top: 4px;
+  border-radius: 6px;
+  box-shadow: 0 -3px 0 -1px rgba(255, 255, 255, 0.28), 0 -6px 0 -2px rgba(255, 255, 255, 0.14);
+}
+
+.room-queue-group-cover img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #000;
+}
+
+.room-queue-group-count {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 0 6px 6px 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.room-queue-group-count i {
+  font-size: 9px;
+}
+
+.room-queue-group-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.room-queue-group-info b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.room-queue-group-info small {
+  font-size: 11px;
+  color: #9a9aab;
+}
+
+.room-queue-group-info .room-queue-group-kind {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #6fb0ff;
+}
+
+.room-queue-group.current .room-queue-group-info small:last-child {
+  color: #9ccaff;
+}
+
+.room-queue-group-chevron {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 11px;
+  color: #c9c9d6;
+  background: rgba(255, 255, 255, 0.06);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.room-queue-group.open .room-queue-group-chevron {
+  transform: rotate(180deg);
+}
+
+/* Its videos: indented below it, along a line; folded away until it's opened */
+.room-queue-item.in-playlist {
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(62, 151, 253, 0.28);
+  border-radius: 0 10px 10px 0;
+  animation: playlistOpen 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.room-queue-item.in-playlist.playlist-end {
+  margin-bottom: 4px;
+}
+
+.room-queue-item.in-playlist.folded {
+  display: none;
+}
+
+/* (searching the queue: what matches shows, folded or not) */
+.room-queue.filtered .room-queue-item.in-playlist.folded:not([hidden]) {
+  display: flex;
+}
+
+@keyframes playlistOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-queue-item.in-playlist,
+  .room-queue-group-chevron {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* =================== SEARCH: RECENTLY PLAYED, A LITTLE LOWER =================== */
+/* (its pictures clear of its heading, the chosen one's outline too) */
+.cmd-recent-title {
+  margin: 6px 6px 12px;
+}
+
+.cmd-recent-row {
+  padding-top: 6px;
+}
+
+/* (the chevron centred in its circle: Font Awesome's own display would put it at the top) */
+.room-queue-group-head > .room-queue-group-chevron {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.room-queue-group-head > .room-queue-group-chevron::before {
+  display: block;
+  line-height: 1;
+}
+
+/* =================== SHUFFLE (room.js) =================== */
+/* While a playlist plays: blue with a dot under it while it's on */
+.options button.shuffle-btn {
+  position: relative;
+}
+
+.options button.shuffle-btn.active {
+  color: #3e97fd;
+}
+
+.options button.shuffle-btn.active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #3e97fd;
+  transform: translateX(-50%);
+}
+
+.options button.shuffle-btn:disabled {
+  opacity: 0.45;
+}
+
+/* Phones: with previous / next beside them (a playlist or the queue), the middle buttons sit
+   closer together, so all five fit on the screen */
+@media (pointer: coarse), screen and (max-width: 600px) {
+  .container .video-controls .options.center:has(> .next-track:not([hidden]), > .prev-track:not([hidden])) {
+    gap: clamp(10px, 4vw, 40px);
   }
 }

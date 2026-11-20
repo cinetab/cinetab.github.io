@@ -1040,6 +1040,7 @@
         nextTrackBtn.hidden = !autoplay && (!ids || ids.length < 2);
         prevTrackBtn.disabled = !canStep(-1);
         nextTrackBtn.disabled = !canStep(1);
+        if (together.renderShuffle) together.renderShuffle();
         // Still loading, an error, or a browser that wants a tap on YouTube's player first. The
         // layer over the player steps aside so YouTube's player can be clicked: on a computer for an
         // ad (its Skip) or to start; on a touch screen never for an ad (only CineTab's controls show
@@ -1090,6 +1091,8 @@
         solo.active = true;
         if (window.updatePlayerStop) window.updatePlayerStop();
         solo.ref = { id: ref.id || null, list: ref.list || null, start: ref.start || 0 };
+        // (a new playlist starts in its own order)
+        solo.shuffle = false;
         solo.meta = { ...meta };
         solo.intent = true;
         solo.error = null;
@@ -1326,6 +1329,18 @@
         get videoId() { return solo.active ? expectedId() : null; },
         get autoplay() { return autoplay; },
         toggleAutoplay: () => setAutoplay(!autoplay),
+        // A YouTube playlist on: YouTube's player shuffles what's left of it (or stops shuffling)
+        get isList() {
+            const ids = solo.active && solo.ref && solo.ref.list ? playlist() : null;
+            return !!ids && ids.length > 2;
+        },
+        get shuffled() { return !!solo.shuffle; },
+        setShuffle: on => {
+            solo.shuffle = !!on;
+            try {
+                solo.player.setShuffle(!!on);
+            } catch (e) {}
+        },
         renderAutoplay,
         canStep,
         stop: () => stop(true),

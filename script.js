@@ -278,18 +278,39 @@ videoTitle.addEventListener("click", () => renameTitle());
 // app, and (in a room) the room's name at the top in its place. Not in fullscreen (unless a
 // room's panel is open below the picture) or sideways, where the title stays at the top.
 const metaTitle = document.querySelector(".player-meta-title");
-// One line: a title too long for it glides slowly to its end and back (pausing at each end), so
-// it can be read whole; a short one stays put
+// One line: a title too long for it rests at its start for a few seconds, glides slowly to its
+// end (about 28 px a second), rests there, and slides back - over and over, so it can be read
+// whole. A tap starts it again from the beginning. A short one stays put; with less motion asked
+// for, it's cut short with "…".
+let metaGlide = null;
+let metaGlideKey = "";
 const fitMetaTitle = () => {
     const line = metaTitle.querySelector(".meta-title-text");
     if (!line) return;
     const over = Math.ceil(line.scrollWidth - metaTitle.clientWidth);
     const moving = metaTitle.clientWidth > 0 && over > 2;
     metaTitle.classList.toggle("scrolling", moving);
-    if (!moving) return;
-    metaTitle.style.setProperty("--marquee-d", `${-over - 6}px`);
-    // (about 28 px a second, plus the pauses)
-    metaTitle.style.setProperty("--marquee-t", `${Math.max(6, Math.round(over / 28 + 3))}s`);
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches || typeof line.animate !== "function";
+    const key = moving && !calm ? `${over}|${line.textContent}` : "";
+    if (key === metaGlideKey && (metaGlide || !key)) return;
+    metaGlideKey = key;
+    if (metaGlide) metaGlide.cancel();
+    metaGlide = null;
+    if (!key) return;
+    const distance = -over - 8;
+    const rest = 3500, glide = Math.max(2500, over / 28 * 1000), restEnd = 1800, back = Math.max(900, glide * 0.35);
+    const total = rest + glide + restEnd + back;
+    metaGlide = line.animate([
+        { transform: "translateX(0)", offset: 0 },
+        { transform: "translateX(0)", offset: rest / total, easing: "ease-in-out" },
+        { transform: `translateX(${distance}px)`, offset: (rest + glide) / total },
+        { transform: `translateX(${distance}px)`, offset: (rest + glide + restEnd) / total, easing: "ease-in-out" },
+        { transform: "translateX(0)", offset: 1 }
+    ], { duration: total, iterations: Infinity });
+};
+// (from the beginning: the title's start, resting there before it moves)
+const restartMetaTitle = () => {
+    if (metaGlide) metaGlide.currentTime = 0;
 };
 const syncMetaTitle = () => {
     if (metaTitle.querySelector("input")) return;
@@ -312,7 +333,26 @@ new MutationObserver(syncMetaTitle).observe(videoTitle, { childList: true, chara
 new MutationObserver(() => !metaTitle.querySelector("input, .meta-title-text") && syncMetaTitle()).observe(metaTitle, { childList: true });
 if ("ResizeObserver" in window) new ResizeObserver(fitMetaTitle).observe(metaTitle);
 syncMetaTitle();
-metaTitle.addEventListener("click", () => renameTitle(metaTitle));
+// A tap: the title from its beginning again. Held down a moment: rename it.
+{
+    let holdTimer = null;
+    let held = false;
+    metaTitle.addEventListener("pointerdown", e => {
+        if (e.button > 0 || metaTitle.querySelector("input")) return;
+        held = false;
+        clearTimeout(holdTimer);
+        holdTimer = setTimeout(() => {
+            held = true;
+            renameTitle(metaTitle);
+        }, 550);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(type => metaTitle.addEventListener(type, () => clearTimeout(holdTimer)));
+    metaTitle.addEventListener("click", () => {
+        if (held || metaTitle.querySelector("input")) return;
+        restartMetaTitle();
+    });
+    metaTitle.addEventListener("contextmenu", e => e.preventDefault());
+}
 // (a phone held upright, or a window made as narrow as one: the phone's layout)
 const uprightPhone = matchMedia("(pointer: coarse) and (orientation: portrait), (max-width: 600px) and (orientation: portrait)");
 const placeTitle = () => playerPage.classList.toggle("title-below", uprightPhone.matches &&
@@ -1869,10 +1909,38 @@ const toggleCustomPiP = async () => {
 
             const pipPlayBtn = pipContainer.querySelector('#pip-play-btn');
             const pipMuteBtn = pipContainer.querySelector('#pip-mute-btn');
-            pipPlayBtn.addEventListener('click', togglePlay);
-            pipContainer.querySelector('#pip-seek-back').addEventListener('click', () => seek(-5));
-            pipContainer.querySelector('#pip-seek-forward').addEventListener('click', () => seek(5));
-            pipMuteBtn.addEventListener('click', () => setVolume(mainVideo.volume > 0 ? 0 : 1));
+            const pipOverlay = pipContainer.querySelector('.pip-overlay');
+            // (each one answered at once in the window: its icons, and the controls' hiding)
+            const pipAct = action => {
+                action();
+                updatePipIcons();
+                pipWindow.setTimeout(updatePipIcons, 350);
+                showPipControls();
+            };
+            pipPlayBtn.addEventListener('click', () => pipAct(togglePlay));
+            pipContainer.querySelector('#pip-seek-back').addEventListener('click', () => pipAct(() => seek(-5)));
+            pipContainer.querySelector('#pip-seek-forward').addEventListener('click', () => pipAct(() => seek(5)));
+            pipMuteBtn.addEventListener('click', () => pipAct(() => setVolume(mainVideo.volume > 0 ? 0 : 1)));
+            // A click on the picture itself (not a button): play or pause, as in the player
+            pipOverlay.addEventListener('click', e => {
+                if (e.target.closest('button')) return;
+                pipAct(togglePlay);
+            });
+            // The keyboard, while the window has the focus: the player's own keys
+            pipWindow.addEventListener('keydown', e => {
+                if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea')) return;
+                const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+                const keys = {
+                    ' ': togglePlay, k: togglePlay,
+                    ArrowLeft: () => seek(-5), ArrowRight: () => seek(5), j: () => seek(-10), l: () => seek(10),
+                    ArrowUp: () => setVolume(Math.min(1, mainVideo.volume + 0.1)),
+                    ArrowDown: () => setVolume(Math.max(0, mainVideo.volume - 0.1)),
+                    m: () => setVolume(mainVideo.volume > 0 ? 0 : 1)
+                };
+                if (!keys[key]) return;
+                e.preventDefault();
+                pipAct(keys[key]);
+            });
 
             // Background Play: closes the window, the sound goes on
             pipContainer.querySelector('#pip-min-btn')?.addEventListener('click', () => {
@@ -1891,31 +1959,46 @@ const toggleCustomPiP = async () => {
             });
 
             // The buttons as things change (YouTube says nothing to the page: a look twice a second)
-            const updatePipIcons = () => {
-                pipPlayBtn.querySelector('i').className = mediaPaused() ? 'fas fa-play' : 'fas fa-pause';
+            let pipWasPaused = mediaPaused();
+            function updatePipIcons() {
+                const paused = mediaPaused();
+                pipPlayBtn.querySelector('i').className = paused ? 'fas fa-play' : 'fas fa-pause';
+                pipPlayBtn.title = paused ? 'Play (Space)' : 'Pause (Space)';
                 pipMuteBtn.querySelector('i').className = mainVideo.volume === 0 ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
-            };
+                // (paused from anywhere - the page, the room, the keyboard: the controls show)
+                if (paused !== pipWasPaused) {
+                    pipWasPaused = paused;
+                    if (paused) {
+                        clearTimeout(pipIdleTimer);
+                        pipContainer.classList.remove('hide-controls');
+                    } else hidePipControls();
+                }
+            }
             const iconTimer = pipWindow.setInterval(updatePipIcons, 500);
             mainVideo.addEventListener('play', updatePipIcons);
             mainVideo.addEventListener('pause', updatePipIcons);
             mainVideo.addEventListener('volumechange', updatePipIcons);
 
-            // The video's buttons hide while it plays and the pointer rests
+            // The video's buttons hide while it plays and the pointer rests (paused, they stay);
+            // any movement, anywhere in the window (over YouTube's picture too: the overlay keeps
+            // the pointer, its buttons only ignore it while hidden), brings them back
             let pipIdleTimer;
             const hidePipControls = () => {
+                clearTimeout(pipIdleTimer);
                 if (mediaPaused()) return;
                 pipIdleTimer = setTimeout(() => {
-                    pipContainer.classList.add('hide-controls');
+                    if (!mediaPaused()) pipContainer.classList.add('hide-controls');
                 }, 2500);
             };
-            hidePipControls();
-            videoWrapper.addEventListener('mousemove', () => {
+            function showPipControls() {
                 pipContainer.classList.remove('hide-controls');
-                clearTimeout(pipIdleTimer);
                 hidePipControls();
-            });
+            }
+            hidePipControls();
+            pipDoc.addEventListener('pointermove', showPipControls);
+            pipDoc.addEventListener('pointerdown', showPipControls);
             videoWrapper.addEventListener('mouseleave', () => {
-                pipContainer.classList.add('hide-controls');
+                if (!mediaPaused()) pipContainer.classList.add('hide-controls');
             });
 
             // Closed: the video back in the page, everything else stopped
@@ -2981,7 +3064,7 @@ const cmdPalette = (() => {
     const resultsHost = make("div", "yt-results cmd-results");
     body.append(note, link, list, recentBox, resultsHost);
     const foot = make("div", "cmd-foot");
-    foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> close</span>";
+    foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> back · close</span>";
     box.append(form, body, foot);
     overlay.append(box);
     playerPage.append(overlay);
@@ -3102,6 +3185,8 @@ const cmdPalette = (() => {
 
     // ---------- The list: only recent videos and search (commands work when entered, but do not show)
     let items = [];
+    // (what YouTube was last searched for here)
+    let searchedFor = "";
     let chosen = 0;
     let freshChoice = true;
     const matches = (command, words) => {
@@ -3116,8 +3201,10 @@ const cmdPalette = (() => {
             items = allRecent;
         } else {
             const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-            const search = youtube() ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
-            const matchingRecent = allRecent.filter(item => words.every(word => `${item.label} ${item.meta}`.toLowerCase().includes(word)));
+            // (not once its results are showing)
+            const shown = results && results.open && searchedFor === query;
+            const search = youtube() && !shown ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
+            const matchingRecent = shown ? [] : allRecent.filter(item => words.every(word => `${item.label} ${item.meta}`.toLowerCase().includes(word)));
             items = [...search, ...matchingRecent];
         }
         if (freshChoice) chosen = preferred;
@@ -3233,9 +3320,13 @@ const cmdPalette = (() => {
     // ---------- YouTube: results, and a pasted link (play, or in a room play now / add to queue)
     const roomQueue = () => !!together.canQueueYouTube && together.canQueueYouTube();
     const resultActions = [];
-    const setResultActions = () => resultActions.splice(0, resultActions.length, ...(roomQueue()
+    // (the first is what a click on a result does: out of a room it plays, and the box closes; in a
+    // room, where playing would change it for everyone, it's added to the queue)
+    const setResultActions = () => resultActions.splice(0, resultActions.length, ...(!roomQueue()
+        ? [{ key: "play", label: "Play", icon: "fa-play" }]
+        : together.active()
         ? [{ key: "end", label: "Add to queue", icon: "fa-plus" }, { key: "play", label: "Play now", icon: "fa-play" }]
-        : [{ key: "play", label: "Play", icon: "fa-play" }]));
+        : [{ key: "play", label: "Play", icon: "fa-play" }, { key: "end", label: "Add to queue", icon: "fa-plus" }]));
     setResultActions();
     // Play: here (on your own), or for everyone in a room; Add to queue: stays open for more
     const pick = (ref, where, meta = {}) => {
@@ -3270,7 +3361,9 @@ const cmdPalette = (() => {
     const searchYouTube = query => {
         if (!results) return;
         showNote("");
+        searchedFor = query;
         results.run(query);
+        renderList();
         // On a phone the keyboard steps aside for the results
         if (isTouch) input.blur();
     };
@@ -3421,7 +3514,7 @@ const cmdPalette = (() => {
     });
 
     // ---------- Opening and closing
-    const open = (text = "", message = "") => {
+    const open = (text = "", message = "", search = false) => {
         if (playerPage.hidden) showPlayer();
         if (overlay.hidden) {
             ensureResults();
@@ -3438,13 +3531,37 @@ const cmdPalette = (() => {
         showNote(message);
         renderAll();
         input.focus();
-        if (!overlay.hidden && !isTouch) input.select();
+        if (search && text.trim() && results && !linkState.ref) searchYouTube(text.trim());
+        else if (!overlay.hidden && !isTouch) input.select();
     };
+    // Esc: with something typed or results showing, back to the start (Recently played); then the
+    // box closes. (Ahead of the results' own Esc, so the list is drawn again too.)
+    const backToStart = () => {
+        if (!input.value.trim() && !(results && results.open) && link.hidden) return false;
+        input.value = "";
+        searchedFor = "";
+        if (results) results.clear();
+        linkState.key = "";
+        chosen = 0;
+        freshChoice = true;
+        showNote("");
+        renderAll();
+        body.scrollTop = 0;
+        input.focus();
+        return true;
+    };
+    input.addEventListener("keydown", e => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!backToStart()) close();
+    }, true);
     const close = () => {
         if (overlay.hidden) return;
         overlay.hidden = true;
         searchBtn.setAttribute("aria-expanded", "false");
         if (results) results.clear();
+        searchedFor = "";
         input.value = "";
         linkState.ref = null;
         link.hidden = true;
@@ -3470,7 +3587,7 @@ const cmdPalette = (() => {
         if (e.key === "Escape") {
             e.preventDefault();
             e.stopPropagation();
-            close();
+            if (!backToStart()) close();
             return;
         }
         if (e.key === "Tab") {
