@@ -124,12 +124,24 @@ container.addEventListener("pointerdown", e => {
 });
 
 // Show Center Visual Feedback Badge
+// On a computer it shows at the side, not over the middle of the picture: going back (-10s,
+// previous video) on the left, everything else (next video, play, volume…) on the right
+let feedbackTimer = null;
 const showFeedback = (iconClass, text = "") => {
     feedbackIcon.className = `fa-solid ${iconClass}`;
     feedbackText.innerText = text;
+    const left = /backward/.test(iconClass);
+    if (centerFeedback.classList.contains("show") && centerFeedback.classList.contains("left") !== left) {
+        // Changing sides: start from that side, not slide across the picture
+        centerFeedback.classList.remove("show");
+        void centerFeedback.offsetWidth;
+    }
+    centerFeedback.classList.toggle("left", left);
+    centerFeedback.classList.toggle("right", !left);
     centerFeedback.classList.add("show");
-    
-    setTimeout(() => {
+    // Another message straight after keeps it up for its own 700ms
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => {
         centerFeedback.classList.remove("show");
     }, 700);
 };
@@ -1052,7 +1064,8 @@ const releaseMedia = () => {
     container.classList.remove("audio-mode");
     videoTitle.innerText = audioTitle.innerText = "No Video Loaded";
     progressBar.style.width = "0%";
-    currentVidTime.innerText = videoDuration.innerText = formatTime(0);
+    videoDuration.innerText = formatTime(0);
+    paintTime(0, 0);
     showPlaying(false);
     updatePlayerStop();
 };
@@ -1277,10 +1290,47 @@ const seekWhileDragging = time => {
 };
 mainVideo.addEventListener("seeked", () => scrubbing && scrubNext !== null && seekWhileDragging(scrubNext));
 
+// The time at the left of the controls: how far in (01:23), or - clicked or tapped - how long is
+// left (-43:37). Clicked again, back. Remembered in this browser.
+const TIME_MODE_KEY = "cinetab:time-left";
+let showRemaining = storage.get(TIME_MODE_KEY) === "1";
+const shownTime = { time: 0, duration: 0 };
+const paintTime = (time = shownTime.time, duration = shownTime.duration) => {
+    shownTime.time = time;
+    shownTime.duration = duration;
+    const left = showRemaining && Number.isFinite(duration) && duration > 0;
+    currentVidTime.innerText = left ? `-${formatTime(Math.max(0, duration - time))}` : formatTime(time);
+    currentVidTime.classList.toggle("left", left);
+};
+const paintTimeLabel = () => {
+    const label = showRemaining ? "Time left: show how far in" : "Show the time left";
+    currentVidTime.title = label;
+    currentVidTime.setAttribute("aria-label", label);
+    currentVidTime.setAttribute("aria-pressed", String(showRemaining));
+};
+currentVidTime.setAttribute("role", "button");
+currentVidTime.tabIndex = 0;
+paintTimeLabel();
+const toggleTimeLeft = e => {
+    e.stopPropagation();
+    // ("LIVE" has no time left)
+    if (container.classList.contains("yt-live")) return;
+    showRemaining = !showRemaining;
+    storage.set(TIME_MODE_KEY, showRemaining ? "1" : "0");
+    paintTimeLabel();
+    paintTime();
+};
+currentVidTime.addEventListener("click", toggleTimeLeft);
+currentVidTime.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    toggleTimeLeft(e);
+});
+
 const scrub = (e, dragging = false) => {
     const ratio = timelineRatio(e);
     progressBar.style.width = `${ratio * 100}%`;
-    currentVidTime.innerText = formatTime(ratio * mediaDuration());
+    paintTime(ratio * mediaDuration(), mediaDuration());
     if (!together.stream) {
         const time = ratio * mainVideo.duration;
         if (dragging) seekWhileDragging(time);
@@ -1325,7 +1375,7 @@ const showProgress = (currentTime, duration) => {
     if (scrubbing) return;
     let percent = (currentTime / duration) * 100;
     progressBar.style.width = `${percent}%`;
-    currentVidTime.innerText = formatTime(currentTime);
+    paintTime(currentTime, duration);
 };
 
 mainVideo.addEventListener("timeupdate", e => {
@@ -2712,7 +2762,6 @@ let pinchStartDistance = 0;
 let pinchScale = 1;
 let pinching = false;
 let mobileSwipe = null;
-let ignoreNextTouchPointerUp = false;
 let mobileBrightness = 1;
 
 const toggleControls = () => {
@@ -2765,8 +2814,7 @@ onSurface("pointerup", e => {
     if (e.pointerType !== "touch" || pinching) return;
     const moved = touchStart && Math.hypot(e.clientX - touchStart.x, e.clientY - touchStart.y) > 14;
     touchStart = null;
-    if (ignoreNextTouchPointerUp || moved) {
-        ignoreNextTouchPointerUp = false;
+    if (moved) {
         touchedAt = Date.now();
         return;
     }
@@ -2856,9 +2904,9 @@ const showMobileAdjustment = (kind, value) => {
     // Volume: the lower half of the bar is 0-100%, the upper half the boost up to 300%
     const boosted = kind === "volume" && value > 1;
     const percent = kind === "volume" ? Math.round(value <= 1 ? value * 100 : 100 + (value - 1) * 200) : Math.round(value * 100);
-    icon.className = `fa-solid ${kind === "brightness" ? "fa-sun" : value ? "fa-volume-high" : "fa-volume-xmark"}`;
+    icon.className = `fa-solid ${kind === "brightness" ? "fa-sun" : !value ? "fa-volume-xmark" : value < 0.5 ? "fa-volume-low" : "fa-volume-high"}`;
     fill.style.height = `${kind === "volume" ? value * 50 : percent}%`;
-    label.textContent = `${percent}%`;
+    label.textContent = String(percent);
     adjustment.classList.toggle("boosted", boosted);
     mobileBrightnessAdjustment.classList.toggle("show", kind === "brightness");
     mobileVolumeAdjustment.classList.toggle("show", kind === "volume");
@@ -2869,19 +2917,18 @@ const showMobileAdjustment = (kind, value) => {
     }, 700);
 };
 
+// Fullscreen swipes, like MX Player: up and down on the left half is the brightness, on the right
+// half the volume. (No swipe enters or leaves fullscreen: that's the button or a double tap.)
 onSurface("touchstart", e => {
-    const portraitPhone = isTouch && matchMedia("(orientation: portrait)").matches;
-    if (e.touches.length !== 1 || (!fullscreenElement() && !portraitPhone) || pinching) return;
+    if (e.touches.length !== 1 || !fullscreenElement() || pinching) return;
     const touch = e.touches[0];
     const rect = e.currentTarget.getBoundingClientRect();
-    const edge = touch.clientX - rect.left;
-    const edgeWidth = rect.width * 0.22;
-    const isFullscreen = Boolean(fullscreenElement());
+    const left = touch.clientX - rect.left < rect.width / 2;
     mobileSwipe = {
         x: touch.clientX,
         y: touch.clientY,
-        kind: !isFullscreen ? "dismiss" : edge <= edgeWidth ? "brightness" : edge >= rect.width - edgeWidth ? "volume" : "dismiss",
-        startValue: edge <= edgeWidth ? mobileBrightness : soundLevel(),
+        kind: left ? "brightness" : "volume",
+        startValue: left ? mobileBrightness : soundLevel(),
         handled: false
     };
 }, { passive: true });
@@ -2891,29 +2938,26 @@ onSurface("touchmove", e => {
     const touch = e.touches[0];
     const dx = touch.clientX - mobileSwipe.x;
     const dy = touch.clientY - mobileSwipe.y;
-    if (Math.abs(dy) < 12 && !mobileSwipe.handled) return;
-
-    const verticalSwipe = Math.abs(dy) > Math.abs(dx) * 1.2;
-    if (mobileSwipe.kind === "dismiss" && !fullscreenElement() && dy < -80 && verticalSwipe) {
+    if (!mobileSwipe.handled) {
+        if (Math.abs(dy) < 12) return;
+        // Mostly sideways: not a brightness or volume swipe
+        if (Math.abs(dy) < Math.abs(dx) * 1.2) {
+            mobileSwipe = null;
+            return;
+        }
         mobileSwipe.handled = true;
-        ignoreNextTouchPointerUp = true;
-        toggleFullscreen();
-        showFeedback("fa-up-long", "Entered fullscreen");
-    } else if (mobileSwipe.kind === "dismiss" && fullscreenElement() && dy > 80 && verticalSwipe) {
-        mobileSwipe.handled = true;
-        ignoreNextTouchPointerUp = true;
-        exitFullscreen();
-        showFeedback("fa-down-long", "Exited fullscreen");
-    } else if (mobileSwipe.kind === "brightness" && Math.abs(dy) > 12) {
-        mobileSwipe.handled = true;
-        updateMobileBrightness(mobileSwipe.startValue - dy / 300);
+        // Counted from here, so the value doesn't jump by the first 12px
+        mobileSwipe.y = touch.clientY;
+    }
+    const moved = touch.clientY - mobileSwipe.y;
+    if (mobileSwipe.kind === "brightness") {
+        updateMobileBrightness(mobileSwipe.startValue - moved / 300);
         showMobileAdjustment("brightness", mobileBrightness);
-    } else if (mobileSwipe.kind === "volume" && Math.abs(dy) > 12) {
-        mobileSwipe.handled = true;
-        setSoundLevel(mobileSwipe.startValue - dy / 250);
+    } else {
+        setSoundLevel(mobileSwipe.startValue - moved / 250);
         showMobileAdjustment("volume", soundLevel());
     }
-    if (mobileSwipe.handled) e.preventDefault();
+    e.preventDefault();
 }, { passive: false });
 
 onSurface("touchend", () => {
@@ -3137,16 +3181,46 @@ const cmdPalette = (() => {
     const list = make("ul", "cmd-list");
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", "Commands");
-    // Recently played: the last 8, a row of pictures with their titles below, scrolling across
-    const recentBox = make("section", "cmd-recent");
-    recentBox.hidden = true;
-    recentBox.append(make("p", "cmd-recent-title", "Recently played"));
-    const recentRow = make("div", "cmd-recent-row");
-    recentRow.setAttribute("role", "listbox");
-    recentRow.setAttribute("aria-label", "Recently played");
-    recentBox.append(recentRow);
+    // Recently played (the last 20) and Saved (YouTube videos and playlists kept with a heart):
+    // each a row of pictures with their titles below, scrolling across
+    const cardSection = (title, extra = "") => {
+        const box = make("section", `cmd-recent${extra}`);
+        box.hidden = true;
+        box.append(make("p", "cmd-recent-title", title));
+        const row = make("div", "cmd-recent-row");
+        row.setAttribute("role", "listbox");
+        row.setAttribute("aria-label", title);
+        // Arrows at its ends (with a mouse): move it a page left or right; each shows while there's
+        // more that way
+        const rail = make("div", "cmd-recent-rail");
+        const arrow = dir => {
+            const button = make("button", `cmd-recent-arrow ${dir < 0 ? "prev" : "next"}`);
+            button.type = "button";
+            button.tabIndex = -1;
+            button.title = dir < 0 ? "Scroll left" : "Scroll right";
+            button.setAttribute("aria-label", `${button.title}: ${title}`);
+            button.append(make("i", `fa-solid ${dir < 0 ? "fa-chevron-left" : "fa-chevron-right"}`));
+            button.addEventListener("click", e => {
+                e.stopPropagation();
+                row.scrollBy({ left: dir * Math.max(160, row.clientWidth * 0.8), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            });
+            return button;
+        };
+        rail.append(arrow(-1), row, arrow(1));
+        box.append(rail);
+        return [box, row];
+    };
+    // (an arrow shows while the row goes on that way)
+    const paintArrows = row => {
+        const rail = row.parentNode;
+        const max = row.scrollWidth - row.clientWidth;
+        rail.classList.toggle("can-prev", max > 2 && row.scrollLeft > 2);
+        rail.classList.toggle("can-next", max > 2 && row.scrollLeft < max - 2);
+    };
+    const [recentBox, recentRow] = cardSection("Recently played");
+    const [savedBox, savedRow] = cardSection("Saved", " cmd-saved");
     const resultsHost = make("div", "yt-results cmd-results");
-    body.append(note, link, list, recentBox, resultsHost);
+    body.append(note, link, list, recentBox, savedBox, resultsHost);
     const foot = make("div", "cmd-foot");
     foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> back · close</span>";
     box.append(form, body, foot);
@@ -3163,7 +3237,7 @@ const cmdPalette = (() => {
     const recentVideos = () => {
         if (!window.CineHistory) return [];
         const list = CineHistory.list() || [];
-        return list.slice(0, 8).map(entry => {
+        return list.slice(0, 20).map(entry => {
             const isYt = entry.type === "video" || entry.type === "playlist";
             const title = entry.title || entry.name || (isYt ? "YouTube video" : "Video file");
             const icon = entry.type === "playlist" ? "fa-list" : isYt ? "fa-brands fa-youtube" : "fa-film";
@@ -3209,6 +3283,28 @@ const cmdPalette = (() => {
                         });
                     }
                 }
+            };
+        });
+    };
+
+    // ---------- Saved YouTube videos and playlists (history.js), newest first: played from the start
+    const savedVideos = () => {
+        if (!window.CineSaved || !youtube()) return [];
+        return (CineSaved.list() || []).slice(0, 40).map(entry => {
+            const playlist = entry.type === "playlist";
+            const meta = [entry.channel, playlist ? (entry.count ? `${entry.count} videos` : "Playlist") : entry.live ? "Live" : entry.duration ? formatTime(entry.duration) : ""]
+                .filter(Boolean).join(" · ") || (playlist ? "Playlist" : "YouTube");
+            return {
+                label: entry.title || (playlist ? "YouTube playlist" : "YouTube video"),
+                meta,
+                icon: playlist ? "fa-list" : "fa-brands fa-youtube",
+                saved: true,
+                entry,
+                thumb: entry.id ? `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg` : "",
+                progress: 0,
+                run: () => pick({ id: entry.id || null, list: playlist ? entry.list : null, start: 0 }, "play", playlist
+                    ? { listTitle: entry.title, channel: entry.channel, count: entry.count }
+                    : { title: entry.title, channel: entry.channel, live: !!entry.live })
             };
         });
     };
@@ -3280,25 +3376,26 @@ const cmdPalette = (() => {
     const renderList = () => {
         const query = input.value.trim();
         const allRecent = recentVideos();
+        const allSaved = savedVideos();
         let preferred = 0;
         if (!query) {
-            items = allRecent;
+            items = [...allRecent, ...allSaved];
         } else {
             const words = query.toLowerCase().split(/\s+/).filter(Boolean);
             // (not once its results are showing)
             const shown = results && results.open && searchedFor === query;
             const search = youtube() && !shown ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
-            const matchingRecent = shown ? [] : allRecent.filter(item => words.every(word => `${item.label} ${item.meta}`.toLowerCase().includes(word)));
-            items = [...search, ...matchingRecent];
+            const matching = cards => shown ? [] : cards.filter(item => words.every(word => `${item.label} ${item.meta}`.toLowerCase().includes(word)));
+            items = [...search, ...matching(allRecent), ...matching(allSaved)];
         }
         if (freshChoice) chosen = preferred;
         freshChoice = false;
         chosen = Math.min(chosen, Math.max(0, items.length - 1));
         renderRecent();
-        const rows = items.map((item, i) => [item, i]).filter(([item]) => !item.recent);
+        const rows = items.map((item, i) => [item, i]).filter(([item]) => !item.recent && !item.saved);
         if (!rows.length) {
             if (!query && !items.length) {
-                list.innerHTML = `<li class="cmd-empty"><i class="fa-solid fa-clock-rotate-left"></i><span>No recent videos</span><small>Search YouTube or paste a link above</small></li>`;
+                list.innerHTML = `<li class="cmd-empty"><i class="fa-solid fa-clock-rotate-left"></i><span>No recent or saved videos</span><small>Search YouTube or paste a link above</small></li>`;
                 list.hidden = false;
                 return;
             }
@@ -3327,12 +3424,17 @@ const cmdPalette = (() => {
         list.hidden = false;
         markChosen();
     };
-    // The recent ones: a card each - the video's picture (a film for a file from this device) with
-    // how far it got along its bottom, its title below, and where it's from
+    // The recent and saved ones: a card each - the video's picture (a film for a file from this
+    // device) with how far it got along its bottom, its title below, and where it's from. (Drawn
+    // again after a heart or ×: each row stays scrolled where it was.)
     const renderRecent = () => {
-        const cards = items.map((item, i) => [item, i]).filter(([item]) => item.recent);
-        recentBox.hidden = !cards.length;
-        recentRow.replaceChildren(...cards.map(([item, i]) => {
+        renderCards(recentBox, recentRow, items.map((item, i) => [item, i]).filter(([item]) => item.recent));
+        renderCards(savedBox, savedRow, items.map((item, i) => [item, i]).filter(([item]) => item.saved));
+    };
+    const renderCards = (box, row, cards) => {
+        box.hidden = !cards.length;
+        const scrolled = row.scrollLeft;
+        row.replaceChildren(...cards.map(([item, i]) => {
             const card = make("button", "cmd-card");
             card.type = "button";
             card.setAttribute("role", "option");
@@ -3379,7 +3481,7 @@ const cmdPalette = (() => {
             const entry = item.entry || {};
             const youTube = entry.type === "video" || entry.type === "playlist";
             const acts = make("span", "cmd-card-acts");
-            acts.append(act("forget", "fa-xmark", "Remove from Recently played"));
+            if (item.recent) acts.append(act("forget", "fa-xmark", "Remove from Recently played"));
             const saveItem = savedItemOfEntry(entry);
             const key = saveItem && window.CineSaved && window.CineYouTube && CineYouTube.paintHeart && CineSaved.keyOf(saveItem);
             if (key) {
@@ -3398,12 +3500,14 @@ const cmdPalette = (() => {
             wrap.append(card, acts, run);
             return wrap;
         }));
+        row.scrollLeft = scrolled;
+        paintArrows(row);
     };
     // (a recent YouTube video or playlist, as Saved keeps it)
     const savedItemOfEntry = entry => entry.type === "playlist" && entry.list
         ? { kind: "playlist", list: entry.list, id: entry.id, title: entry.title || entry.videoTitle, channel: entry.channel, count: entry.count }
         : entry.type === "video" && entry.id ? { kind: "video", id: entry.id, title: entry.title, channel: entry.channel, duration: entry.duration || null, live: !!entry.live } : null;
-    recentRow.addEventListener("click", e => {
+    const onCardClick = e => {
         const button = e.target.closest(".cmd-card-act");
         const wrap = e.target.closest(".cmd-card-wrap");
         const item = wrap && items[+wrap.dataset.i];
@@ -3414,8 +3518,15 @@ const cmdPalette = (() => {
         const name = button.dataset.act;
         if (name === "play") return runItem(item);
         if (name === "fav") {
-            const saved = CineSaved.toggle(savedItemOfEntry(entry));
-            if (saved !== null) showNote(saved ? "Saved - it's on the home page's Saved" : "Taken out of Saved");
+            const saveItem = savedItemOfEntry(entry);
+            const unsaving = item.saved;
+            // (a card in Saved leaves its row first)
+            if (unsaving) wrap.classList.add("leaving");
+            setTimeout(() => {
+                // (the Saved row follows the heart: CineSaved.onChange below)
+                const saved = CineSaved.toggle(saveItem);
+                if (saved !== null) showNote(saved ? "Saved - it's in Saved here and on the home page" : "Taken out of Saved");
+            }, unsaving ? 180 : 0);
             return;
         }
         if (name === "queue") {
@@ -3435,13 +3546,65 @@ const cmdPalette = (() => {
                 renderList();
             }, 180);
         }
+    };
+    // A heart anywhere (a card here, a search result, another tab): the Saved row follows, while
+    // open. (Listened to from the first opening: history.js loads after this file.)
+    let followingSaved = false;
+    const followSaved = () => {
+        if (followingSaved || !window.CineSaved) return;
+        followingSaved = true;
+        CineSaved.onChange(() => {
+            if (overlay.hidden) return;
+            freshChoice = false;
+            renderAll();
+        });
+    };
+    [recentRow, savedRow].forEach(row => {
+        row.addEventListener("click", onCardClick);
+        // Up and down (a wheel, a trackpad) scrolls the search box as usual; a trackpad's sideways
+        // swipe scrolls the row by itself; Shift + the wheel scrolls the row across
+        row.addEventListener("wheel", e => {
+            if (!e.shiftKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || row.scrollWidth <= row.clientWidth) return;
+            e.preventDefault();
+            row.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 32 : 1);
+        }, { passive: false });
+        row.addEventListener("scroll", () => paintArrows(row), { passive: true });
+        if ("ResizeObserver" in window) new ResizeObserver(() => paintArrows(row)).observe(row);
+        // (no scrollbar: a mouse drags the row across; a drag isn't a click on a card)
+        let drag = null;
+        row.addEventListener("pointerdown", e => {
+            if (e.pointerType !== "mouse" || e.button !== 0 || row.scrollWidth <= row.clientWidth) return;
+            drag = { x: e.clientX, left: row.scrollLeft, moved: false, id: e.pointerId };
+        });
+        row.addEventListener("pointermove", e => {
+            if (!drag || e.pointerId !== drag.id) return;
+            const dx = e.clientX - drag.x;
+            if (!drag.moved && Math.abs(dx) < 6) return;
+            if (!drag.moved) {
+                drag.moved = true;
+                row.classList.add("dragging");
+                row.setPointerCapture(drag.id);
+            }
+            row.scrollLeft = drag.left - dx;
+        });
+        const endDrag = () => {
+            if (!drag) return;
+            const moved = drag.moved;
+            drag = null;
+            row.classList.remove("dragging");
+            if (!moved) return;
+            // (the click straight after the drag, if any, is swallowed; a later one counts)
+            const swallow = e => {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+            };
+            row.addEventListener("click", swallow, { capture: true, once: true });
+            setTimeout(() => row.removeEventListener("click", swallow, { capture: true }), 0);
+        };
+        row.addEventListener("pointerup", endDrag);
+        row.addEventListener("pointercancel", endDrag);
+        row.addEventListener("dragstart", e => e.preventDefault());
     });
-    // (a mouse wheel scrolls the row across)
-    recentRow.addEventListener("wheel", e => {
-        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || recentRow.scrollWidth <= recentRow.clientWidth) return;
-        e.preventDefault();
-        recentRow.scrollLeft += e.deltaY;
-    }, { passive: false });
     const markChosen = () => {
         body.querySelectorAll(".cmd-item[data-i], .cmd-card[data-i]").forEach(node => {
             const on = +node.dataset.i === chosen;
@@ -3604,6 +3767,7 @@ const cmdPalette = (() => {
             list.replaceChildren();
             list.hidden = true;
             recentBox.hidden = true;
+            savedBox.hidden = true;
             return;
         }
         renderList();
@@ -3670,12 +3834,15 @@ const cmdPalette = (() => {
         if (playerPage.hidden) showPlayer();
         if (overlay.hidden) {
             ensureResults();
+            followSaved();
             setResultActions();
             overlay.hidden = false;
             searchBtn.setAttribute("aria-expanded", "true");
             input.placeholder = youtube() ? "Search YouTube, paste a link, or pick recent…" : "Paste a link or pick a recent video…";
             if (results) results.clear();
             linkState.key = "";
+            // (both rows from their start again)
+            recentRow.scrollLeft = savedRow.scrollLeft = 0;
         }
         input.value = text;
         chosen = 0;

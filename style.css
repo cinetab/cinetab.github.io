@@ -1495,52 +1495,114 @@ body.watching {
   text-transform: capitalize;
 }
 
-/* Mobile edge gesture feedback: brightness on the left, volume on the right. */
+/* A computer: messages show at the side of the picture as a pill, not over the middle. Going back
+   on the left, everything else (next video, play / pause, volume, subtitles…) on the right. */
+@media (hover: hover) and (pointer: fine) and (min-width: 601px) {
+  .container .center-feedback {
+    top: 50%;
+    left: auto;
+    right: 28px;
+    width: auto;
+    height: auto;
+    max-width: min(320px, 40%);
+    padding: 10px 18px 10px 14px;
+    flex-direction: row;
+    gap: 10px;
+    border-radius: 999px;
+    transform: translate(16px, -50%);
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .container .center-feedback.left {
+    left: 28px;
+    right: auto;
+    transform: translate(-16px, -50%);
+  }
+  .container .center-feedback.show {
+    transform: translate(0, -50%);
+  }
+  .container .center-feedback i {
+    font-size: 18px;
+  }
+  .container .center-feedback span {
+    margin-top: 0;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .container .center-feedback span:empty {
+    display: none;
+  }
+  .container .center-feedback:has(span:empty) {
+    padding: 10px 14px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 601px) and (prefers-reduced-motion: reduce) {
+  .container .center-feedback,
+  .container .center-feedback.left {
+    transition: opacity 0.15s ease;
+  }
+}
+
+/* Swipe feedback, like MX Player: the panel shows on the other side from the finger, so the
+   finger doesn't cover it. A volume swipe (right half) shows on the left, a brightness swipe
+   (left half) on the right. A dark pill: the number on top, a thick bar, the icon below. */
 .mobile-adjustment {
   position: absolute;
   top: 50%;
   z-index: 5;
-  width: 58px;
-  height: 190px;
-  padding: 10px 0;
+  width: 52px;
+  padding: 14px 0 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: #fff;
+  border-radius: 26px;
+  background: rgba(20, 20, 24, 0.62);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-50%) scale(0.88);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-.mobile-brightness-adjustment {
-  left: 16px;
+  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
 .mobile-volume-adjustment {
-  right: 16px;
+  left: max(20px, env(safe-area-inset-left));
+  transform: translate(-24px, -50%);
+}
+
+.mobile-brightness-adjustment {
+  right: max(20px, env(safe-area-inset-right));
+  transform: translate(24px, -50%);
 }
 
 .mobile-adjustment.show {
   opacity: 1;
-  transform: translateY(-50%) scale(1);
+  transform: translate(0, -50%);
 }
 
-.mobile-adjustment > i {
-  font-size: 18px;
-  height: 20px;
+.mobile-adjustment span {
+  order: -1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
 }
 
 .mobile-adjustment-track {
   position: relative;
-  width: 8px;
-  height: 130px;
+  width: 6px;
+  height: 140px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .mobile-adjustment-fill {
@@ -1554,14 +1616,17 @@ body.watching {
   transition: height 0.08s linear;
 }
 
-.mobile-adjustment span {
-  min-width: 46px;
-  padding: 2px 5px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.65);
-  font-size: 10px;
-  font-weight: 600;
+.mobile-adjustment > i {
+  font-size: 16px;
+  width: 20px;
+  height: 18px;
   text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-adjustment {
+    transition: opacity 0.15s ease;
+  }
 }
 
 /* Controls Wrapper */
@@ -1781,6 +1846,31 @@ body.watching {
 .video-timer .separator {
   margin: 0 5px;
   color: #888;
+}
+
+/* The current time: clicked or tapped, the time left instead (-43:37), and back (script.js) */
+.video-timer .current-time {
+  margin: -4px -5px;
+  padding: 4px 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.video-timer .current-time:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.video-timer .current-time:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 1px;
+}
+
+.video-timer .current-time:active {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 /* Popup Menus */
@@ -5683,6 +5773,21 @@ body > .room-toasts {
   backdrop-filter: blur(24px);
 }
 
+/* A phone held upright in a room (.now-below): mica rather than acrylic - a denser tint over a
+   softer, less saturated glow, so the video's colours only wash through the panel and the title
+   below the video. Still the live glow: it changes with the picture. */
+.player-page.now-below.ambient-on :is(.ambient, .ambient-yt).on {
+  opacity: 0.42;
+  filter: blur(56px) saturate(1.1);
+}
+
+.player-page.now-below.ambient-on .room-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 120px), rgba(22, 22, 28, 0.8);
+  -webkit-backdrop-filter: blur(40px) saturate(115%);
+  backdrop-filter: blur(40px) saturate(115%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
 /* The call window (room.js): everyone in the room, like a video call, over the player wherever it
    was dragged to (also in fullscreen). Each tile is a camera, or an avatar while it's off, with the
    person's name and their mic: on, or muted (red). Floating, room.js gives it its size (any shape,
@@ -5958,6 +6063,47 @@ body > .room-toasts {
   font-size: 12.5px;
   font-weight: 600;
   color: #fff;
+}
+
+/* (a button: on a computer it minimizes the call and shows it again, with a chevron after the
+   number; otherwise just how many) */
+button.room-call-title {
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: default;
+}
+
+button.room-call-title:not(.folds) {
+  pointer-events: none;
+}
+
+.room-call-title .room-call-title-chevron {
+  display: none;
+  margin-left: 1px;
+  font-size: 9px;
+  color: #c9c9d6;
+  transition: transform 0.2s ease;
+}
+
+.room-call:not(.unit) .room-call-title.folds {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.room-call:not(.unit) .room-call-title.folds .room-call-title-chevron {
+  display: inline-block;
+}
+
+.room-call:not(.unit) .room-call-title.folds:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.room-call:not(.unit) .room-call-title.folds:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
 }
 
 .room-call-btn {
@@ -8823,6 +8969,39 @@ body > .room-toasts {
   display: none;
 }
 
+/* A phone held upright, out of a room too (the queue on your own): the panel is a bottom sheet
+   below the video - no hide button (that's for computers), but a handle line on its top edge;
+   a swipe down from it (or from the tabs) slides the panel away (room.js) */
+@media (pointer: coarse) and (max-width: 900px) and (orientation: portrait) {
+  .room-panel .room-hide-btn {
+    display: none !important;
+  }
+  .player-page.room-open .room-panel {
+    border-width: 1px 1px 0;
+    border-radius: 18px 18px 0 0;
+  }
+  .player-page.room-open .room-panel::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    z-index: 2;
+    width: 40px;
+    height: 4px;
+    margin-left: -20px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+  }
+  /* (room under the handle; in a room upright, the tabs already make it) */
+  .player-page.room-open:not(.now-below) .room-panel {
+    padding-top: 14px;
+  }
+  .player-page.room-open .room-panel.swiping::before {
+    background: rgba(255, 255, 255, 0.55);
+  }
+}
+
 .player-meta .room-now {
   gap: 6px;
   margin: 6px 0 0;
@@ -11563,50 +11742,10 @@ body > .room-toasts {
   bottom: -12px;
 }
 
-.room-call.mini.bar-to-right:not(.unit) .room-call-bar,
-.room-call.mini.bar-to-left:not(.unit) .room-call-bar {
-  top: calc(50% + var(--bar-dy, 0px));
-  right: auto;
-  bottom: auto;
-  left: calc(100% + 8px);
-  transform: translateY(-50%) scale(0.96);
-  transform-origin: left center;
-}
-
-.room-call.mini.bar-to-left:not(.unit) .room-call-bar {
-  right: calc(100% + 8px);
-  left: auto;
-  transform-origin: right center;
-}
-
-.room-call.mini.bar-to-right:not(.unit) .room-call-bar::before,
-.room-call.mini.bar-to-left:not(.unit) .room-call-bar::before {
-  top: 0;
-  bottom: 0;
-  width: 12px;
-  height: auto;
-}
-
-.room-call.mini.bar-to-right:not(.unit) .room-call-bar::before {
-  right: auto;
-  left: -12px;
-}
-
-.room-call.mini.bar-to-left:not(.unit) .room-call-bar::before {
-  right: -12px;
-  left: auto;
-}
-
-.room-call.mini:not(.unit):is(:hover, :has(:focus-visible), .bar-open):not(.dragging):not(.resizing):not(.bar-to-left):not(.bar-to-right) .room-call-bar {
+.room-call.mini:not(.unit):is(:hover, :has(:focus-visible), .bar-open):not(.dragging):not(.resizing) .room-call-bar {
   opacity: 1;
   pointer-events: auto;
   transform: translate(calc(-50% + var(--bar-dx, 0px)), 0);
-}
-
-.room-call.mini:is(.bar-to-left, .bar-to-right):not(.unit):is(:hover, :has(:focus-visible), .bar-open):not(.dragging):not(.resizing) .room-call-bar {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(-50%) scale(1);
 }
 
 .room-call.mini:not(.unit) .room-call-btn {
@@ -11956,7 +12095,7 @@ body > .room-toasts {
 }
 
 /* =================== SEARCH: RECENTLY PLAYED, A ROW OF PICTURES =================== */
-/* The last 8 videos played, side by side, scrolling across (a mouse wheel scrolls it too): each
+/* The last 20 videos played (and, below, the Saved ones), side by side, scrolling across (a mouse wheel scrolls it too): each
    its picture (a film for a file from this device) with how far it got along the bottom, and its
    title and where it's from below. Arrow keys and Enter choose, as in the list. */
 .cmd-recent[hidden] {
@@ -11981,8 +12120,75 @@ body > .room-toasts {
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
   scroll-padding-inline: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  /* No scrollbar: it scrolls with a swipe, a trackpad, the mouse wheel or by dragging (script.js) */
+  scrollbar-width: none;
+}
+
+.cmd-recent-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Arrows at the row's ends (with a mouse): a page left or right, each while there's more that way */
+.cmd-recent-rail {
+  position: relative;
+}
+
+.cmd-recent-arrow {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  /* (centred on the pictures: a card is 160px wide at 16:9) */
+  margin-top: calc(160px * 9 / 32 - 17px + 6px);
+  display: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(20, 20, 26, 0.86);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.cmd-recent-arrow.prev {
+  left: 0;
+}
+
+.cmd-recent-arrow.next {
+  right: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cmd-recent-arrow {
+    display: grid;
+  }
+  .cmd-recent-rail.can-prev .cmd-recent-arrow.prev,
+  .cmd-recent-rail.can-next .cmd-recent-arrow.next {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.cmd-recent-arrow:hover {
+  background: rgba(62, 151, 253, 0.95);
+}
+
+.cmd-recent-arrow:active {
+  transform: scale(0.92);
+}
+
+.cmd-recent-row.dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
 }
 
 .cmd-card {
@@ -13694,6 +13900,192 @@ body > .room-toasts {
   background: rgba(255, 77, 94, 0.1);
 }
 
+/* ---------- A room card: everyone who has joined it so far (room.js) - all their pictures,
+   wrapping onto more rows, a green ring on those in it now, and their names below */
+.room-card-people {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.room-card-avatars {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  flex-shrink: 1;
+  max-width: 100%;
+}
+
+.room-card-avatars > .online {
+  border-color: #3ad07a;
+}
+
+.room-card-people .room-card-names {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+/* Saved in common: a button opens the list - each video or playlist two or more people saved,
+   who saved it, and Play (or Add to the room's queue, in the room now) */
+.room-card-common-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 6px 11px;
+  border: 1px solid rgba(255, 79, 139, 0.3);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffd2e2;
+  background: rgba(255, 79, 139, 0.1);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.room-card-common-btn > .fa-heart {
+  font-size: 11px;
+  color: #ff4f8b;
+}
+
+.room-card-common-btn:hover {
+  border-color: rgba(255, 79, 139, 0.55);
+  background: rgba(255, 79, 139, 0.18);
+}
+
+.room-card-common-btn:focus-visible {
+  outline: 2px solid #3e97fd;
+  outline-offset: 2px;
+}
+
+.room-card-common-chev {
+  font-size: 9px;
+  transition: transform 0.2s ease;
+}
+
+.room-card-common-btn[aria-expanded="true"] .room-card-common-chev {
+  transform: rotate(180deg);
+}
+
+.room-card-common {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 232px;
+  margin: 8px 0 0;
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  animation: viewIn 0.25s var(--ease) both;
+}
+
+.room-card-common[hidden] {
+  display: none;
+}
+
+.room-card-common-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 5px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.room-card-common-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.room-card-common-thumb {
+  flex: 0 0 64px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  color: #9a9aab;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.room-card-common-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.room-card-common-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-card-common-info b,
+.room-card-common-info small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.room-card-common-info b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.room-card-common-info small {
+  font-size: 11px;
+  color: #9a9aac;
+}
+
+.room-card-common-act {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 50%;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.room-card-common-act.play {
+  border-color: transparent;
+  background: #3e97fd;
+}
+
+.room-card-common-act:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.room-card-common-act.play:hover {
+  background: #2289ff;
+}
+
+.room-card-common-act:active {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-card-common {
+    animation: none;
+  }
+}
+
 /* My rooms: its head's buttons; no rooms yet */
 .rooms-head-actions {
   display: flex;
@@ -14279,54 +14671,70 @@ body > .room-toasts {
   padding-bottom: 300px;
 }
 
-/* Phones: a strip along the bottom, above the tab bar - the video at its left */
+/* Phones: the same card as on a computer (like YouTube's miniplayer) - the video on top, the
+   room's name and what's playing below it with the buttons - smaller, at the right above the tab
+   bar. Its size follows the screen's width: the video at 16:9. */
 @media (max-width: 860px) {
+  .player-page.miniplayer[hidden],
+  .room-home-bar.mini {
+    --mini-w: min(288px, calc(100vw - 24px));
+    --mini-vh: calc(var(--mini-w) * 9 / 16);
+    --mini-bar: 58px;
+    --mini-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
   .player-page.miniplayer[hidden] {
-    inset: auto auto calc(84px + env(safe-area-inset-bottom)) 8px;
-    width: 116px;
-    height: 66px;
-    border-radius: 14px 0 0 14px;
+    inset: auto 12px calc(var(--mini-bottom) + var(--mini-bar)) auto;
+    width: var(--mini-w);
+    height: var(--mini-vh);
+    border-radius: 14px 14px 0 0;
     box-shadow: none;
   }
   .room-home-bar.mini {
-    left: 8px;
-    right: 8px;
-    bottom: calc(84px + env(safe-area-inset-bottom));
-    width: auto;
-    height: 66px;
+    left: auto;
+    right: 12px;
+    bottom: var(--mini-bottom);
+    width: var(--mini-w);
+    height: calc(var(--mini-vh) + var(--mini-bar));
     grid-template-columns: minmax(0, 1fr) auto auto auto;
     align-content: center;
     gap: 6px;
-    padding: 0 8px 0 128px;
+    padding: var(--mini-vh) 8px 0 12px;
     border-radius: 14px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
   }
   .room-home-bar.mini::before {
-    inset: 0 0 0 116px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-left: 0;
-    border-radius: 0 14px 14px 0;
+    inset: var(--mini-vh) 0 0 0;
+    border-radius: 0 0 14px 14px;
   }
   .room-home-bar.mini .room-home-video {
-    width: 116px;
-    height: 66px;
-    border-radius: 14px 0 0 14px;
+    width: 100%;
+    height: var(--mini-vh);
+    border-radius: 14px 14px 0 0;
   }
   .room-home-bar.mini .room-home-video i {
     display: none;
   }
+  .room-home-bar.mini .room-home-text b {
+    font-size: 13px;
+  }
+  .room-home-bar.mini .room-home-now:not([hidden]) {
+    font-size: 11.5px;
+  }
   .room-home-bar.mini .room-home-action {
-    padding: 7px 10px;
-    font-size: 12.5px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
   .room-home-bar.mini :is(.room-home-play, .room-home-leave) {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
   }
   .room-home-bar.mini .room-home-leave-menu:not([hidden]) {
-    bottom: 74px;
+    bottom: calc(var(--mini-bar) + 6px);
+    min-width: min(220px, calc(var(--mini-w) - 16px));
   }
   .has-miniplayer .home-main {
-    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+    padding-bottom: calc(84px + 58px + min(288px, calc(100vw - 24px)) * 9 / 16 + 24px + env(safe-area-inset-bottom));
   }
 }
 
@@ -15080,14 +15488,9 @@ body > .notice-layer {
   display: inline-block;
 }
 
+/* (the glide itself: room.js, at one steady, slow speed whatever the title's length) */
 .room-home-now.glide .room-home-now-text {
-  animation: miniGlide var(--glide, 10s) ease-in-out infinite;
-}
-
-@keyframes miniGlide {
-  0%, 18% { transform: translateX(0); }
-  62%, 80% { transform: translateX(var(--over, 0px)); }
-  100% { transform: translateX(0); }
+  will-change: transform;
 }
 
 /* (in the miniplayer: the room's name and the video's title - who hosts it on pointing at it) */

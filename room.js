@@ -201,6 +201,8 @@
     let miniUI = null;
     // Who's in the room now (the home page's room cards; remembered with the room, below)
     let lastMembers = [];
+    // (room cards whose Saved in common list is open)
+    const openCommon = new Set();
     let peopleSaveTimer = null;
     // The host: each guest's voice as it arrives, to pass on to the others
     const voiceTracks = new Map();
@@ -1183,6 +1185,9 @@
     // up on the title bar under the video opens it again. Only once the finger has clearly picked
     // a direction, so taps, scrolling and typing work as before.
     const touchOnly = matchMedia("(pointer: coarse)");
+    // (a phone held upright: the panel is stacked below the video, a bottom sheet with a handle;
+    // the same query as the CSS that hides its hide button there)
+    const sheetPanel = matchMedia("(pointer: coarse) and (max-width: 900px) and (orientation: portrait)");
     const SLOP = 10;
     // Something under the finger that scrolls that way itself, and isn't at its end yet
     const scrollsAlong = (target, root, axis, towardStart) => {
@@ -1216,7 +1221,9 @@
         if (!swipe.axis) {
             if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
             const sideways = Math.abs(dx) > Math.abs(dy) * 1.2;
-            const down = !sideways && dy > 0 && playerPage.classList.contains("now-below");
+            // (down: wherever the panel is a sheet below the video - in a room, or the queue on
+            // your own - on a phone held upright)
+            const down = !sideways && dy > 0 && (playerPage.classList.contains("now-below") || sheetPanel.matches);
             // Not ours: the page (or a list) scrolls as usual
             if ((!sideways && !down) || !event.cancelable ||
                 (sideways && (visibleTabs().length < 2 || scrollsAlong(swipe.target, panel, "x"))) ||
@@ -1973,10 +1980,13 @@
     callWin.hidden = true;
     callWin.setAttribute("aria-label", "People in the room");
     const callBar = el("div", "room-call-bar");
-    // How many are in the room: a number
-    const callTitle = el("span", "room-call-title");
+    // How many are in the room: a number. On a computer it's also the minimize button: a chevron
+    // after the number folds everyone's video away, or shows it again (no separate button)
+    const callTitle = el("button", "room-call-title");
+    callTitle.type = "button";
     const callCount = el("b");
-    callTitle.append(el("i", "fa-solid fa-user-group"), callCount);
+    const callTitleChevron = el("i", "fa-solid fa-chevron-down room-call-title-chevron");
+    callTitle.append(el("i", "fa-solid fa-user-group"), callCount, callTitleChevron);
     const callButton = (className, label) => {
         const button = el("button", `room-call-btn ${className}`);
         button.type = "button";
@@ -2616,44 +2626,18 @@
     // just the videos. A tap on it shows its call bar as a pill below it (above it, low on the
     // screen) for a few seconds; minimized, or with nobody's video yet, it's the bar itself.
     let unitBarTimer = null;
-    // Keep the call's option pill on screen. On a computer, it opens beside a window near either
-    // side edge; otherwise it opens below or above it.
+    // Keep the call's option pill on screen: below the window, or above it when there's no room
+    // below (never beside it), slid sideways to stay inside the screen
     const placePill = () => {
         const pill = callWin.classList.contains("unit") ? roomFoot : callBar;
         const box = callWin.getBoundingClientRect();
         const page = playerPage.getBoundingClientRect();
         const tall = (pill.offsetHeight || 50) + 16;
         const wide = pill.offsetWidth;
-        const leftSpace = box.left - page.left;
-        const rightSpace = page.right - box.right;
-        const edge = Math.max(80, Math.min(180, wide * 0.4));
-        const sideRoom = Math.min(wide + 16, page.width * 0.35);
-        let side = "";
-        if (!callWin.classList.contains("unit")) {
-            const nearLeft = leftSpace < edge;
-            const nearRight = rightSpace < edge;
-            if (nearLeft || nearRight) {
-                const preferred = nearLeft && nearRight
-                    ? rightSpace >= leftSpace ? "bar-to-right" : "bar-to-left"
-                    : nearLeft ? "bar-to-right" : "bar-to-left";
-                const other = preferred === "bar-to-right" ? "bar-to-left" : "bar-to-right";
-                const preferredSpace = preferred === "bar-to-right" ? rightSpace : leftSpace;
-                const otherSpace = other === "bar-to-right" ? rightSpace : leftSpace;
-                if (preferredSpace >= sideRoom) side = preferred;
-                else if (otherSpace >= sideRoom) side = other;
-            }
-        }
-        callWin.classList.remove("bar-to-left", "bar-to-right");
-        if (side) callWin.classList.add(side);
-        callWin.classList.toggle("bar-up", !side && box.bottom + tall > page.bottom && box.top - tall > page.top);
+        callWin.classList.toggle("bar-up", box.bottom + tall > page.bottom && box.top - tall > page.top);
         const left = box.left + box.width / 2 - wide / 2;
         const fits = Math.max(page.left + 8, Math.min(left, page.right - 8 - wide));
         callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
-        if (side) {
-            const pillTop = box.top + box.height / 2 - (pill.offsetHeight || 50) / 2;
-            const safeTop = Math.max(page.top + 8, Math.min(pillTop, page.bottom - 8 - (pill.offsetHeight || 50)));
-            callWin.style.setProperty("--bar-dy", `${Math.round(safeTop - pillTop)}px`);
-        }
     };
     // (a computer's: placed as it's pointed at, and as it's dragged or resized)
     const placeDeskPill = () => callWin.classList.contains("mini") && !callWin.classList.contains("unit") && placePill();
@@ -2672,6 +2656,30 @@
     // (its buttons used: it stays a while longer)
     roomFoot.addEventListener("pointerdown", () => callWin.classList.contains("bar-open") && showUnitBar(true));
 
+    // A phone: is your own video too small for your mic and camera buttons on it? (A little
+    // larger to take them back than to give them up, so they don't flicker at the edge.)
+    const ownTileSmall = () => {
+        const tile = callGrid.querySelector(".room-call-tile.me");
+        const box = tile && tile.getBoundingClientRect();
+        if (!box || !box.width) return !!call.ownSmall;
+        return call.ownSmall ? box.width < 150 || box.height < 115 : box.width < 130 || box.height < 100;
+    };
+    // (resized, pinched, or someone joined: measured again)
+    if ("ResizeObserver" in window) new ResizeObserver(() => {
+        if (!callWin.classList.contains("unit") || callWin.hidden) return;
+        if (ownTileSmall() !== !!call.ownSmall) renderCallButtons();
+    }).observe(callGrid);
+    // The people button: how many; on a computer, with what a click does (minimize / show again)
+    const paintCallTitle = () => {
+        const count = +callCount.textContent || 1;
+        const who = count === 1 ? "Just you in the room" : `${count} in the room`;
+        callTitle.classList.toggle("folds", !!call.titleFolds);
+        callTitle.tabIndex = call.titleFolds ? 0 : -1;
+        callTitle.title = call.titleFolds ? `${who} · ${callFoldBtn.title}` : who;
+        callTitle.setAttribute("aria-label", call.titleFolds ? `${who}. ${callFoldBtn.title}` : who);
+        if (call.titleFolds) callTitle.setAttribute("aria-expanded", String(!call.collapsed));
+        else callTitle.removeAttribute("aria-expanded");
+    };
     const renderCallButtons = () => {
         // The bottom dock has its own video toggle; floating, pinned to the side, and phone calls fold here.
         const unit = callWin.classList.contains("unit");
@@ -2687,8 +2695,12 @@
         // Your camera on and your video showing: your mic and camera buttons are on your video
         // (pointed at, on a computer; always, on a touch screen), not in the bar
         // (pinned with the room's panel open, the dock below the video keeps them)
+        // (a phone with your video very small: they'd cover it, so they stay in the call bar - the
+        // pill a tap shows, floating)
+        call.ownSmall = unit && ownTileSmall();
         const ownOnVideo = camEnabled && !alone && call.dock !== "rail" && !(unit && call.dock === "strip")
-            && (call.dock === "bottom" ? callWin.classList.contains("has-video") && !call.collapsed : !folded);
+            && (call.dock === "bottom" ? callWin.classList.contains("has-video") && !call.collapsed : !folded)
+            && !call.ownSmall;
         callWin.classList.toggle("own-ctl", ownOnVideo);
         unitPeopleBtn.disabled = alone;
         unitChevron.className = `fa-solid ${call.collapsed ? "fa-chevron-up" : "fa-chevron-down"} room-unit-chevron`;
@@ -2719,6 +2731,12 @@
             : call.collapsed ? "Show everyone" : "Minimize";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
+        // (a computer: the people button minimizes and restores, instead of its own button)
+        call.titleFolds = !unit && !callFoldBtn.hidden;
+        if (!unit) callFoldBtn.hidden = true;
+        callTitleChevron.className = `fa-solid ${foldsVideos ? call.collapsed ? "fa-chevron-up" : "fa-chevron-down"
+            : call.collapsed ? "fa-chevron-down" : "fa-chevron-up"} room-call-title-chevron`;
+        paintCallTitle();
         callChatBtn.hidden = unit;
         // Layout (computers): the button shows where it is now; the menu ticks it. Where it can't be
         // docked (a tablet held upright), only floating is offered.
@@ -2747,6 +2765,7 @@
     callWin.addEventListener("pointerdown", showCallNames);
 
     unitPeopleBtn.addEventListener("click", () => callFoldBtn.click());
+    callTitle.addEventListener("click", () => call.titleFolds && callFoldBtn.click());
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -3164,8 +3183,7 @@
         if (people.length && (wasHidden || who !== call.who)) showCallNames();
         call.who = who;
         callCount.textContent = String(Math.max(1, people.length));
-        callTitle.title = people.length === 1 ? "Just you in the room" : `${people.length} in the room`;
-        callTitle.setAttribute("aria-label", callTitle.title);
+        paintCallTitle();
         const keep = new Set(people.map(person => person.key));
         call.tiles.forEach((tile, key) => {
             if (keep.has(key)) return;
@@ -4017,6 +4035,10 @@
             return greet(peer, message);
         }
         if (peer.status !== "admitted") return;
+        if (message.t === "saved") {
+            if (allow(peer, "saved", 6, 20000)) onGuestSaved(peer, message.items);
+            return;
+        }
         if (message.t === "chat") {
             const text = clean(message.text, 500);
             if (text && allow(peer, "chat", 5, 5000)) shareChat(peer.id, peer.name, peer.avatar, text, message.reply);
@@ -7075,6 +7097,8 @@
                 guest.hostBefore = guest.hostName;
                 renderState();
                 rememberRoom();
+                // (what's in this browser's Saved, for Saved in common)
+                sendSaved();
                 // Back after a dropped connection while sharing: share again, unless someone else
                 // started a video in the meantime
                 if (guest.presenting) {
@@ -7225,6 +7249,8 @@
                 if (text) addMessage({ system: true, text });
                 return;
             }
+            case "saved-all":
+                return onSavedAll(message.lists);
             case "subs":
                 if (guest.ownCues && together.stream) return;
                 guest.cues = validCues(message.cues);
@@ -8042,20 +8068,72 @@
         const count = live ? room.memberCount || lastMembers.length || 1 : 0;
         body.append(name, el("small", "room-card-meta", [Signaling.formatCode(item.code),
             live ? plural(count, "person").replace("persons", "people") + " in it" : `used ${roomAgo(item.at)}`].join(" · ")));
-        // Who: everyone in it now (live), or who has been in it - not you
-        const others = (live ? lastMembers : item.people || []).filter(person => !live || person.id !== room.id);
+        // Who: everyone who has joined it so far - not you - those in it now first (with a green
+        // ring), then everyone who has been in it before
+        const online = live ? lastMembers.filter(person => person.id !== room.id).map(person => ({ ...person, online: true })) : [];
+        const others = [...online, ...(item.people || []).filter(old => !online.some(person => person.name === old.name))];
         const people = el("div", "room-card-people");
         if (others.length) {
             const stack = el("span", "room-card-avatars");
-            others.slice(0, 5).forEach(person => {
+            others.forEach(person => {
                 const face = makeAvatar(person.name, person.avatar, "small");
-                face.title = person.name + (person.host ? " (host)" : "");
+                face.title = person.name + (person.host ? " (host)" : "") + (person.online ? " · in the room now" : "");
+                if (person.online) face.classList.add("online");
                 stack.append(face);
             });
-            if (others.length > 5) stack.append(el("span", "room-card-more", `+${others.length - 5}`));
-            people.append(stack, el("small", null, peopleNames(others)));
+            const everyone = others.map(person => person.name).join(", ");
+            const names = el("small", "room-card-names", `${plural(others.length, "person").replace("persons", "people")} joined so far: ${everyone}`);
+            names.title = everyone;
+            people.append(stack, names);
         } else people.append(el("small", "room-card-nobody", live ? "Just you so far · invite people" : "No one's been in it yet"));
         body.append(people);
+        // Saved in common: YouTube videos and playlists that two or more people in the room keep
+        // in Saved - a button opens the list, each to play (or, in the room now, add to its queue)
+        const common = (live && room.common) || item.common || [];
+        if (common.length) {
+            const toggle = el("button", "room-card-common-btn");
+            toggle.type = "button";
+            toggle.dataset.commonToggle = item.code;
+            const open = openCommon.has(item.code);
+            toggle.setAttribute("aria-expanded", String(open));
+            toggle.append(el("i", "fa-solid fa-heart"), el("span", null, `${common.length} saved in common`), el("i", "fa-solid fa-chevron-down room-card-common-chev"));
+            const list = el("ul", "room-card-common");
+            list.hidden = !open;
+            const me = (storage.get(NAME_KEY) || "").trim();
+            const canQueue = live && together.queueYouTube && (!together.canQueueYouTube || together.canQueueYouTube());
+            common.forEach((entry, i) => {
+                const row = el("li", "room-card-common-item");
+                const thumb = el("span", "room-card-common-thumb");
+                if (entry.id) {
+                    const img = el("img");
+                    img.src = `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg`;
+                    img.alt = "";
+                    img.loading = "lazy";
+                    img.referrerPolicy = "no-referrer";
+                    thumb.append(img);
+                } else thumb.append(el("i", "fa-solid fa-list"));
+                const info = el("span", "room-card-common-info");
+                const by = entry.by.map(name => name === me ? "you" : name);
+                const title = el("b", null, entry.title || (entry.type === "playlist" ? "YouTube playlist" : "YouTube video"));
+                title.title = entry.title || "";
+                info.append(title, el("small", null, `${entry.type === "playlist" ? "Playlist · " : ""}Saved by ${by.join(", ")}`));
+                const act = (name, icon, label) => {
+                    const button = el("button", `room-card-common-act ${name}`);
+                    button.type = "button";
+                    button.dataset.commonAct = name;
+                    button.dataset.code = item.code;
+                    button.dataset.i = i;
+                    button.title = label;
+                    button.setAttribute("aria-label", `${label}: ${entry.title || "YouTube video"}`);
+                    button.append(el("i", `fa-solid ${icon}`));
+                    return button;
+                };
+                row.append(thumb, info, act("play", "fa-play", live ? "Play now" : "Play"));
+                if (canQueue) row.append(act("queue", "fa-plus", "Add to the room's queue"));
+                list.append(row);
+            });
+            body.append(toggle, list);
+        }
         const actions = el("div", "room-card-actions");
         const open = el("button", "btn btn-primary btn-sm room-card-open");
         open.type = "button";
@@ -8110,14 +8188,14 @@
         const sideLive = document.querySelector(".side-live");
         if (sideLive) sideLive.hidden = !liveItem;
     }
-    // Who's been in the room, with the remembered room (merged: the newest first, up to 8)
+    // Who's been in the room, with the remembered room (merged: the newest first, up to 30)
     function rememberPeople() {
         if (!room) return;
         const list = savedRooms();
         const at = list.findIndex(item => item.code === room.code);
         if (at < 0) return;
         const now = lastMembers.filter(person => person.id !== room.id).map(({ name, avatar, host }) => ({ name, avatar, host }));
-        const merged = [...now, ...(list[at].people || []).filter(old => !now.some(person => person.name === old.name))].slice(0, 8);
+        const merged = [...now, ...(list[at].people || []).filter(old => !now.some(person => person.name === old.name))].slice(0, 30);
         if (JSON.stringify(merged) === JSON.stringify(list[at].people || [])) return;
         list[at] = { ...list[at], people: merged };
         storage.set(ROOMS_KEY, JSON.stringify(list.slice(0, 6)));
@@ -8125,6 +8203,118 @@
     }
     // (up to date whenever the home page shows)
     new MutationObserver(() => !homePage.hidden && renderRoomCards()).observe(homePage, { attributes: true, attributeFilter: ["hidden"] });
+
+    // ---------- Saved in common: everyone in a room shares what's in their Saved (YouTube videos
+    // and playlists: their ids and titles, nothing else) with the room, over its own encrypted
+    // connection - guests send theirs to the host, the host passes everyone's on. Each browser
+    // works out what two or more people have saved, and keeps that with the remembered room.
+    const SAVED_SHARE_MAX = 60;
+    function savedSummary() {
+        return (window.CineSaved ? CineSaved.list() : []).slice(0, SAVED_SHARE_MAX).map(entry => ({
+            k: entry.k, id: entry.id || null, title: (entry.title || "").slice(0, 100), channel: (entry.channel || "").slice(0, 60)
+        }));
+    }
+    function validSaved(items) {
+        if (!Array.isArray(items)) return [];
+        return items.slice(0, SAVED_SHARE_MAX).filter(item => item && typeof item.k === "string" && /^(yt|pl):[\w-]{2,64}$/.test(item.k)).map(item => {
+            const playlist = item.k.startsWith("pl:");
+            const ref = item.k.slice(3);
+            const id = playlist ? (typeof item.id === "string" && /^[\w-]{11}$/.test(item.id) ? item.id : null) : ref;
+            return { k: item.k, type: playlist ? "playlist" : "video", id, list: playlist ? ref : null, title: clean(item.title, 100), channel: clean(item.channel, 60) };
+        }).filter(item => item.type === "playlist" || /^[\w-]{11}$/.test(item.id));
+    }
+    // Everyone's lists (one per name: someone who reconnected counts once) -> what two or more saved
+    function updateCommon(lists) {
+        if (!room) return;
+        const byName = new Map();
+        lists.forEach(entry => entry && entry.name && byName.set(entry.name, entry.items || []));
+        const found = new Map();
+        byName.forEach((items, name) => items.forEach(item => {
+            const entry = found.get(item.k) || { ...item, by: [] };
+            if (!entry.by.includes(name)) entry.by.push(name);
+            if (!entry.title && item.title) entry.title = item.title;
+            found.set(item.k, entry);
+        }));
+        const common = [...found.values()].filter(entry => entry.by.length >= 2)
+            .sort((a, b) => b.by.length - a.by.length).slice(0, 40)
+            .map(({ k, type, id, list, title, channel, by }) => ({ k, type, id, list, title, channel, by: by.slice(0, 30) }));
+        room.common = common;
+        const rooms = savedRooms();
+        const at = rooms.findIndex(item => item.code === room.code);
+        if (at >= 0 && JSON.stringify(rooms[at].common || []) !== JSON.stringify(common)) {
+            rooms[at] = { ...rooms[at], common };
+            storage.set(ROOMS_KEY, JSON.stringify(rooms.slice(0, 6)));
+        }
+        renderRoomCards();
+    }
+    // The host: its own list with everyone's, to everyone (a moment after the last change)
+    let savedShareTimer = null;
+    function shareSaved() {
+        clearTimeout(savedShareTimer);
+        savedShareTimer = setTimeout(() => {
+            if (!room || room.role !== "host") return;
+            room.savedLists ||= new Map();
+            room.savedLists.set(room.id, { name: room.name, items: validSaved(savedSummary()) });
+            const lists = [...room.savedLists.values()].slice(-30);
+            broadcast({ t: "saved-all", lists });
+            updateCommon(lists);
+        }, 400);
+    }
+    // A guest's list (from hostHandle); kept for everyone who joined so far, up to 30
+    function onGuestSaved(peer, items) {
+        room.savedLists ||= new Map();
+        room.savedLists.set(peer.id, { name: peer.name, items: validSaved(items) });
+        while (room.savedLists.size > 30) room.savedLists.delete(room.savedLists.keys().next().value);
+        shareSaved();
+    }
+    // A guest: its own list to the host (on joining, and whenever Saved changes)
+    function sendSaved() {
+        if (room && room.role === "guest" && room.phase === "in") send(room.peer, { t: "saved", items: savedSummary() });
+    }
+    // Everyone's lists, from the host (from guestHandle)
+    function onSavedAll(lists) {
+        if (!Array.isArray(lists)) return;
+        updateCommon(lists.slice(0, 30).map(entry => entry && ({ name: clean(entry.name, 30), items: validSaved(entry.items) })).filter(entry => entry && entry.name));
+    }
+    if (window.CineSaved) CineSaved.onChange(() => {
+        if (!room) return;
+        if (room.role === "host") {
+            if (room.savedLists && room.savedLists.size) shareSaved();
+        } else sendSaved();
+    });
+    // The list on a card: opened and closed, and its Play / Add to queue
+    function onCommonClick(e) {
+        const toggle = e.target.closest("[data-common-toggle]");
+        if (toggle) {
+            const code = toggle.dataset.commonToggle;
+            if (openCommon.has(code)) openCommon.delete(code);
+            else openCommon.add(code);
+            const open = openCommon.has(code);
+            toggle.setAttribute("aria-expanded", String(open));
+            const list = toggle.nextElementSibling;
+            if (list) list.hidden = !open;
+            return true;
+        }
+        const button = e.target.closest("[data-common-act]");
+        if (!button) return false;
+        const live = room && room.code === button.dataset.code;
+        const item = savedRooms().find(saved => saved.code === button.dataset.code);
+        const common = (live && room.common) || (item && item.common) || [];
+        const entry = common[+button.dataset.i];
+        if (!entry) return true;
+        const ref = entry.type === "playlist" ? { id: entry.id || null, list: entry.list, start: 0 } : { id: entry.id, list: null, start: 0 };
+        const meta = entry.type === "playlist" ? { listTitle: entry.title, channel: entry.channel } : { title: entry.title, channel: entry.channel };
+        if (button.dataset.commonAct === "queue") {
+            const refused = together.queueYouTube(ref, meta);
+            showFeedback(refused ? "fa-lock" : "fa-plus", refused || "Added to the room's queue");
+            return true;
+        }
+        if (!window.CineYouTube) return true;
+        toPlayer();
+        const refused = CineYouTube.play(ref, meta);
+        if (refused) showFeedback("fa-lock", refused);
+        return true;
+    }
 
     const renderRooms = () => {
         renderRoomCards();
@@ -8199,6 +8389,7 @@
     });
 
     const onRoomCard = e => {
+        if (onCommonClick(e)) return;
         const button = e.target.closest("button[data-room]");
         if (!button) return;
         if ("live" in button.dataset && room) {
@@ -8290,21 +8481,35 @@
         const title = raw && raw !== "No Video Loaded" ? raw : "";
         now.hidden = !title;
         now.title = title;
-        if (line.textContent !== title) {
-            line.textContent = title;
-            now.classList.remove("glide");
-            now.style.removeProperty("--over");
-        }
-        // (measured once it shows: how far it has to glide, at about 30 px a second)
+        if (line.textContent !== title) line.textContent = title;
+        // (measured once it shows: how far it has to glide)
         requestAnimationFrame(() => {
             const over = Math.ceil(line.scrollWidth - clip.clientWidth);
-            if (over > 4) {
-                now.style.setProperty("--over", `${-over}px`);
-                now.style.setProperty("--glide", `${Math.max(8, over / 30 + 5).toFixed(1)}s`);
-                now.classList.add("glide");
-            } else now.classList.remove("glide");
+            const key = over > 4 ? `${title}|${over}` : "";
+            // (the same title, the same distance: it keeps gliding as it was - drawn every second,
+            // it isn't started again)
+            if (key === miniGlide.key) return;
+            miniGlide.key = key;
+            if (miniGlide.anim) miniGlide.anim.cancel();
+            miniGlide.anim = null;
+            now.classList.toggle("glide", !!key);
+            if (!key || calmer()) return;
+            // A slow, steady glide: 2.5 s still at the start, to the end at 22 px a second, 2.5 s
+            // still there, and back at the same speed
+            const move = over / 22;
+            const pause = 2.5;
+            const total = 2 * move + 2 * pause;
+            const at = x => `translateX(${x}px)`;
+            miniGlide.anim = line.animate([
+                { transform: at(0), offset: 0 },
+                { transform: at(0), offset: pause / total },
+                { transform: at(-over), offset: (pause + move) / total },
+                { transform: at(-over), offset: (2 * pause + move) / total },
+                { transform: at(0), offset: 1 }
+            ], { duration: total * 1000, iterations: Infinity, easing: "linear" });
         });
     };
+    const miniGlide = { key: "", anim: null };
     const hasVideoOn = () => !!room && (!!together.stream || hasMedia());
     function renderMiniplayer(playing) {
         if (!homeBar || !miniUI) return;

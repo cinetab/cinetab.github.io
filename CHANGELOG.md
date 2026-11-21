@@ -6,6 +6,41 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-21
+
+### Rooms
+- Room cards show everyone who has joined the room so far (up to 30), not only who's in it now:
+  all their pictures, with a green ring on those in the room now, and their names
+- Saved in common: people in a room share their Saved list with the room over its encrypted
+  connection, and each room card lists the YouTube videos and playlists two or more of them saved,
+  who saved each, with Play (and Add to the room's queue while you're in it). Remembered with the room
+- Phones: the room's miniplayer on the home page is a card like on a computer - the video, then the
+  room's name and what's playing - instead of a bar. The playing title glides at one slow, steady speed
+- Phones held upright: the room panel's glass is calmer (mica rather than acrylic), still tinted live
+  by the video
+- Phones held upright out of a room: the Queue / Watch together panel is a bottom sheet with a handle
+  line - swipe it down to hide it - instead of the computer's hide button
+
+### Video call
+- Computers: the people count is also the minimize button (a chevron after the number), instead of a
+  separate button
+- Computers: the floating call's button bar opens only above or below it, never beside it
+- Phones: when your own video is very small, your mic and camera buttons move off it into the call bar
+
+### Player
+- Click or tap the current time to show the time left (-43:37), and again to go back; remembered
+- Computers: messages (play, next video, volume, subtitles...) show as a pill at the side of the
+  picture - going back on the left, everything else on the right - not over the middle
+- Phones: brightness and volume swipes work like MX Player - the left half is brightness, the right
+  half volume, with a pill on the other side from your finger. Swiping no longer enters or leaves
+  fullscreen
+
+### Search
+- A Saved row under Recently played, with Play, Add to queue and a heart on each
+- Recently played shows the last 20 (was 8)
+- No scrollbars on the rows: they scroll with a swipe, a trackpad sideways, Shift + the mouse wheel,
+  by dragging, or with arrow buttons at their ends; up and down scrolls the search box as usual
+
 ## [1.7.1] - 2026-11-21
 
 ### Polish
