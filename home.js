@@ -166,8 +166,30 @@
     sideLinks.forEach(link => link.addEventListener("click", () => showView(link.dataset.view)));
     const dashboardLink = sideLinks.find(link => link.dataset.view === "dashboard");
     if (dashboardLink) dashboardLink.hidden = true;
-    home.querySelector(".header-search")?.addEventListener("click", () => window.CineLauncher?.open());
+    home.querySelectorAll(".header-search").forEach(button => button.addEventListener("click", () => window.CineLauncher?.open()));
     home.querySelector(".mobile-search-link")?.addEventListener("click", () => window.CineLauncher?.open());
+    // The lobby launcher uses the same join dialog and validation as every other room entry.
+    // Fill it before room.js handles the button, so pasted invite links keep their code/password.
+    home.querySelector(".room-launcher-join")?.addEventListener("submit", e => {
+        e.preventDefault();
+        const value = home.querySelector(".room-launcher-code")?.value.trim() || "";
+        if (!value) return home.querySelector(".room-launcher-code")?.focus();
+        const joinForm = document.querySelector('#room-overlay [data-view="join"]');
+        const code = joinForm?.querySelector('[name="code"]');
+        const password = joinForm?.querySelector('[name="password"]');
+        let roomCode = value;
+        let roomPassword = "";
+        try {
+            const hash = value.includes("#") ? value.slice(value.indexOf("#") + 1) : value;
+            const params = new URLSearchParams(hash.replace(/^.*[?&](join|pw)=/, "$1="));
+            roomCode = params.get("join") || value;
+            roomPassword = params.get("pw") || "";
+        } catch (ignore) {}
+        if (code) code.value = roomCode;
+        if (password && roomPassword) password.value = roomPassword;
+        // The existing room.js document listener receives this submit button click next.
+        (e.submitter || e.currentTarget.querySelector(".room-join-open"))?.click();
+    });
     home.addEventListener("click", e => {
         const go = e.target.closest("[data-go]");
         if (go) {
@@ -260,25 +282,29 @@
     const searchInput = searchForm.querySelector(".yt-search-input");
     const pasteBtn = searchForm.querySelector(".yt-search-paste");
     const note = dashboard.querySelector(".dash-note");
-    const historyBox = dashboard.querySelector(".dash-history");
+    const historyBox = dashboard.querySelector(".library-history");
     const filterBtns = historyBox.querySelectorAll(".dash-filter");
     const clearBtn = historyBox.querySelector(".dash-clear");
     const grid = historyBox.querySelector(".dash-grid");
     const empty = historyBox.querySelector(".dash-empty");
     const moreBtn = historyBox.querySelector(".dash-more");
     const continueGrid = home.querySelector(".home-continue");
+    home.querySelectorAll(".recent-rail-arrow").forEach(button => button.addEventListener("click", () => {
+        const rail = button.closest(".recent-video-rail")?.querySelector(".home-continue");
+        if (rail) rail.scrollBy({ left: (button.classList.contains("next") ? 1 : -1) * Math.max(220, rail.clientWidth * .72), behavior: "smooth" });
+    }));
+    const railContinueGrid = home.querySelector(".home-rail-list");
+    const railContinueEmpty = home.querySelector(".home-rail-empty");
     const FILTER_KEY = "cinetab:dash-filter";
     const SHOWN = 8;
     let filter = storage.get(FILTER_KEY) || "all";
     let showAll = false;
 
-    let noteTimer = null;
     const showNote = (text, error = false) => {
-        clearTimeout(noteTimer);
-        note.hidden = !text;
-        note.textContent = text || "";
-        note.classList.toggle("error", error);
-        if (text) noteTimer = setTimeout(() => note.hidden = true, 8000);
+        note.hidden = true;
+        note.textContent = "";
+        if (text) window.CineToast(text, { key: "home-notice", tone: error ? "error" : "info" });
+        else window.CineToast.dismiss("home-notice");
     };
 
     // ---------- Searching YouTube, or a pasted link
@@ -455,9 +481,12 @@
         return heart;
     };
     const favView = home.querySelector("#favorites");
+    // Library deliberately combines the two personal collections: Saved and viewing history.
+    // Moving this existing node preserves its cards, handlers and history state.
+    favView?.querySelector(".dash-panel")?.append(historyBox);
     const favGrid = favView && favView.querySelector(".fav-grid");
     const favEmpty = favView && favView.querySelector(".fav-empty");
-    const favFilterBtns = favView ? favView.querySelectorAll(".dash-filter") : [];
+    const favFilterBtns = favView?.querySelector(".fav-box")?.querySelectorAll(".dash-filter") || [];
     const favClear = favView && favView.querySelector(".fav-clear");
     const homeFavs = home.querySelector(".home-favs");
     const FAV_FILTER_KEY = "cinetab:fav-filter";
@@ -628,6 +657,10 @@
             continueGrid.replaceChildren(...list.slice(0, 36).map(card));
             continueGrid.closest(".home-continue-strip").hidden = !list.length;
         }
+        if (railContinueGrid) {
+            railContinueGrid.replaceChildren(...list.slice(0, 8).map(card));
+            if (railContinueEmpty) railContinueEmpty.hidden = list.length > 0;
+        }
         empty.hidden = list.length > 0;
         moreBtn.hidden = shown.length <= SHOWN;
         moreBtn.textContent = showAll ? "Show less" : `Show all ${shown.length}`;
@@ -704,6 +737,7 @@
     };
     grid.addEventListener("click", onCard);
     if (continueGrid) continueGrid.addEventListener("click", onCard);
+    if (railContinueGrid) railContinueGrid.addEventListener("click", onCard);
 
     // Up to date whenever the home page shows (positions change while watching) and when the
     // history changes (also in another tab)

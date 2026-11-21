@@ -635,7 +635,11 @@
             button.classList.toggle("active", button.dataset.tab === tab);
             button.setAttribute("aria-selected", button.dataset.tab === tab);
         });
-        tabPanels.forEach(section => section.hidden = section.dataset.tab !== tab);
+        tabPanels.forEach(section => {
+            section.hidden = section.dataset.tab !== tab;
+            section.style.transform = "";
+            section.style.opacity = "";
+        });
         playerPage.classList.toggle("queue-open", !panel.hidden && tab === "queue");
         // (not in a room: the Watch together button shows pressed while its tab is open)
         playerPage.classList.toggle("together-open", !panel.hidden && !room && tab === "together");
@@ -1203,7 +1207,11 @@
         return false;
     };
     const swipeIgnored = target => !!target.closest("input, textarea, select, [contenteditable], .room-sheet, .room-react-picker, .room-leave-popover");
-    const visibleTabs = () => [...tabButtons].filter(button => !button.hidden).map(button => button.dataset.tab);
+    // CSS hides room-only tabs outside a room. Include computed visibility so swipe navigation
+    // follows the same reduced tab set as the visible tab bar.
+    const visibleTabs = () => [...tabButtons]
+        .filter(button => !button.hidden && getComputedStyle(button).display !== "none" && getComputedStyle(button).visibility !== "hidden")
+        .map(button => button.dataset.tab);
     const openSection = () => [...tabPanels].find(section => !section.hidden);
 
     let swipe = null;
@@ -2402,8 +2410,9 @@
         if (call.pos) {
             x = call.pos.x * (page.width - width);
             y = call.pos.y * (page.height - height);
-        } else if (callWin.classList.contains("mini") && callWin.classList.contains("unit")) {
-            // (a phone's small window: the bottom right corner, like picture in picture)
+        } else if (callWin.classList.contains("unit")
+            && (callWin.classList.contains("mini") || call.collapsed)) {
+            // A phone's video preview, minimized or active: the bottom right corner, like picture in picture.
             x = page.width - width - 12;
             y = page.height - height - 16;
         } else if (callWin.classList.contains("unit")) {
@@ -2632,41 +2641,129 @@
     // Keep the call's option pill on screen: below the window, or above it when there's no room
     // below (never beside it), slid sideways to stay inside the screen
     const placePill = () => {
+        if (callWin.classList.contains("unit") && !callWin.classList.contains("bar-open")) return;
         const pill = callWin.classList.contains("unit") ? roomFoot : callBar;
         const box = callWin.getBoundingClientRect();
         const page = playerPage.getBoundingClientRect();
+        const viewport = window.visualViewport;
+        const top = Math.max(page.top, viewport ? viewport.offsetTop : page.top);
+        const bottom = Math.min(page.bottom, viewport ? viewport.offsetTop + viewport.height : page.bottom);
+        const leftEdge = Math.max(page.left, viewport ? viewport.offsetLeft : page.left);
+        const rightEdge = Math.min(page.right, viewport ? viewport.offsetLeft + viewport.width : page.right);
+        pill.style.maxWidth = `${Math.max(0, rightEdge - leftEdge - 16)}px`;
         const tall = (pill.offsetHeight || 50) + 16;
         const wide = pill.offsetWidth;
-        callWin.classList.toggle("bar-up", box.bottom + tall > page.bottom && box.top - tall > page.top);
+        const roomBelow = bottom - box.bottom - 8;
+        const roomAbove = box.top - top - 8;
+        const openUp = roomBelow < tall && roomAbove > roomBelow;
+        callWin.classList.toggle("bar-up", openUp);
         const left = box.left + box.width / 2 - wide / 2;
-        const fits = Math.max(page.left + 8, Math.min(left, page.right - 8 - wide));
-        callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
+        const fits = Math.max(leftEdge + 8, Math.min(left, rightEdge - 8 - wide));
+        if (callWin.classList.contains("unit")) {
+            const pillTop = openUp ? box.top - pill.offsetHeight - 8 : box.bottom + 8;
+            pill.style.left = `${Math.round(fits - box.left)}px`;
+            pill.style.top = `${Math.round(pillTop - box.top)}px`;
+            pill.style.right = "auto";
+            pill.style.bottom = "auto";
+        } else callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
     };
     // (a computer's: placed as it's pointed at, and as it's dragged or resized)
     const placeDeskPill = () => callWin.classList.contains("mini") && !callWin.classList.contains("unit") && placePill();
     callWin.addEventListener("pointerenter", e => e.pointerType !== "touch" && placeDeskPill());
+    const closeUnitPanel = () => {
+        clearTimeout(unitBarTimer);
+        callWin.classList.remove("bar-open", "peek-open");
+        ["left", "top", "right", "bottom"].forEach(property => roomFoot.style.removeProperty(property));
+    };
+    let unitFootAnimation = null;
+    const animateUnitFootFrom = from => {
+        if (!from) return;
+        if (unitFootAnimation) {
+            unitFootAnimation.cancel();
+            unitFootAnimation = null;
+        }
+        roomFoot.classList.add("unit-foot-morphing");
+        if (calmer() || typeof roomFoot.animate !== "function") {
+            roomFoot.classList.remove("unit-foot-morphing");
+            return;
+        }
+        requestAnimationFrame(() => {
+            if (callWin.classList.contains("bar-open")) placePill();
+            requestAnimationFrame(() => {
+                const to = roomFoot.getBoundingClientRect();
+                if (!to.width || !to.height) {
+                    roomFoot.classList.remove("unit-foot-morphing");
+                    return;
+                }
+                const dx = from.left - to.left;
+                const dy = from.top - to.top;
+                const transform = getComputedStyle(roomFoot).transform;
+                const animation = roomFoot.animate([
+                    { transform: `translate(${dx}px, ${dy}px) ${transform}`, opacity: .9 },
+                    { transform, opacity: 1 }
+                ], { duration: 280, easing: PANEL_EASE });
+                unitFootAnimation = animation;
+                animation.onfinish = () => {
+                    if (unitFootAnimation !== animation) return;
+                    roomFoot.classList.remove("unit-foot-morphing");
+                    unitFootAnimation = null;
+                };
+                animation.oncancel = () => {
+                    if (unitFootAnimation !== animation) return;
+                    roomFoot.classList.remove("unit-foot-morphing");
+                    unitFootAnimation = null;
+                };
+            });
+        });
+    };
     const showUnitBar = open => {
+        const from = open && callWin.classList.contains("peek-open") ? roomFoot.getBoundingClientRect() : null;
         clearTimeout(unitBarTimer);
         if (open) {
-            placePill();
+            callWin.classList.remove("peek-open");
+            callWin.classList.add("bar-open");
+            animateUnitFootFrom(from);
+            requestAnimationFrame(placePill);
             unitBarTimer = setTimeout(function hide() {
                 if (leavePopover && !leavePopover.hidden) unitBarTimer = setTimeout(hide, 2000);
-                else showUnitBar(false);
+                else {
+                    closeUnitPanel();
+                    wakeCall();
+                }
+            }, 4500);
+        } else {
+            closeUnitPanel();
+        }
+    };
+    const showUnitPeek = open => {
+        const from = open && callWin.classList.contains("bar-open") ? roomFoot.getBoundingClientRect() : null;
+        clearTimeout(unitBarTimer);
+        callWin.classList.remove("bar-open");
+        ["left", "top", "right", "bottom"].forEach(property => roomFoot.style.removeProperty(property));
+        callWin.classList.toggle("peek-open", open);
+        animateUnitFootFrom(from);
+        const settlePreviewBounds = () => {
+            requestAnimationFrame(placeCall);
+            setTimeout(placeCall, 260);
+        };
+        settlePreviewBounds();
+        if (open) {
+            unitBarTimer = setTimeout(() => {
+                callWin.classList.remove("peek-open");
+                settlePreviewBounds();
+                wakeCall();
             }, 4500);
         }
-        callWin.classList.toggle("bar-open", open);
     };
-    // (its buttons used: it stays a while longer)
-    roomFoot.addEventListener("pointerdown", () => callWin.classList.contains("bar-open") && showUnitBar(true));
+    // Keep the active control surface open while it is being used.
+    roomFoot.addEventListener("pointerdown", () => {
+        if (callWin.classList.contains("bar-open")) showUnitBar(true);
+        else if (callWin.classList.contains("peek-open")) showUnitPeek(true);
+    });
     callWin.addEventListener("click", e => {
-        if (!callWin.classList.contains("unit") || !call.collapsed || e.target.closest("button")) return;
+        if (!callWin.classList.contains("unit") || !call.collapsed || call.dock || e.target.closest("button")) return;
         if (callWin.classList.contains("peek-open")) showUnitBar(true);
-        else {
-            callWin.classList.add("peek-open");
-            placePill();
-            clearTimeout(unitBarTimer);
-            unitBarTimer = setTimeout(() => callWin.classList.remove("peek-open"), 4500);
-        }
+        else showUnitPeek(true);
     });
 
     // A phone: is your own video too small for your mic and camera buttons on it? (A little
@@ -2906,6 +3003,7 @@
             const moving = motion === true && !calmer() && !callWin.hidden;
             const videoWas = moving ? container.getBoundingClientRect() : null;
             const unit = unitMode();
+            const wasUnit = callWin.classList.contains("unit");
             callWin.classList.toggle("unit", unit);
             const upright = isUprightPhone();
             call.dockable = upright || !uprightTouch.matches;
@@ -2937,6 +3035,11 @@
             playerPage.classList.toggle("call-dock-below", dock === "strip");
             const was = call.dock;
             call.dock = dock;
+            if (was !== dock || wasUnit !== unit) {
+                callWin.classList.remove("idle");
+                playerPage.classList.remove("call-idle");
+                if (dock || wasUnit !== unit) closeUnitPanel();
+            }
             renderCallButtons();
             if (was !== dock) {
                 // (room notices follow the video to its new place)
@@ -2962,7 +3065,15 @@
             inPlaceDock = false;
         }
     };
-    window.addEventListener("resize", () => placeDock());
+    const repositionUnitBar = () => {
+        if (callWin.classList.contains("bar-open")) requestAnimationFrame(placePill);
+    };
+    window.addEventListener("resize", () => {
+        placeDock();
+        repositionUnitBar();
+    });
+    window.visualViewport?.addEventListener("resize", repositionUnitBar);
+    window.visualViewport?.addEventListener("scroll", repositionUnitBar);
     // (the room's panel opening or closing, the title moving below the picture, fullscreen)
     new MutationObserver(mutations => {
         if (inPlaceDock) return;
@@ -3029,18 +3140,26 @@
     // keyboard activity brings it back; this works for floating and docked layouts.
     const CALL_IDLE_MS = 4000;
     let callIdleTimer = null;
-    const callIdleWanted = () => !callWin.hidden && call.collapsed && call.dock !== "strip"
-        && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden);
+    const callIdleWanted = () => !callWin.hidden && call.collapsed
+        && !callWin.classList.contains("bar-open") && !callWin.classList.contains("peek-open")
+        && !callWin.querySelector(":focus-visible") && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden);
     const setCallIdle = idle => {
         callWin.classList.toggle("idle", idle);
-        playerPage.classList.toggle("call-idle", idle && call.dock === "side");
+        playerPage.classList.toggle("call-idle", idle && (call.dock === "side" || call.dock === "strip"));
     };
     const wakeCall = () => {
         clearTimeout(callIdleTimer);
         if (callWin.classList.contains("idle")) setCallIdle(false);
         if (callIdleWanted()) callIdleTimer = setTimeout(() => callIdleWanted() && setCallIdle(true), CALL_IDLE_MS);
     };
-    playerPage.addEventListener("pointerdown", wakeCall, true);
+    playerPage.addEventListener("pointerdown", e => {
+        wakeCall();
+        // Like a call app's tap-to-reveal motion: anywhere in the mobile player wakes the floating
+        // minimized preview. A tap on the preview itself advances to its extra control pill below.
+        if (callWin.classList.contains("unit") && call.collapsed && !call.dock && !callWin.contains(e.target)) {
+            showUnitPeek(true);
+        }
+    }, true);
     playerPage.addEventListener("pointermove", () => callWin.classList.contains("idle") && wakeCall(), { passive: true });
     document.addEventListener("keydown", wakeCall, true);
     document.addEventListener("fullscreenchange", wakeCall);
@@ -3309,6 +3428,7 @@
         placeCall();
         renderPipCall();
         if (flipFrom) flipTiles(flipFrom);
+        wakeCall();
     };
     // Each one from where it was to where it is now; a new one fades and grows in
     const flipTiles = from => {
@@ -5884,8 +6004,10 @@
 
     const ytHintText = ytHint.textContent;
     const showYouTubeHint = (text = ytHintText, error = false) => {
-        ytHint.textContent = text;
-        ytHint.classList.toggle("error", error);
+        ytHint.textContent = ytHintText;
+        ytHint.classList.remove("error");
+        if (text === ytHintText) window.CineToast.dismiss("room-youtube-notice");
+        else window.CineToast(text, { key: "room-youtube-notice", tone: error ? "error" : "info" });
     };
 
     // YouTube's button (and Find more videos, under the queue) opens the player's search (script.js):
@@ -8048,62 +8170,6 @@
         return startGuest({ code: item.code, password: item.password, name, avatar, remember: true, ticket: item.ticket,
             owner: item.owner || null, ownerTag: item.ownerTag || null, hostIfAlone: item.owner ? { title: item.title } : null });
     };
-    const roomMenuRoot = document.querySelector(".home-room-menu-root");
-    const roomMenuTrigger = roomMenuRoot?.querySelector(".home-room-menu-trigger");
-    const roomMenu = roomMenuRoot?.querySelector(".home-room-menu");
-    const renderRoomMenu = () => {
-        if (!roomMenuRoot || !roomMenu) return;
-        const live = room && (room.role === "host" || room.phase === "in") ? room : null;
-        const rooms = savedRooms();
-        const items = live ? [{ ...rooms.find(item => item.code === live.code), code: live.code, title: live.title, role: live.role, active: true }, ...rooms.filter(item => item.code !== live.code)] : rooms;
-        const miniRoomVisible = !!(room && homeBar && !homeBar.hidden);
-        roomMenuRoot.hidden = !items.length || miniRoomVisible;
-        roomMenuTrigger.querySelector(".home-room-menu-count").textContent = String(items.length);
-        roomMenu.replaceChildren(...items.map(item => {
-            const button = el("button", "home-room-menu-item");
-            button.type = "button";
-            button.setAttribute("role", "menuitem");
-            button.dataset.room = item.code;
-            button.dataset.live = item.active ? "1" : "";
-            const people = item.active && room ? room.memberCount : Array.isArray(item.people) ? item.people.length : 0;
-            const members = el("small", "home-room-menu-members");
-            members.append(el("i", "fa-solid fa-user-group"), document.createTextNode(` ${people || 1}`));
-            button.append(el("i", `fa-solid ${item.active ? "fa-circle-play" : "fa-door-open"}`), el("span", null, roomLabel(item)), members,
-                el("small", "home-room-menu-action", item.active ? "Open" : item.role === "host" ? "Open" : "Join"));
-            return button;
-        }));
-    };
-    roomMenuTrigger?.addEventListener("click", () => {
-        const open = roomMenu.hidden;
-        roomMenu.hidden = !open;
-        roomMenuTrigger.setAttribute("aria-expanded", String(open));
-    });
-    const showRoomMenu = () => {
-        if (!roomMenu || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-        roomMenu.hidden = false;
-        roomMenuTrigger?.setAttribute("aria-expanded", "true");
-    };
-    const hideRoomMenu = () => {
-        if (!roomMenu || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-        roomMenu.hidden = true;
-        roomMenuTrigger?.setAttribute("aria-expanded", "false");
-    };
-    roomMenuRoot?.addEventListener("pointerenter", showRoomMenu);
-    roomMenuRoot?.addEventListener("pointerleave", hideRoomMenu);
-    roomMenuRoot?.addEventListener("focusin", showRoomMenu);
-    roomMenuRoot?.addEventListener("focusout", e => !roomMenuRoot.contains(e.relatedTarget) && hideRoomMenu());
-    roomMenu?.addEventListener("click", e => {
-        const button = e.target.closest("button[data-room]");
-        if (!button) return;
-        if (button.dataset.live && room) { showPlayer(); showPanel(true); }
-        else {
-            const item = savedRooms().find(saved => saved.code === button.dataset.room);
-            if (item) reopen(item);
-        }
-        roomMenu.hidden = true;
-        roomMenuTrigger?.setAttribute("aria-expanded", "false");
-    });
-
     // ---------- The home page's room cards (My rooms, and a few on Home): the room you're in
     // ("Live now", with everyone in it), then the rooms remembered in this browser, each with who
     // has been in it, when it was last used, and one button to get back in
@@ -8124,7 +8190,7 @@
         if (names.length <= 2) return names.join(" and ");
         return `${names.slice(0, 2).join(", ")} and ${plural(names.length - 2, "other")}`;
     };
-    const roomCard = (item, live) => {
+    const roomCard = (item, live, homeCard = false) => {
         const host = item.role === "host";
         const li = el("li", `room-card${live ? " live" : ""}${host ? " host" : ""}`);
         li.style.setProperty("--hue", roomHue(item.code));
@@ -8144,6 +8210,7 @@
         const count = live ? room.memberCount || lastMembers.length || 1 : 0;
         body.append(name, el("small", "room-card-meta", [Signaling.formatCode(item.code),
             live ? plural(count, "person").replace("persons", "people") + " in it" : `used ${roomAgo(item.at)}`].join(" · ")));
+        if (homeCard) body.append(el("small", "room-card-home-meta", live ? `${count} watching` : `Last active ${roomAgo(item.at)}`));
         // Who: everyone who has joined it so far - not you - those in it now first (with a green
         // ring), then everyone who has been in it before
         const online = live ? lastMembers.filter(person => person.id !== room.id).map(person => ({ ...person, online: true })) : [];
@@ -8220,7 +8287,7 @@
             open.append(el("i", "fa-solid fa-arrow-right-to-bracket"), el("span", null, "Return"));
         } else {
             open.title = host ? "Open this room again with the same code and password" : "Join this room (its host needs to have it open)";
-            open.append(el("i", `fa-solid ${host ? "fa-play" : "fa-right-to-bracket"}`), el("span", null, host ? "Open" : "Join"));
+            open.append(el("i", `fa-solid ${host ? "fa-play" : "fa-right-to-bracket"}`), el("span", null, host ? "Open" : "Rejoin"));
         }
         actions.append(open);
         if (!live || item.password) {
@@ -8236,8 +8303,9 @@
         li.append(cover, body, actions);
         return li;
     };
-    const homeRoomCards = document.querySelector(".home-room-cards");
+    const homeRoomList = document.querySelector(".home-room-list");
     const roomsEmpty = document.querySelector(".rooms-empty");
+    const homeRoomsEmpty = document.querySelector(".home-rooms-empty");
     function renderRoomCards() {
         if (!roomList) return;
         const list = savedRooms();
@@ -8250,11 +8318,21 @@
             card.style.setProperty("--i", i);
             return card;
         }));
+        const homeLiveCount = document.querySelector(".home-live-count");
+        if (homeLiveCount) {
+            const liveCount = items.filter(item => item === liveItem).length;
+            homeLiveCount.hidden = !liveCount;
+            homeLiveCount.innerHTML = `<i></i>${liveCount} Live Now`;
+        }
         if (roomsEmpty) roomsEmpty.hidden = items.length > 0;
         if (forgetAllBtn) forgetAllBtn.hidden = !list.length;
-        if (homeRoomCards) {
-            homeRoomCards.replaceChildren(...items.slice(0, 3).map(item => roomCard(item, item === liveItem)));
-            homeRoomCards.closest(".home-rooms-strip").hidden = !items.length;
+        if (homeRoomList) {
+            homeRoomList.replaceChildren(...items.map((item, i) => {
+                const card = roomCard(item, item === liveItem, true);
+                card.style.setProperty("--i", i);
+                return card;
+            }));
+            homeRoomsEmpty.hidden = items.length > 0;
         }
         const sideCount = document.querySelector('.side-count[data-count="rooms"]');
         if (sideCount) {
@@ -8396,7 +8474,6 @@
         renderRoomCards();
         renderHomeBar();
         renderTogetherRooms();
-        renderRoomMenu();
     };
 
     // ---------- The panel's Watch together tab (not in a room): create a room, join one with its
@@ -8479,7 +8556,7 @@
         else reopen(item);
     };
     roomList?.addEventListener("click", onRoomCard);
-    homeRoomCards?.addEventListener("click", onRoomCard);
+    homeRoomList?.addEventListener("click", onRoomCard);
 
     // On the home page: the room you're in (it keeps going), or the last room to get back into
     function renderHomeBar() {
@@ -8524,18 +8601,32 @@
     // like YouTube's, over the room's bar: its name, play / pause, open it again, or leave (or end)
     // it. The player itself shrinks into the window - nothing moves, so nothing starts over.
     if (homeBar) {
-        const video = el("button", "room-home-video");
+        const video = el("div", "room-home-video");
+        const expand = el("button", "room-home-expand");
         const play = el("button", "room-home-play");
         const leave = el("button", "room-home-leave");
+        const seek = el("input", "room-home-seek");
+        const resize = el("button", "room-home-resize");
         const menu = el("div", "room-home-leave-menu");
-        video.type = play.type = leave.type = "button";
-        video.title = "Open the room";
-        video.setAttribute("aria-label", "Open the room");
-        video.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
+        expand.type = play.type = leave.type = resize.type = "button";
+        video.setAttribute("role", "group");
+        video.setAttribute("aria-label", "Video miniplayer");
+        expand.title = "Open the room";
+        expand.setAttribute("aria-label", "Open the room");
+        expand.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
         play.append(el("i", "fa-solid fa-pause"));
         leave.title = "Leave the room";
         leave.setAttribute("aria-label", "Leave the room");
         leave.append(el("i", "fa-solid fa-xmark"));
+        seek.type = "range";
+        seek.min = "0";
+        seek.max = "1000";
+        seek.value = "0";
+        seek.setAttribute("aria-label", "Seek video");
+        seek.title = "Seek video";
+        resize.title = "Resize miniplayer";
+        resize.setAttribute("aria-label", "Resize miniplayer");
+        resize.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
         menu.hidden = true;
         // The video's title, under the room's name: one line, gliding to its end and back when
         // it's too long for it (like the player's on a phone)
@@ -8544,10 +8635,11 @@
         clip.append(el("span", "room-home-now-text"));
         now.append(el("i", "fa-solid fa-play"), clip);
         homeBar.querySelector(".room-home-text").append(now);
+        video.append(expand, leave, seek);
         homeBar.prepend(video);
         homeBar.querySelector(".room-home-action").before(play);
-        homeBar.append(leave, menu);
-        miniUI = { video, play, leave, menu, now };
+        homeBar.append(resize, menu);
+        miniUI = { video, expand, play, leave, menu, now, seek, resize };
     }
     const renderMiniTitle = () => {
         const now = miniUI && miniUI.now;
@@ -8590,7 +8682,7 @@
     const hasVideoOn = () => !!room && (!!together.stream || hasMedia());
     function renderMiniplayer(playing) {
         if (!homeBar || !miniUI) return;
-        const { play: miniPlay, leave: miniLeave, menu: miniMenu } = miniUI;
+        const { play: miniPlay, leave: miniLeave, expand: miniExpand, menu: miniMenu, seek: miniSeek } = miniUI;
         const on = !!room && !homePage.hidden && hasVideoOn();
         // (over the player, its bar leaves the home page's layer for the page's own while it's the
         // miniplayer - its menu over the video - and goes back after)
@@ -8614,16 +8706,77 @@
         miniLeave.title = room.role === "host" || room.ownerSecret ? "Leave, or end and delete the room" : "Leave, or leave and delete the room";
         renderMiniTitle();
         miniLeave.setAttribute("aria-label", miniLeave.title);
+        miniExpand.setAttribute("aria-label", "Open the room");
+        miniExpand.title = "Open the room";
+        const seekable = !together.stream && (room.yt ? !!room.yt.duration : Number.isFinite(mainVideo.duration) && mainVideo.duration > 0);
+        miniSeek.disabled = !seekable;
+        if (seekable) {
+            const time = room.yt ? expectedTime() : mainVideo.currentTime;
+            const duration = room.yt ? room.yt.duration : mainVideo.duration;
+            miniSeek.value = String(Math.round(Math.max(0, Math.min(1, time / duration)) * 1000));
+            miniSeek.style.setProperty("--seek-progress", `${miniSeek.value / 10}%`);
+        } else miniSeek.style.setProperty("--seek-progress", "0%");
     }
     // (going home and back, playing and pausing: it follows)
     new MutationObserver(() => renderHomeBar()).observe(homePage, { attributes: true, attributeFilter: ["hidden"] });
     ["play", "pause"].forEach(type => mainVideo.addEventListener(type, () => !homePage.hidden && renderHomeBar()));
     setInterval(() => playerPage.classList.contains("miniplayer") && renderHomeBar(), 1000);
-    const { video: miniVideo, play: miniPlay, leave: miniLeave, menu: miniMenu } = miniUI || {};
-    miniVideo?.addEventListener("click", () => homeBar.querySelector(".room-home-action").click());
+    const { video: miniVideo, expand: miniExpand, play: miniPlay, leave: miniLeave, menu: miniMenu, seek: miniSeek, resize: miniResize } = miniUI || {};
+    miniExpand?.addEventListener("click", () => homeBar.querySelector(".room-home-action").click());
     miniPlay?.addEventListener("click", () => {
         togglePlay();
         setTimeout(renderHomeBar, 300);
+    });
+    const seekMini = () => {
+        if (!room || !miniSeek || miniSeek.disabled) return;
+        const duration = room.yt ? room.yt.duration : mainVideo.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        const time = duration * Number(miniSeek.value) / 1000;
+        if (room.yt) request({ time });
+        else if (together.stream) together.stream.request({ time });
+        else mainVideo.currentTime = time;
+    };
+    miniSeek?.addEventListener("input", () => {
+        miniSeek.style.setProperty("--seek-progress", `${miniSeek.value / 10}%`);
+    });
+    miniSeek?.addEventListener("change", seekMini);
+    miniSeek?.addEventListener("click", e => e.stopPropagation());
+    miniSeek?.addEventListener("pointerdown", e => e.stopPropagation());
+
+    const miniSizeKey = "cinetab:miniplayer-width";
+    const miniMobile = () => matchMedia("(max-width: 860px)").matches;
+    const miniBounds = () => {
+        const mobile = miniMobile();
+        const max = Math.max(mobile ? 200 : 280, Math.min(mobile ? 280 : 560, innerWidth - 24, mobile ? innerWidth * .78 : innerWidth * .48));
+        const min = Math.min(max, mobile ? 190 : 300);
+        return { min, max, initial: mobile ? Math.min(248, max) : Math.min(384, max) };
+    };
+    const applyMiniSize = width => {
+        const { min, max, initial } = miniBounds();
+        const value = Math.round(Math.max(min, Math.min(max, Number(width) || initial)));
+        document.body.style.setProperty("--room-mini-width", `${value}px`);
+        document.body.style.setProperty("--room-mini-video-height", `${Math.round(value * 9 / 16)}px`);
+        document.body.style.setProperty("--room-mini-bar-height", miniMobile() ? "66px" : "64px");
+        return value;
+    };
+    let miniWidth = applyMiniSize(storage.get(miniSizeKey));
+    window.addEventListener("resize", () => { miniWidth = applyMiniSize(miniWidth); });
+    miniResize?.addEventListener("pointerdown", e => {
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = miniWidth;
+        miniResize.setPointerCapture?.(e.pointerId);
+        const move = event => { miniWidth = applyMiniSize(startWidth + startX - event.clientX); };
+        const finish = () => {
+            miniResize.removeEventListener("pointermove", move);
+            miniResize.removeEventListener("pointerup", finish);
+            miniResize.removeEventListener("pointercancel", finish);
+            storage.set(miniSizeKey, String(miniWidth));
+        };
+        miniResize.addEventListener("pointermove", move);
+        miniResize.addEventListener("pointerup", finish, { once: true });
+        miniResize.addEventListener("pointercancel", finish, { once: true });
     });
     // Leave: just leave (it goes on for everyone); its host: end it for everyone and delete it;
     // a guest: leave and delete it from this browser

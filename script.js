@@ -126,24 +126,74 @@ container.addEventListener("pointerdown", e => {
 // Show Center Visual Feedback Badge
 // On a computer it shows at the side, not over the middle of the picture: going back (-10s,
 // previous video) on the left, everything else (next video, play, volume…) on the right
-let feedbackTimer = null;
-const showFeedback = (iconClass, text = "") => {
-    feedbackIcon.className = `fa-solid ${iconClass}`;
-    feedbackText.innerText = text;
-    const left = /backward/.test(iconClass);
-    if (centerFeedback.classList.contains("show") && centerFeedback.classList.contains("left") !== left) {
-        // Changing sides: start from that side, not slide across the picture
-        centerFeedback.classList.remove("show");
-        void centerFeedback.offsetWidth;
+const appToastRoot = document.createElement("div");
+appToastRoot.className = "app-toasts";
+appToastRoot.setAttribute("role", "region");
+appToastRoot.setAttribute("aria-label", "Notifications");
+appToastRoot.setAttribute("aria-live", "polite");
+document.body.append(appToastRoot);
+const toastByKey = new Map();
+const removeAppToast = (item, immediate = false) => {
+    if (!item) return;
+    clearTimeout(item.toastTimer);
+    if (item.toastKey && toastByKey.get(item.toastKey) === item) toastByKey.delete(item.toastKey);
+    if (immediate || !item.isConnected) return item.remove();
+    item.classList.add("leaving");
+    setTimeout(() => item.remove(), 180);
+};
+const showAppToast = (message, options = {}) => {
+    const text = String(message || "").trim();
+    const key = options.key || "";
+    if (!text) {
+        if (key) removeAppToast(toastByKey.get(key));
+        return null;
     }
-    centerFeedback.classList.toggle("left", left);
-    centerFeedback.classList.toggle("right", !left);
+    if (key) removeAppToast(toastByKey.get(key), true);
+    const tone = options.tone === "error" ? "error" : "info";
+    const item = document.createElement("div");
+    item.className = `app-toast ${tone}`;
+    item.setAttribute("role", tone === "error" ? "alert" : "status");
+    item.setAttribute("aria-atomic", "true");
+    if (key) {
+        item.toastKey = key;
+        toastByKey.set(key, item);
+    }
+    const icon = document.createElement("i");
+    icon.className = `app-toast-icon fa-solid ${options.iconClass || (tone === "error" ? "fa-circle-exclamation" : "fa-circle-info")}`;
+    icon.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "app-toast-message";
+    label.textContent = text;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "app-toast-close";
+    close.title = "Dismiss notification";
+    close.setAttribute("aria-label", "Dismiss notification");
+    close.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    close.addEventListener("click", () => removeAppToast(item));
+    item.append(icon, label, close);
+    appToastRoot.append(item);
+    [...appToastRoot.children].slice(0, Math.max(0, appToastRoot.childElementCount - 3)).forEach(old => removeAppToast(old, true));
+    item.toastTimer = setTimeout(() => removeAppToast(item), Math.max(1800, Number(options.duration) || 3600));
+    return item;
+};
+showAppToast.dismiss = key => removeAppToast(toastByKey.get(key));
+window.CineToast = showAppToast;
+
+let centerFeedbackTimer;
+centerFeedback.setAttribute("role", "status");
+centerFeedback.setAttribute("aria-live", "polite");
+centerFeedback.setAttribute("aria-atomic", "true");
+const showFeedback = (iconClass, text = "") => {
+    clearTimeout(centerFeedbackTimer);
+    feedbackIcon.className = `fa-solid ${iconClass}`;
+    feedbackText.textContent = text;
+    centerFeedback.classList.toggle("left", /fa-backward|fa-backward-step/.test(iconClass));
+    centerFeedback.classList.remove("show");
+    // Restart the entrance transition when feedback changes quickly (e.g. volume keys).
+    void centerFeedback.offsetWidth;
     centerFeedback.classList.add("show");
-    // Another message straight after keeps it up for its own 700ms
-    clearTimeout(feedbackTimer);
-    feedbackTimer = setTimeout(() => {
-        centerFeedback.classList.remove("show");
-    }, 700);
+    centerFeedbackTimer = setTimeout(() => centerFeedback.classList.remove("show"), 1500);
 };
 
 // Format Time
@@ -185,6 +235,56 @@ const showPlayer = () => {
     document.body.classList.add("watching");
     if (together.onPlayer) together.onPlayer();
     if (location.hash !== "#watch") history.pushState(null, "", "#watch");
+    const hasWatchedBefore = !!(window.CineHistory && CineHistory.list().length);
+    const hasSavedRooms = !!storage.get("cinetab:rooms");
+    if (homePage && !hasWatchedBefore && !hasSavedRooms && !together.active() && storage.get("cinetab:player-tour") !== "done") {
+        setTimeout(startPlayerTour, 450);
+    }
+};
+
+const startPlayerTour = () => {
+    if (playerPage.hidden || document.querySelector(".player-tour")) return;
+    const steps = [
+        { target: ".player-search-btn", title: "Find something to watch", text: "Search YouTube or paste a video link. In a room, the host can play it for everyone." },
+        { target: ".player-queue-btn", title: "Build the queue", text: "Add YouTube videos and playlists, then choose what plays next." },
+        { target: ".share-help-btn", title: "Create or join a room", text: "Start a watch room or join a friend with their invite. Playback stays in sync." },
+        { target: ".room-tab-btn[data-tab='chat']", title: "Chat with your room", text: "Once you’re in a room, open Chat to message everyone while you watch." },
+        { target: ".room-tab-btn[data-tab='people']", title: "Invite friends", text: "In People, share the room code, QR code, or Copy invite link. Friends can join from any browser." }
+    ];
+    let index = 0;
+    const layer = document.createElement("div");
+    layer.className = "player-tour";
+    layer.innerHTML = '<div class="player-tour-card" role="dialog" aria-modal="true" aria-live="polite"><span class="player-tour-count"></span><button type="button" class="player-tour-skip">Skip tour</button><h2></h2><p></p><div class="player-tour-actions"><button type="button" class="player-tour-next">Next</button></div></div>';
+    document.body.append(layer);
+    const card = layer.querySelector(".player-tour-card");
+    const render = () => {
+        const step = steps[index];
+        const target = document.querySelector(step.target);
+        const box = target && target.getClientRects().length ? target.getBoundingClientRect() : null;
+        const focus = box || document.querySelector(".share-help-btn")?.getBoundingClientRect();
+        layer.style.setProperty("--tour-x", focus ? `${focus.left + focus.width / 2}px` : "50vw");
+        layer.style.setProperty("--tour-y", focus ? `${focus.top + focus.height / 2}px` : "50vh");
+        card.querySelector(".player-tour-count").textContent = `QUICK TOUR · ${index + 1} OF ${steps.length}`;
+        card.querySelector("h2").textContent = step.title;
+        card.querySelector("p").textContent = step.text;
+        const next = card.querySelector(".player-tour-next");
+        next.textContent = index === steps.length - 1 ? "Done" : "Next";
+        const cardRect = card.getBoundingClientRect();
+        const anchor = focus || { left: innerWidth / 2, right: innerWidth / 2, top: innerHeight / 2, bottom: innerHeight / 2, width: 0 };
+        const margin = 16;
+        let left = anchor.left + anchor.width / 2 - cardRect.width / 2;
+        left = Math.max(margin, Math.min(left, innerWidth - cardRect.width - margin));
+        let top = anchor.bottom + 14;
+        if (top + cardRect.height > innerHeight - margin) top = anchor.top - cardRect.height - 14;
+        top = Math.max(margin, Math.min(top, innerHeight - cardRect.height - margin));
+        card.style.left = `${left}px`;
+        card.style.top = `${top}px`;
+        next.focus();
+    };
+    const finish = () => { storage.set("cinetab:player-tour", "done"); layer.remove(); };
+    card.querySelector(".player-tour-next").addEventListener("click", () => index === steps.length - 1 ? finish() : (index++, render()));
+    card.querySelector(".player-tour-skip").addEventListener("click", finish);
+    render();
 };
 
 const showHome = () => {
@@ -1219,8 +1319,30 @@ const togglePopup = menu => {
         // (as tall as the player leaves room for above the control bar; it scrolls past that)
         moreOptions.style.maxHeight = `${Math.max(180, Math.min(600, container.clientHeight - 84))}px`;
         renderMoreOptions();
+        showMoreMenuMain();
     }
 };
+const showMoreMenuMain = () => {
+    moreOptions.querySelector("[data-more-main]").hidden = false;
+    moreOptions.querySelectorAll("[data-more-view]").forEach(view => view.hidden = true);
+    moreOptions.classList.remove("showing-subview");
+};
+moreOptions.addEventListener("click", e => {
+    const back = e.target.closest("[data-more-back]");
+    if (back) {
+        showMoreMenuMain();
+        return;
+    }
+    const opener = e.target.closest("[data-more-open]");
+    if (!opener) return;
+    const viewName = opener.dataset.moreOpen;
+    const main = moreOptions.querySelector("[data-more-main]");
+    const view = moreOptions.querySelector(`[data-more-view="${viewName}"]`);
+    if (!view) return;
+    main.hidden = true;
+    moreOptions.querySelectorAll("[data-more-view]").forEach(item => item.hidden = item !== view);
+    moreOptions.classList.add("showing-subview");
+});
 const playerSheet = container.querySelector(".player-sheet");
 const closePopups = () => {
     const open = popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden;
@@ -1535,6 +1657,14 @@ function renderMoreOptions() {
     boostCurrent.textContent = youtube ? "—" : boost.level > 1 ? `${Math.round(boost.level * 100)}%` : "Off";
     moreNote.hidden = !youtube;
     moreNote.textContent = youtube ? "YouTube's player keeps its own volume (up to 100%)." : "";
+    const menuValues = {
+        speed: moreOptions.querySelector(".speed-current").textContent,
+        subtitles: subsCurrent?.textContent || "Off",
+        picture: aspectCurrent.textContent,
+        ambient: moreOptions.querySelector(".ambient-current").textContent,
+        boost: boostCurrent.textContent
+    };
+    moreOptions.querySelectorAll("[data-more-value]").forEach(value => value.textContent = menuValues[value.dataset.moreValue] || "");
     if (!playerSheet.hidden) renderSheet();
 }
 renderMoreOptions();
@@ -1849,6 +1979,7 @@ const syncSpeedUI = () => {
     const rate = mainVideo.playbackRate;
     speedPresets.forEach(option => option.classList.toggle("active", +option.dataset.speed === rate));
     speedCurrent.textContent = rate === 1 ? "Normal" : `${rate}x`;
+    moreOptions.querySelectorAll('[data-more-value="speed"]').forEach(value => value.textContent = speedCurrent.textContent);
     speedSlider.value = rate;
     paintRange(speedSlider);
     if (document.activeElement !== speedInput) speedInput.value = rate;
@@ -2505,6 +2636,7 @@ const setAmbient = (on, announce = false) => {
     ambient.still = 0;
     ambientChips.forEach(chip => chip.classList.toggle("active", (chip.dataset.ambient === "on") === on));
     ambientCurrent.textContent = on ? "On" : "Off";
+    moreOptions.querySelectorAll('[data-more-value="ambient"]').forEach(value => value.textContent = ambientCurrent.textContent);
     if (announce) {
         storage.set(AMBIENT_KEY, on ? "on" : "off");
         showFeedback("fa-lightbulb", on ? "Ambient mode on" : "Ambient mode off");
@@ -3233,9 +3365,10 @@ const cmdPalette = (() => {
     document.body.append(overlay);
 
     const showNote = (text = "", error = false) => {
-        note.textContent = text;
-        note.hidden = !text;
-        note.classList.toggle("error", error);
+        note.textContent = "";
+        note.hidden = true;
+        if (text) window.CineToast(text, { key: "launcher-notice", tone: error ? "error" : "info" });
+        else window.CineToast.dismiss("launcher-notice");
     };
 
     // ---------- Recent videos from history
@@ -3244,21 +3377,21 @@ const cmdPalette = (() => {
         const list = CineHistory.list() || [];
         return list.slice(0, 20).map(entry => {
             const isYt = entry.type === "video" || entry.type === "playlist";
+            const playlist = entry.type === "playlist";
             const title = entry.title || entry.name || (isYt ? "YouTube video" : "Video file");
-            const icon = entry.type === "playlist" ? "fa-list" : isYt ? "fa-brands fa-youtube" : "fa-film";
+            const icon = playlist ? "fa-list" : isYt ? "fa-brands fa-youtube" : "fa-film";
             let meta = "";
-            if (isYt) {
-                meta = entry.channel || (entry.type === "playlist" ? "Playlist" : "YouTube");
-            } else {
-                meta = entry.size ? `Local file · ${formatBytes(entry.size)}` : "Local file";
+            if (playlist) {
+                meta = [entry.channel, entry.count ? `${entry.count} videos` : "Playlist"].filter(Boolean).join(" · ");
             }
-            if (entry.time && entry.time > 5) {
-                meta += ` · ${formatTime(entry.time)}`;
-            }
+            const searchMeta = [entry.channel, entry.type === "file" ? "Local file" : "", meta].filter(Boolean).join(" ");
+            const durationLabel = !playlist && entry.live ? "LIVE" : !playlist && entry.duration > 0 ? formatTime(entry.duration) : "";
             const thumbId = isYt ? entry.id || null : null;
             return {
                 label: title,
                 meta,
+                searchMeta,
+                durationLabel,
                 icon,
                 recent: true,
                 entry,
@@ -3297,11 +3430,12 @@ const cmdPalette = (() => {
         if (!window.CineSaved || !youtube()) return [];
         return (CineSaved.list() || []).slice(0, 40).map(entry => {
             const playlist = entry.type === "playlist";
-            const meta = [entry.channel, playlist ? (entry.count ? `${entry.count} videos` : "Playlist") : entry.live ? "Live" : entry.duration ? formatTime(entry.duration) : ""]
-                .filter(Boolean).join(" · ") || (playlist ? "Playlist" : "YouTube");
+            const meta = playlist ? [entry.channel, entry.count ? `${entry.count} videos` : "Playlist"].filter(Boolean).join(" · ") : "";
             return {
                 label: entry.title || (playlist ? "YouTube playlist" : "YouTube video"),
                 meta,
+                searchMeta: entry.channel || "",
+                durationLabel: !playlist && entry.live ? "LIVE" : !playlist && entry.duration > 0 ? formatTime(entry.duration) : "",
                 icon: playlist ? "fa-list" : "fa-brands fa-youtube",
                 saved: true,
                 entry,
@@ -3390,7 +3524,7 @@ const cmdPalette = (() => {
             // (not once its results are showing)
             const shown = results && results.open && searchedFor === query;
             const search = youtube() && !shown ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
-            const matching = cards => shown ? [] : cards.filter(item => words.every(word => `${item.label} ${item.meta}`.toLowerCase().includes(word)));
+            const matching = cards => shown ? [] : cards.filter(item => words.every(word => `${item.label} ${item.searchMeta || item.meta}`.toLowerCase().includes(word)));
             items = [...search, ...matching(allRecent), ...matching(allSaved)];
         }
         if (freshChoice) chosen = preferred;
@@ -3460,6 +3594,7 @@ const cmdPalette = (() => {
                 thumb.append(img);
             }
             thumb.append(make("i", `${/^fa-(brands|regular)/.test(item.icon) ? "" : "fa-solid "}${item.icon} cmd-card-icon`));
+            if (item.durationLabel) thumb.append(make("span", "cmd-card-duration", item.durationLabel));
             if (item.progress) {
                 const bar = make("span", "cmd-card-progress");
                 const fill = make("i");
@@ -3467,7 +3602,8 @@ const cmdPalette = (() => {
                 bar.append(fill);
                 thumb.append(bar);
             }
-            card.append(thumb, make("span", "cmd-card-title", item.label), make("span", "cmd-card-meta", item.meta));
+            card.append(thumb, make("span", "cmd-card-title", item.label));
+            if (item.meta) card.append(make("span", "cmd-card-meta", item.meta));
             // Its buttons, on its picture: take it out of Recently played (×), keep it in Saved (a
             // heart: YouTube), and play it or add it to the queue (YouTube) - showing when it's
             // pointed at or chosen with the arrows, always on a touch screen
@@ -3835,7 +3971,16 @@ const cmdPalette = (() => {
     });
 
     // ---------- Opening and closing
+    let closeToken = 0;
+    let closeAnimations = [];
+    const cancelCloseMotion = () => {
+        closeToken++;
+        closeAnimations.forEach(animation => animation.cancel());
+        closeAnimations = [];
+        overlay.classList.remove("closing");
+    };
     const open = (text = "", message = "", search = false) => {
+        if (overlay.classList.contains("closing")) cancelCloseMotion();
         if (overlay.hidden) {
             ensureResults();
             followSaved();
@@ -3881,14 +4026,36 @@ const cmdPalette = (() => {
     }, true);
     const close = () => {
         if (overlay.hidden) return;
-        overlay.hidden = true;
+        if (overlay.classList.contains("closing")) return;
         searchBtn.setAttribute("aria-expanded", "false");
-        if (results) results.clear();
-        searchedFor = "";
-        input.value = "";
-        linkState.ref = null;
-        link.hidden = true;
         input.blur();
+        const token = ++closeToken;
+        const finish = () => {
+            if (token !== closeToken) return;
+            overlay.hidden = true;
+            overlay.classList.remove("closing");
+            closeAnimations.forEach(animation => animation.cancel());
+            closeAnimations = [];
+            if (results) results.clear();
+            searchedFor = "";
+            input.value = "";
+            linkState.ref = null;
+            link.hidden = true;
+        };
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches || !overlay.animate || !box.animate) return finish();
+        overlay.classList.add("closing");
+        const overlayOpacity = getComputedStyle(overlay).opacity;
+        const boxStyle = getComputedStyle(box);
+        closeAnimations = [
+            overlay.animate([{ opacity: overlayOpacity }, { opacity: 0 }], {
+                duration: 170, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards"
+            }),
+            box.animate([
+                { opacity: boxStyle.opacity, transform: boxStyle.transform },
+                { opacity: 0, transform: "translateY(-8px) scale(.98)" }
+            ], { duration: 170, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" })
+        ];
+        Promise.all(closeAnimations.map(animation => animation.finished.catch(() => {}))).then(finish);
     };
     const toggle = () => overlay.hidden ? open() : close();
     searchBtn.setAttribute("aria-haspopup", "dialog");

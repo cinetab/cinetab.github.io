@@ -515,6 +515,12 @@
         const showStatus = (message, kind = "") => {
             status.replaceChildren();
             status.className = `yt-status ${kind}`.trim();
+            if (kind === "error" && window.CineToast) {
+                status.hidden = true;
+                window.CineToast(message, { key: "youtube-search-error", tone: "error", duration: 5000 });
+                return;
+            }
+            if (window.CineToast) window.CineToast.dismiss("youtube-search-error");
             status.hidden = !message;
             if (!message) return;
             if (kind === "busy") status.append(el("i", "fa-solid fa-circle-notch fa-spin"), " ");
@@ -561,7 +567,8 @@
             }
             const info = el("span", "yt-info");
             info.append(el("b", null, item.title || "YouTube video"));
-            const meta = [item.channel, views(item.views), item.ago].filter(Boolean).join(" · ");
+            const meta = state.mode === "history" && item.kind === "video" ? ""
+                : [item.channel, views(item.views), item.ago].filter(Boolean).join(" · ");
             if (meta) info.append(el("small", null, meta));
             main.append(thumb, info);
             li.append(main);

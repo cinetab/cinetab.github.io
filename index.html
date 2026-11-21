@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.8.1">
+  <meta name="version" content="1.8.3">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.8.1",
+      "softwareVersion": "1.8.3",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -106,11 +106,10 @@
       </div>
       <nav class="side-nav" aria-label="Sections">
         <button type="button" class="side-link" data-view="home" title="Home"><i class="fa-solid fa-house"></i><span>Home</span></button>
-        <button type="button" class="side-link" data-view="dashboard" title="Search YouTube and what you watched"><i class="fa-solid fa-clapperboard"></i><span>Dashboard</span></button>
-        <button type="button" class="side-link" data-view="favorites" title="YouTube videos and playlists you saved"><i class="fa-solid fa-heart"></i><span>Saved</span></button>
+        <button type="button" class="side-link" data-view="rooms" title="Rooms and lobby"><i class="fa-solid fa-users"></i><span>Lobby</span><i class="side-live" hidden title="You're in a room"></i></button>
         <button type="button" class="mobile-search-link" title="Search YouTube" aria-label="Search YouTube"><span class="mobile-search-icon"><i class="fa-solid fa-magnifying-glass"></i></span><span>Search</span></button>
-        <button type="button" class="side-link" data-view="rooms" title="Rooms"><i class="fa-solid fa-users"></i><span>Rooms</span><i class="side-live" hidden title="You're in a room"></i></button>
-        <button type="button" class="side-link" data-view="help" title="How CineTab works"><i class="fa-solid fa-book-open"></i><span>Guide</span></button>
+        <button type="button" class="side-link" data-view="favorites" title="Your video library"><i class="fa-solid fa-film"></i><span>Library</span></button>
+        <button type="button" class="side-link" data-view="help" title="Guide"><i class="fa-solid fa-compass"></i><span>Guide</span></button>
       </nav>
       <div class="side-section">
         <p class="side-label">Start</p>
@@ -142,59 +141,36 @@
 
       <!-- ============ HOME ============ -->
       <section class="home-view" data-view="home" aria-label="Home">
-      <section class="hero">
-        <div class="hero-text">
-          <span class="eyebrow"><i class="fa-solid fa-shield-halved"></i> Private rooms &middot; Peer-to-peer &middot; No sign-up</span>
-          <h1>Watch movies together <span class="gradient-text">in sync.</span></h1>
-          <p class="lead">Open a video from your device or find one on YouTube. Share your tab with friends, or invite them to a CineTab room.</p>
-          <div class="hero-actions">
-            <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
-            <button class="btn btn-ghost btn-lg room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create room</button>
-            <button class="btn btn-ghost btn-lg room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join room</button>
-          </div>
-          <div class="hero-notes">
-            <p class="hero-note"><i class="fa-solid fa-lock"></i> Files are not hosted online &middot; Best in Chrome &amp; Edge</p>
-            <p class="hero-note offline-note" data-online-only><i class="fa-solid fa-download"></i> <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download CineTab as a single HTML file you can open from your computer">Download standalone offline player</a></p>
-          </div>
+      <section class="hero room-launcher" aria-labelledby="watch-together-title">
+        <div class="room-launcher-intro">
+          <span class="eyebrow"><i class="fa-solid fa-film"></i> Movie night</span>
+          <h1 id="watch-together-title">Watch together</h1>
+          <p class="lead">Sync videos and watch with friends in real-time.</p>
         </div>
-
-        <div class="hero-visual">
-          <div class="browser-mock" id="home-drop">
-            <div class="mock-tabbar">
-              <span class="mock-dots"><i></i><i></i><i></i></span>
-              <span class="mock-tab"><img src="logo.svg" alt="" width="14" height="14"> CineTab</span>
-              <span class="mock-share"><i class="fa-solid fa-volume-high"></i> Sharing tab audio</span>
-            </div>
-            <div class="mock-body">
-              <div class="drop-icon"><i class="fa-solid fa-film"></i></div>
-              <h2>Drop a movie here</h2>
-              <p>MP4, MKV, AVI, WMV, MOV&hellip; or music &middot; add .srt subtitles anytime</p>
-              <button class="btn btn-primary choose-video" title="Pick a video or audio file, or drop one here"><i class="fa-solid fa-folder-open"></i> Choose video</button>
-            </div>
-          </div>
-          <div class="viewers">
-            <span class="avatar" style="--hue: 210" title="Your friends on the call">A</span>
-            <span class="avatar" style="--hue: 260">R</span>
-            <span class="avatar" style="--hue: 330">S</span>
-            <span class="avatar" style="--hue: 160">+3</span>
-            <p>Friends watch on a call or in a CineTab room &mdash; nothing to install</p>
-          </div>
+        <div class="room-launcher-actions">
+          <button class="btn btn-primary btn-lg room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create Watch Room</button>
+          <form class="room-launcher-join" novalidate>
+            <input class="room-launcher-code" type="text" autocomplete="off" spellcheck="false" placeholder="Enter room code or paste link" aria-label="Enter a room code or paste an invite link">
+            <button class="btn btn-primary room-join-open" type="submit" title="Join a friend's room"><span>Join</span><i class="fa-solid fa-arrow-right"></i></button>
+          </form>
+        </div>
+        <div class="room-source-pills" aria-label="Start a room with a source">
+          <span>Quick start</span>
+          <button type="button" class="header-search room-source-pill" title="Find a YouTube video to watch together"><i class="fa-brands fa-youtube"></i> YouTube URL</button>
+          <button type="button" class="choose-video room-source-pill" title="Choose a local video file to share in a room"><i class="fa-solid fa-file-video"></i> Local Video File</button>
         </div>
       </section>
 
-        <div class="quick-tiles">
-          <button type="button" class="quick-tile choose-video" style="--i: 0; --hue: 210"><span class="quick-icon"><i class="fa-solid fa-folder-open"></i></span><b>Open a movie</b><small>Any video or music from this device</small></button>
-          <button type="button" class="quick-tile" data-go="dashboard" data-focus-search style="--i: 1; --hue: 0"><span class="quick-icon"><i class="fa-brands fa-youtube"></i></span><b>Search YouTube</b><small>Videos and playlists, or paste a link</small></button>
-          <button type="button" class="quick-tile room-create-open" style="--i: 2; --hue: 260"><span class="quick-icon"><i class="fa-solid fa-plus"></i></span><b>Create a room</b><small>Watch together, in sync, with a call</small></button>
-          <button type="button" class="quick-tile room-join-open" style="--i: 3; --hue: 160"><span class="quick-icon"><i class="fa-solid fa-right-to-bracket"></i></span><b>Join a room</b><small>With a code or an invite link</small></button>
-        </div>
-
         <section class="home-strip home-continue-strip" hidden>
           <div class="strip-head">
-            <h2><i class="fa-solid fa-clock-rotate-left"></i> Continue watching</h2>
-            <button type="button" class="strip-more" data-go="dashboard">See all <i class="fa-solid fa-arrow-right"></i></button>
+            <h2><i class="fa-solid fa-clock-rotate-left"></i> Quick-start from recent videos</h2>
+            <button type="button" class="strip-more" data-go="favorites">View history <i class="fa-solid fa-arrow-right"></i></button>
           </div>
-          <ul class="dash-grid home-continue"></ul>
+          <div class="recent-video-rail">
+            <button type="button" class="recent-rail-arrow prev" aria-label="Scroll recent videos left" title="Scroll left"><i class="fa-solid fa-chevron-left"></i></button>
+            <ul class="dash-grid home-continue"></ul>
+            <button type="button" class="recent-rail-arrow next" aria-label="Scroll recent videos right" title="Scroll right"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
         </section>
 
         <section class="home-strip home-fav-strip" hidden>
@@ -205,6 +181,16 @@
           <ul class="dash-grid home-favs"></ul>
         </section>
 
+        <section class="home-rooms-panel" aria-labelledby="home-rooms-title">
+          <div class="home-rooms-heading"><h2 id="home-rooms-title">Active &amp; Recent Rooms</h2><span class="home-live-count" hidden></span></div>
+          <ul class="room-cards home-room-list" aria-label="Your rooms"></ul>
+          <div class="home-rooms-empty" hidden>
+            <span class="home-rooms-empty-icon"><i class="fa-regular fa-comments"></i></span>
+            <b>No rooms yet</b>
+            <p>Your rooms will stay here, ready when you are.</p>
+          </div>
+          <button type="button" class="home-rooms-browse" data-go="rooms">Manage all rooms <i class="fa-solid fa-arrow-right"></i></button>
+        </section>
       </section>
 
       <!-- ============ DASHBOARD VIEW ============ -->
@@ -228,9 +214,9 @@
           <p class="dash-note" role="status" hidden></p>
           <div class="yt-results dash-results" hidden></div>
 
-          <div class="dash-history">
+          <div class="dash-history library-history">
             <div class="dash-history-head">
-              <h3><i class="fa-solid fa-clock-rotate-left"></i> Recently watched</h3>
+              <h3><i class="fa-solid fa-clock-rotate-left"></i> Recent history</h3>
               <div class="dash-filters" aria-label="Show">
                 <button type="button" class="dash-filter" data-filter="all" aria-pressed="true">All</button>
                 <button type="button" class="dash-filter" data-filter="youtube" aria-pressed="false"><i class="fa-brands fa-youtube"></i> YouTube</button>
@@ -502,7 +488,7 @@
         </a>
         <p>Made for movie nights. Your files stay on your device.</p>
         <p class="footer-meta">
-          <span class="app-version" title="The version of CineTab you're using">v1.8.1</span>
+          <span class="app-version" title="The version of CineTab you're using">v1.8.3</span>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -513,11 +499,6 @@
 
       </section>
     </main>
-    <div class="home-room-menu-root" hidden>
-      <button class="home-room-menu-trigger" type="button" aria-expanded="false"><i class="fa-solid fa-users"></i><span>Rooms</span><b class="home-room-menu-count">0</b></button>
-      <div class="home-room-menu" role="menu" hidden></div>
-    </div>
-
     <div class="room-home-bar" hidden>
       <span class="room-home-icon"><i class="fa-solid fa-door-open"></i></span>
       <span class="room-home-text"><b></b><small></small></span>
@@ -860,51 +841,46 @@
           <div class="popup-menu-wrapper more-content">
             <button class="more-btn" title="More: speed, subtitles, picture, ambient mode, volume boost, keyboard shortcuts" aria-label="More options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             <div class="popup-menu more-options">
-              <div class="speed-options">
-                <div class="menu-header"><span>Speed</span><span class="speed-current">Normal</span></div>
-                <ul class="speed-presets">
-                  <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li>
-                  <li data-speed="0.75" title="Play at 0.75x speed">0.75x</li>
-                  <li data-speed="1" title="Play at normal speed" class="active">Normal</li>
-                  <li data-speed="1.25" title="Play at 1.25x speed">1.25x</li>
-                  <li data-speed="1.5" title="Play at 1.5x speed">1.5x</li>
-                  <li data-speed="2" title="Play at 2x speed">2x</li>
-                </ul>
-                <div class="speed-custom">
-                  <span>Custom</span>
-                  <input type="range" class="speed-slider" min="0.25" max="4" step="0.05" value="1" title="Drag to choose any speed from 0.25x to 4x">
-                  <input type="number" class="speed-input" min="0.25" max="4" step="0.05" value="1" title="Type a speed from 0.25 to 4, then press Enter" aria-label="Custom speed">
-                </div>
+              <div class="more-menu-main" data-more-main>
+                <div class="more-menu-heading"><span>Player settings</span><i class="fa-solid fa-sliders" aria-hidden="true"></i></div>
+                <button type="button" class="more-menu-row" data-more-open="speed"><i class="fa-solid fa-gauge-high"></i><span>Playback speed</span><span class="more-menu-value" data-more-value="speed">Normal</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
+                <button type="button" class="more-menu-row" data-more-open="subtitles"><i class="fa-regular fa-closed-captioning"></i><span>Subtitles</span><span class="more-menu-value" data-more-value="subtitles">Off</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
+                <button type="button" class="more-menu-row" data-more-open="picture"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>Picture</span><span class="more-menu-value" data-more-value="picture">Fit</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
+                <button type="button" class="more-menu-row" data-more-open="ambient"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Ambient mode</span><span class="more-menu-value" data-more-value="ambient">On</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
+                <button type="button" class="more-menu-row" data-more-open="boost"><i class="fa-solid fa-volume-high"></i><span>Volume boost</span><span class="more-menu-value" data-more-value="boost">Off</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
+                <button type="button" class="more-row shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i><span>Keyboard shortcuts</span><kbd>?</kbd></button>
               </div>
-              <div class="menu-header"><span>Subtitles</span><span class="subs-current">Off</span></div>
-              <ul class="option-chips subs-options">
-                <li data-subs="off" title="Hide the subtitles (C)">Off</li>
-                <li data-subs="on" title="Show the subtitles (C)">On</li>
-                <li data-subs="load" title="Load subtitles from an .srt / .vtt file"><i class="fa-solid fa-file-arrow-up"></i> Load file…</li>
-              </ul>
-              <div class="menu-header"><span>Picture</span><span class="aspect-current">Fit</span></div>
-              <ul class="option-chips aspect-options">
-                <li data-aspect="fit" title="The whole picture, with black bars where it doesn't match the screen">Fit</li>
-                <li data-aspect="fill" title="Fill the screen, cropping the edges">Fill</li>
-                <li data-aspect="stretch" title="Stretch the picture to the screen">Stretch</li>
-                <li data-aspect="16:9" title="Show the picture as 16:9">16:9</li>
-                <li data-aspect="4:3" title="Show the picture as 4:3">4:3</li>
-                <li data-aspect="21:9" title="Show the picture as 21:9 (cinema)">21:9</li>
-              </ul>
-              <div class="menu-header"><span>Ambient mode</span><span class="ambient-current">On</span></div>
-              <ul class="option-chips ambient-options">
-                <li data-ambient="on" title="The picture's colours glow softly around the player">On</li>
-                <li data-ambient="off" title="A plain dark background around the player">Off</li>
-              </ul>
-              <div class="menu-header"><span>Volume boost</span><span class="boost-current">Off</span></div>
-              <ul class="option-chips boost-options">
-                <li data-boost="1" title="Normal volume">Off</li>
-                <li data-boost="1.5" title="Up to 150% volume">150%</li>
-                <li data-boost="2" title="Up to 200% volume">200%</li>
-                <li data-boost="3" title="Up to 300% volume (quiet videos)">300%</li>
-              </ul>
-              <p class="more-note" hidden></p>
-              <button type="button" class="more-row shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i><span>Keyboard shortcuts</span><kbd>?</kbd></button>
+              <section class="more-subview" data-more-view="speed" hidden>
+                <button type="button" class="more-subhead" data-more-back><i class="fa-solid fa-arrow-left"></i><span>Playback speed</span><span class="more-menu-value" data-more-value="speed">Normal</span></button>
+                <div class="speed-options">
+                  <div class="menu-header"><span>Speed</span><span class="speed-current">Normal</span></div>
+                  <ul class="speed-presets">
+                    <li data-speed="0.5" title="Play at 0.5x speed">0.5x</li><li data-speed="0.75" title="Play at 0.75x speed">0.75x</li><li data-speed="1" title="Play at normal speed" class="active">Normal</li><li data-speed="1.25" title="Play at 1.25x speed">1.25x</li><li data-speed="1.5" title="Play at 1.5x speed">1.5x</li><li data-speed="2" title="Play at 2x speed">2x</li>
+                  </ul>
+                  <div class="speed-custom"><span>Custom</span><input type="range" class="speed-slider" min="0.25" max="4" step="0.05" value="1" title="Drag to choose any speed from 0.25x to 4x"><input type="number" class="speed-input" min="0.25" max="4" step="0.05" value="1" title="Type a speed from 0.25 to 4, then press Enter" aria-label="Custom speed"></div>
+                </div>
+              </section>
+              <section class="more-subview" data-more-view="subtitles" hidden>
+                <button type="button" class="more-subhead" data-more-back><i class="fa-solid fa-arrow-left"></i><span>Subtitles</span><span class="more-menu-value" data-more-value="subtitles">Off</span></button>
+                <div class="menu-header"><span>Subtitles</span><span class="subs-current">Off</span></div>
+                <ul class="option-chips subs-options"><li data-subs="off" title="Hide the subtitles (C)">Off</li><li data-subs="on" title="Show the subtitles (C)">On</li><li data-subs="load" title="Load subtitles from an .srt / .vtt file"><i class="fa-solid fa-file-arrow-up"></i> Load file…</li></ul>
+              </section>
+              <section class="more-subview" data-more-view="picture" hidden>
+                <button type="button" class="more-subhead" data-more-back><i class="fa-solid fa-arrow-left"></i><span>Picture</span><span class="more-menu-value" data-more-value="picture">Fit</span></button>
+                <div class="menu-header"><span>Picture shape</span><span class="aspect-current">Fit</span></div>
+                <ul class="option-chips aspect-options"><li data-aspect="fit" title="The whole picture, with black bars where it doesn't match the screen">Fit</li><li data-aspect="fill" title="Fill the screen, cropping the edges">Fill</li><li data-aspect="stretch" title="Stretch the picture to the screen">Stretch</li><li data-aspect="16:9" title="Show the picture as 16:9">16:9</li><li data-aspect="4:3" title="Show the picture as 4:3">4:3</li><li data-aspect="21:9" title="Show the picture as 21:9 (cinema)">21:9</li></ul>
+              </section>
+              <section class="more-subview" data-more-view="ambient" hidden>
+                <button type="button" class="more-subhead" data-more-back><i class="fa-solid fa-arrow-left"></i><span>Ambient mode</span><span class="more-menu-value" data-more-value="ambient">On</span></button>
+                <div class="menu-header"><span>Ambient mode</span><span class="ambient-current">On</span></div>
+                <ul class="option-chips ambient-options"><li data-ambient="on" title="The picture's colours glow softly around the player">On</li><li data-ambient="off" title="A plain dark background around the player">Off</li></ul>
+              </section>
+              <section class="more-subview" data-more-view="boost" hidden>
+                <button type="button" class="more-subhead" data-more-back><i class="fa-solid fa-arrow-left"></i><span>Volume boost</span><span class="more-menu-value" data-more-value="boost">Off</span></button>
+                <div class="menu-header"><span>Volume boost</span><span class="boost-current">Off</span></div>
+                <ul class="option-chips boost-options"><li data-boost="1" title="Normal volume">Off</li><li data-boost="1.5" title="Up to 150% volume">150%</li><li data-boost="2" title="Up to 200% volume">200%</li><li data-boost="3" title="Up to 300% volume (quiet videos)">300%</li></ul>
+                <p class="more-note" hidden></p>
+              </section>
             </div>
           </div>
           <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>

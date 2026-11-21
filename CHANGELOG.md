@@ -6,6 +6,18 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-11-21
+
+### Home and navigation
+- Reworked the home page around creating and joining watch rooms, with active and recent rooms shown before compact recent videos
+- Added recent room activity and participant avatars to room cards, plus arrow controls for browsing recent videos
+- Added Search to the center of mobile navigation and fixed room tab swiping to avoid empty pages
+- Added a first-use player tour with focused callouts and a Skip Tour option; returning users are not shown the tour
+
+### Player
+- Reorganized the More menu into a settings list with focused submenus for speed, subtitles, picture, ambient mode and volume boost
+- Refined the player controls and room panel while retaining existing playback and room features
+
 ## [1.8.1] - 2026-11-21
 
 ### Home and navigation
