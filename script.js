@@ -289,8 +289,8 @@ const startPlayerTour = () => {
 
 const showHome = () => {
     // A room keeps going while you look at the home page
-    if (!together.active()) mainVideo.pause();
-    if (together.solo) together.solo.pause();
+    if (!together.active() && !together.soloMini) mainVideo.pause();
+    if (together.solo && !together.soloMini) together.solo.pause();
     if (fullscreenElement()) exitFullscreen();
     playerPage.hidden = true;
     homePage.hidden = false;
@@ -1896,6 +1896,125 @@ const mediaTime = () => handoffMedia() ? handoffMedia().currentTime : together.s
 // The YouTube video in the player (on your own, or the room's), for its picture
 const youTubeIdShown = () => (together.solo && together.solo.active && together.solo.videoId) ||
     (together.roomYouTubeId && together.roomYouTubeId()) || null;
+
+// Audio mode keeps playback and room sync untouched. YouTube's cross-origin player doesn't expose
+// decoded audio samples, so its visualization is gently animated; local media uses captured audio
+// samples when the browser supports captureStream().
+(() => {
+    const audioButton = container.querySelector(".audio-mode-toggle");
+    const miniButton = container.querySelector(".solo-miniplayer-toggle");
+    if (!audioButton || !miniButton) return;
+    const audioView = document.createElement("section");
+    audioView.className = "audio-mode-view";
+    audioView.setAttribute("aria-label", "Audio mode visualizer");
+    audioView.innerHTML = '<div class="audio-mode-art"><img alt="" /><span class="audio-mode-art-icon"><i class="fa-solid fa-music"></i></span></div><div class="audio-mode-visual"><div class="audio-mode-label">NOW PLAYING</div><b></b><p>Audio mode</p><canvas aria-hidden="true"></canvas></div>';
+    container.append(audioView);
+    const canvas = audioView.querySelector("canvas");
+    const context = canvas.getContext("2d");
+    const art = audioView.querySelector("img");
+    art.addEventListener("error", () => { art.hidden = true; art.removeAttribute("src"); });
+    let raf = 0, audioContext = null, analyser = null, sourceNode = null, samples = null, analysisTracks = [];
+    const sourceExists = () => !!(container.classList.contains("youtube") && youTubeIdShown() || currentFile || together.stream);
+    const titleText = () => (videoTitle?.textContent || audioTitle?.textContent || "Now playing").trim();
+    const update = () => {
+        const visible = sourceExists();
+        audioButton.hidden = !visible;
+        miniButton.hidden = !visible || !homePage;
+        audioButton.setAttribute("aria-pressed", String(container.classList.contains("audio-mode-only")));
+        audioButton.setAttribute("aria-label", container.classList.contains("audio-mode-only") ? "Return to video" : "Switch to audio mode");
+        audioView.querySelector("b").textContent = titleText() || "Now playing";
+        const id = youTubeIdShown();
+        const image = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg` : "";
+        const hasVisualVideo = !!(currentFile || together.stream);
+        const sourceKey = image || (currentFile ? `local:${currentFile.name}:${currentFile.size}` : together.stream ? "room-stream" : "");
+        if (art.dataset.src !== sourceKey || hasVisualVideo && art.hidden && mainVideo.videoWidth > 0) {
+            art.dataset.src = sourceKey;
+            if (image) art.src = image;
+            else if (hasVisualVideo && mainVideo.videoWidth && mainVideo.videoHeight) {
+                try {
+                    const poster = document.createElement("canvas");
+                    poster.width = mainVideo.videoWidth;
+                    poster.height = mainVideo.videoHeight;
+                    poster.getContext("2d").drawImage(mainVideo, 0, 0, poster.width, poster.height);
+                    art.src = poster.toDataURL("image/jpeg", .82);
+                } catch (e) { art.removeAttribute("src"); }
+            } else art.removeAttribute("src");
+            art.hidden = !sourceKey || !art.getAttribute("src");
+        }
+    };
+    const setupAnalyser = () => {
+        if (analyser || !mainVideo.captureStream) return;
+        try {
+            audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+            const captured = mainVideo.captureStream();
+            analysisTracks = captured.getAudioTracks().map(track => track.clone());
+            if (!analysisTracks.length) return;
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 128;
+            sourceNode = audioContext.createMediaStreamSource(new MediaStream(analysisTracks));
+            sourceNode.connect(analyser);
+            samples = new Uint8Array(analyser.frequencyBinCount);
+            audioContext.resume().catch(() => {});
+        } catch (e) { analyser = null; }
+    };
+    mainVideo.addEventListener("loadedmetadata", () => {
+        if (!analyser) return;
+        sourceNode?.disconnect();
+        analysisTracks.forEach(track => track.stop());
+        analysisTracks = [];
+        analyser = sourceNode = samples = null;
+        if (container.classList.contains("audio-mode-only")) setupAnalyser();
+    });
+    const draw = now => {
+        if (!container.classList.contains("audio-mode-only")) { raf = 0; return; }
+        const box = canvas.getBoundingClientRect();
+        const scale = devicePixelRatio || 1;
+        if (canvas.width !== Math.round(box.width * scale) || canvas.height !== Math.round(box.height * scale)) {
+            canvas.width = Math.max(1, Math.round(box.width * scale));
+            canvas.height = Math.max(1, Math.round(box.height * scale));
+        }
+        const w = canvas.width, h = canvas.height;
+        context.clearRect(0, 0, w, h);
+        if (analyser && samples) analyser.getByteFrequencyData(samples);
+        const bars = 42;
+        const gap = Math.max(3 * scale, w * .012), barW = (w - gap * (bars - 1)) / bars;
+        const paused = together.solo?.active ? together.solo.paused : mediaPaused();
+        for (let i = 0; i < bars; i++) {
+            const sample = analyser && samples ? samples[Math.floor(i / bars * samples.length)] / 255 : .2 + .45 * Math.abs(Math.sin(now / 430 + i * .62)) * (paused ? .35 : 1);
+            const height = Math.max(3 * scale, sample * h * .78);
+            const x = i * (barW + gap), y = (h - height) / 2;
+            const gradient = context.createLinearGradient(0, y, 0, y + height);
+            gradient.addColorStop(0, "rgba(103, 187, 255, .95)");
+            gradient.addColorStop(1, "rgba(151, 110, 255, .58)");
+            context.fillStyle = gradient;
+            context.beginPath();
+            context.roundRect(x, y, barW, height, Math.min(barW / 2, 5 * scale));
+            context.fill();
+        }
+        raf = requestAnimationFrame(draw);
+    };
+    audioButton.addEventListener("click", () => {
+        const active = !container.classList.contains("audio-mode-only");
+        container.classList.toggle("audio-mode-only", active);
+        if (active) {
+            setupAnalyser(); update();
+            audioContext?.resume().catch(() => {});
+            cancelAnimationFrame(raf); raf = requestAnimationFrame(draw);
+        } else {
+            cancelAnimationFrame(raf);
+            audioContext?.suspend().catch(() => {});
+        }
+        update();
+    });
+    miniButton.addEventListener("click", () => {
+        if (!sourceExists()) return;
+        together.soloMini = !together.active();
+        showHome();
+    });
+    new MutationObserver(update).observe(container, { attributes: true, attributeFilter: ["class"] });
+    setInterval(update, 1000);
+    update();
+})();
 
 // Previous / next on the lock screen: a YouTube playlist, Mix or Autoplay watched on your own
 const trackActions = { previoustrack: null, nexttrack: null };

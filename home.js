@@ -289,7 +289,33 @@
     const empty = historyBox.querySelector(".dash-empty");
     const moreBtn = historyBox.querySelector(".dash-more");
     const continueGrid = home.querySelector(".home-continue");
-    home.querySelectorAll(".recent-rail-arrow").forEach(button => button.addEventListener("click", () => {
+    const recentMoreBtn = home.querySelector(".home-recent-more");
+    let recentVisible = 10;
+    const isMobileRecent = () => matchMedia("(max-width: 767px)").matches;
+    recentMoreBtn?.addEventListener("click", () => {
+        recentVisible += 10;
+        render();
+    });
+    const recentRail = home.querySelector(".recent-video-rail");
+    const recentRailList = recentRail?.querySelector(".home-continue");
+    const recentRailArrows = recentRail?.querySelectorAll(".recent-rail-arrow") || [];
+    const updateRecentArrows = () => {
+        if (!recentRailList) return;
+        const maxScroll = recentRailList.scrollWidth - recentRailList.clientWidth;
+        const hasOverflow = maxScroll > 2;
+        const atStart = recentRailList.scrollLeft <= 1;
+        const atEnd = recentRailList.scrollLeft >= maxScroll - 1;
+        recentRailArrows.forEach(button => {
+            button.hidden = !hasOverflow || (button.classList.contains("prev") ? atStart : atEnd);
+        });
+    };
+    recentRailList?.addEventListener("scroll", updateRecentArrows, { passive: true });
+    if ("ResizeObserver" in window && recentRailList) {
+        const recentRailResize = new ResizeObserver(updateRecentArrows);
+        recentRailResize.observe(recentRailList);
+        if (recentRail) recentRailResize.observe(recentRail);
+    }
+    recentRailArrows.forEach(button => button.addEventListener("click", () => {
         const rail = button.closest(".recent-video-rail")?.querySelector(".home-continue");
         if (rail) rail.scrollBy({ left: (button.classList.contains("next") ? 1 : -1) * Math.max(220, rail.clientWidth * .72), behavior: "smooth" });
     }));
@@ -393,6 +419,9 @@
     const titleOf = entry => entry.type === "file"
         ? savedTitle(entry.name, entry.size)
         : entry.type === "playlist" ? entry.title || entry.videoTitle || "YouTube playlist" : entry.title || "YouTube video";
+    const roomActionTitle = kind => together.active?.()
+        ? `Play this ${kind} in the room`
+        : `Start a room with this ${kind}`;
 
     const card = entry => {
         const li = el("li", `dash-card ${entry.type}`);
@@ -448,14 +477,15 @@
             : progress.duration ? minutes(progress.duration) : "";
         info.append(el("small", "dash-when", [state, relative(entry.at)].filter(Boolean).join(" · ")));
         open.append(thumb, info);
-        open.title = entry.type === "file"
-            ? `${progress.ratio > 0 && !done ? "Continue" : "Play"} “${title}” (${entry.name})`
-            : `${progress.ratio > 0 && !done ? "Continue" : "Play"} “${title}”`;
+        const openTitle = () => roomActionTitle(entry.type === "playlist" ? "playlist" : "video");
+        open.title = openTitle();
+        open.addEventListener("pointerenter", () => { open.title = openTitle(); });
+        open.addEventListener("focus", () => { open.title = openTitle(); });
 
         const remove = el("button", "dash-remove");
         remove.type = "button";
         remove.dataset.act = "remove";
-        remove.title = `Remove “${title}” from the dashboard`;
+        remove.title = `Remove ${entry.type === "playlist" ? "playlist" : "video"} from history`;
         remove.setAttribute("aria-label", remove.title);
         remove.append(el("i", "fa-solid fa-xmark"));
         li.append(open, remove);
@@ -488,6 +518,7 @@
     const favEmpty = favView && favView.querySelector(".fav-empty");
     const favFilterBtns = favView?.querySelector(".fav-box")?.querySelectorAll(".dash-filter") || [];
     const favClear = favView && favView.querySelector(".fav-clear");
+    const historyNoMatch = historyBox.querySelector(".history-nomatch");
     const homeFavs = home.querySelector(".home-favs");
     const FAV_FILTER_KEY = "cinetab:fav-filter";
     let favFilter = storage.get(FAV_FILTER_KEY) || "all";
@@ -499,7 +530,7 @@
     const favWords = () => fold(favSearch ? favSearch.value : "").split(/\s+/).filter(Boolean);
     const favMatches = (entry, words) => {
         if (!words.length) return true;
-        const haystack = fold(`${entry.title} ${entry.channel || ""}`);
+        const haystack = fold(`${entry.title || ""} ${entry.videoTitle || ""} ${entry.channel || ""}`);
         return words.every(word => haystack.includes(word));
     };
     const shortLength = seconds => {
@@ -515,7 +546,10 @@
         const open = el("button", "dash-open");
         open.type = "button";
         open.dataset.act = "open";
-        open.title = `Play “${entry.title}”`;
+        const openTitle = () => roomActionTitle(entry.type === "playlist" ? "playlist" : "video");
+        open.title = openTitle();
+        open.addEventListener("pointerenter", () => { open.title = openTitle(); });
+        open.addEventListener("focus", () => { open.title = openTitle(); });
         const thumb = el("span", "dash-thumb");
         if (entry.id) {
             const img = el("img");
@@ -563,8 +597,10 @@
             const n = button.querySelector(".fav-n");
             if (n) n.textContent = String(count[button.dataset.filter]);
         });
-        // (the search and the filters once there's something saved)
-        favView.querySelector(".dash-history-head").hidden = !list.length;
+        // Keep the Library search available even when either collection is empty.
+        const savedHead = favView.querySelector(".dash-history-head");
+        savedHead.hidden = false;
+        favView.querySelector(".fav-filters").hidden = !list.length;
         favClear.hidden = !list.length;
         const shown = found.filter(entry => favFilter === "all" || entry.type === favFilter);
         favGrid.replaceChildren(...shown.map(favCard));
@@ -588,10 +624,10 @@
     }));
     const clearFavSearch = () => {
         favSearch.value = "";
-        renderSaved();
+        render();
         favSearch.focus();
     };
-    favSearch?.addEventListener("input", renderSaved);
+    favSearch?.addEventListener("input", () => { showAll = false; render(); });
     favSearch?.addEventListener("keydown", e => {
         if (e.key !== "Escape" || !favSearch.value) return;
         e.preventDefault();
@@ -600,6 +636,7 @@
     });
     favSearchClear?.addEventListener("click", clearFavSearch);
     favNoMatch?.querySelector(".fav-nomatch-clear").addEventListener("click", clearFavSearch);
+    historyNoMatch?.querySelector(".history-nomatch-clear").addEventListener("click", clearFavSearch);
     favClear?.addEventListener("click", async () => {
         if (!await playerAsk({ icon: "fa-heart-crack", title: "Clear Saved?", text: "Every saved video and playlist", yes: "Clear", danger: true })) return;
         CineSaved.clear();
@@ -640,7 +677,11 @@
     const render = (placing = false) => {
         if (homePage.hidden) return;
         const list = CineHistory.list();
-        const count = counts(list);
+        const words = favWords();
+        const queryMatches = list.filter(entry => favMatches({
+            title: titleOf(entry), videoTitle: entry.videoTitle, channel: entry.channel || entry.name
+        }, words));
+        const count = counts(queryMatches);
         if (!count[filter]) filter = "all";
         filterBtns.forEach(button => {
             const on = button.dataset.filter === filter;
@@ -650,18 +691,28 @@
         });
         historyBox.querySelector(".dash-filters").hidden = list.length < 2;
         clearBtn.hidden = !list.length;
-        const shown = list.filter(matches);
+        const shown = queryMatches.filter(matches);
         grid.replaceChildren(...(showAll ? shown : shown.slice(0, SHOWN)).map(card));
-        // Home: the last four, to carry on with
+        // Home: recent videos, compact on desktop and ten at a time on mobile
         if (continueGrid) {
-            continueGrid.replaceChildren(...list.slice(0, 36).map(card));
+            const recentCount = isMobileRecent() ? recentVisible : 36;
+            continueGrid.replaceChildren(...list.slice(0, recentCount).map(card));
             continueGrid.closest(".home-continue-strip").hidden = !list.length;
+            if (recentMoreBtn) recentMoreBtn.hidden = !isMobileRecent() || list.length <= recentVisible;
+            requestAnimationFrame(updateRecentArrows);
         }
         if (railContinueGrid) {
             railContinueGrid.replaceChildren(...list.slice(0, 8).map(card));
             if (railContinueEmpty) railContinueEmpty.hidden = list.length > 0;
         }
         empty.hidden = list.length > 0;
+        historyNoMatch.hidden = !list.length || shown.length > 0;
+        if (list.length && !shown.length) {
+            const filterName = filter === "youtube" ? "YouTube" : filter === "playlist" ? "playlists" : filter === "file" ? "videos from this device" : "recent history";
+            historyNoMatch.querySelector("p").textContent = words.length
+                ? `No ${filterName} matches “${favSearch.value.trim()}”.`
+                : `No ${filterName} to show.`;
+        }
         moreBtn.hidden = shown.length <= SHOWN;
         moreBtn.textContent = showAll ? "Show less" : `Show all ${shown.length}`;
         if (placing) place(list.length > 0);
@@ -683,6 +734,7 @@
         CineHistory.clear();
         showNote("History cleared.");
     });
+    window.addEventListener("resize", () => render(), { passive: true });
 
     // ---------- Opening something again
 

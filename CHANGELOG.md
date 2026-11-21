@@ -6,6 +6,18 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-11-21
+
+### Player
+- Added Audio mode with video artwork and a smoothly animated audio visualizer
+- Added a player button to open solo playback or an active room in the resizable miniplayer
+- Extended miniplayer seeking to solo YouTube playback
+
+### Home and library
+- Search now filters saved videos and recent history together
+- Improved the compact mobile Recent videos list and its video actions
+- Placed Recent video save and remove actions in the top corners on desktop
+
 ## [1.8.3] - 2026-11-21
 
 ### Home and navigation

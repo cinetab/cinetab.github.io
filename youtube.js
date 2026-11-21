@@ -116,7 +116,9 @@
         const on = !!window.CineSaved && CineSaved.has(heart.dataset.saveKey);
         heart.classList.toggle("on", on);
         heart.firstChild.className = `${on ? "fa-solid" : "fa-regular"} fa-heart`;
-        heart.title = on ? "Saved - take it out of Saved" : heart.dataset.saveKey.startsWith("pl:") ? "Save the whole playlist" : "Save this video";
+        heart.title = on
+            ? "Remove from your library"
+            : heart.dataset.saveKey.startsWith("pl:") ? "Save this playlist to your library" : "Save this video to your library";
         heart.setAttribute("aria-label", heart.title);
         heart.setAttribute("aria-pressed", String(on));
     };
@@ -1363,6 +1365,8 @@
     together.solo = {
         get active() { return solo.active; },
         get paused() { return soloControls.paused; },
+        get duration() { return soloControls.duration; },
+        get currentTime() { return soloControls.currentTime(); },
         // The video that should be on (its picture: ambient mode, the lock screen)
         get videoId() { return solo.active ? expectedId() : null; },
         // What's on, to save it (the player's heart): the video, and its playlist if it's in one
@@ -1395,6 +1399,7 @@
         canStep,
         stop: () => stop(true),
         pause: () => solo.active && soloControls.request({ paused: true }),
+        seek: time => solo.active && Number.isFinite(time) && soloControls.request({ time }),
         // Shift + N / P (room.js passes them on outside a room)
         step: n => {
             if (solo.active && step(n)) showFeedback(n > 0 ? "fa-forward-step" : "fa-backward-step", n > 0 ? "Next video" : "Previous video");

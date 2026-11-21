@@ -8570,6 +8570,7 @@
                 : room.presenting ? hasMedia() && !mainVideo.paused : !!room.state && !room.state.paused;
             homeBar.hidden = false;
             homeBar.classList.add("live");
+            homeBar.querySelector(".room-home-icon i").className = "fa-solid fa-door-open";
             renderMiniplayer(playing);
             title.textContent = room.title || "Joining a room…";
             detail.textContent = [
@@ -8583,8 +8584,22 @@
             homeBar.dataset.code = "";
             return;
         }
+        const soloMini = !!together.soloMini && (!!currentFile || !!(together.solo && together.solo.active));
+        if (soloMini) {
+            homeBar.hidden = false;
+            homeBar.classList.remove("live");
+            homeBar.querySelector(".room-home-icon i").className = "fa-solid fa-play";
+            renderMiniplayer(!mediaPaused());
+            title.textContent = "Now playing";
+            detail.textContent = (document.querySelector(".video-title")?.textContent || "Your video").trim();
+            action.textContent = "Open player";
+            forget.hidden = close.hidden = true;
+            homeBar.dataset.code = "";
+            return;
+        }
         const last = savedRooms()[0];
         homeBar.classList.remove("live");
+        homeBar.querySelector(".room-home-icon i").className = "fa-solid fa-door-open";
         renderMiniplayer(false);
         homeBar.hidden = !last || homeBarDismissed;
         if (!last) return;
@@ -8607,6 +8622,12 @@
         const leave = el("button", "room-home-leave");
         const seek = el("input", "room-home-seek");
         const resize = el("button", "room-home-resize");
+        const resizeEdges = ["n", "e", "s", "w", "ne", "nw", "se", "sw"].map(edge => {
+            const handle = el("span", `room-home-edge ${edge}`);
+            handle.dataset.edge = edge;
+            handle.setAttribute("aria-hidden", "true");
+            return handle;
+        });
         const menu = el("div", "room-home-leave-menu");
         expand.type = play.type = leave.type = resize.type = "button";
         video.setAttribute("role", "group");
@@ -8638,8 +8659,8 @@
         video.append(expand, leave, seek);
         homeBar.prepend(video);
         homeBar.querySelector(".room-home-action").before(play);
-        homeBar.append(resize, menu);
-        miniUI = { video, expand, play, leave, menu, now, seek, resize };
+        homeBar.append(resize, menu, ...resizeEdges);
+        miniUI = { video, expand, play, leave, menu, now, seek, resize, resizeEdges };
     }
     const renderMiniTitle = () => {
         const now = miniUI && miniUI.now;
@@ -8679,11 +8700,12 @@
         });
     };
     const miniGlide = { key: "", anim: null };
-    const hasVideoOn = () => !!room && (!!together.stream || hasMedia());
+    const hasVideoOn = () => !!room && (!!together.stream || hasMedia()) || !!together.soloMini && (!!currentFile || !!(together.solo && together.solo.active));
     function renderMiniplayer(playing) {
         if (!homeBar || !miniUI) return;
         const { play: miniPlay, leave: miniLeave, expand: miniExpand, menu: miniMenu, seek: miniSeek } = miniUI;
-        const on = !!room && !homePage.hidden && hasVideoOn();
+        const soloMini = !room && !!together.soloMini && (!!currentFile || !!(together.solo && together.solo.active));
+        const on = (!!room || soloMini) && !homePage.hidden && hasVideoOn();
         // (over the player, its bar leaves the home page's layer for the page's own while it's the
         // miniplayer - its menu over the video - and goes back after)
         if (on && homeBar.parentNode !== document.body) {
@@ -8703,16 +8725,17 @@
         miniPlay.firstChild.className = `fa-solid ${playing ? "fa-pause" : "fa-play"}`;
         miniPlay.title = playing ? "Pause" : "Play";
         miniPlay.setAttribute("aria-label", miniPlay.title);
-        miniLeave.title = room.role === "host" || room.ownerSecret ? "Leave, or end and delete the room" : "Leave, or leave and delete the room";
+        miniLeave.title = soloMini ? "Close miniplayer" : room.role === "host" || room.ownerSecret ? "Leave, or end and delete the room" : "Leave, or leave and delete the room";
         renderMiniTitle();
         miniLeave.setAttribute("aria-label", miniLeave.title);
-        miniExpand.setAttribute("aria-label", "Open the room");
-        miniExpand.title = "Open the room";
-        const seekable = !together.stream && (room.yt ? !!room.yt.duration : Number.isFinite(mainVideo.duration) && mainVideo.duration > 0);
+        miniExpand.setAttribute("aria-label", soloMini ? "Open player" : "Open the room");
+        miniExpand.title = soloMini ? "Open player" : "Open the room";
+        const soloYouTube = soloMini && together.solo && together.solo.active;
+        const seekable = soloYouTube ? !!together.solo.duration : !together.stream && (room?.yt ? !!room.yt.duration : Number.isFinite(mainVideo.duration) && mainVideo.duration > 0);
         miniSeek.disabled = !seekable;
         if (seekable) {
-            const time = room.yt ? expectedTime() : mainVideo.currentTime;
-            const duration = room.yt ? room.yt.duration : mainVideo.duration;
+            const time = soloYouTube ? together.solo.currentTime : room?.yt ? expectedTime() : mainVideo.currentTime;
+            const duration = soloYouTube ? together.solo.duration : room?.yt ? room.yt.duration : mainVideo.duration;
             miniSeek.value = String(Math.round(Math.max(0, Math.min(1, time / duration)) * 1000));
             miniSeek.style.setProperty("--seek-progress", `${miniSeek.value / 10}%`);
         } else miniSeek.style.setProperty("--seek-progress", "0%");
@@ -8728,11 +8751,14 @@
         setTimeout(renderHomeBar, 300);
     });
     const seekMini = () => {
-        if (!room || !miniSeek || miniSeek.disabled) return;
-        const duration = room.yt ? room.yt.duration : mainVideo.duration;
+        if (!miniSeek || miniSeek.disabled) return;
+        const soloYouTube = !room && together.soloMini && together.solo?.active;
+        const duration = soloYouTube ? together.solo.duration : room?.yt ? room.yt.duration : mainVideo.duration;
         if (!Number.isFinite(duration) || duration <= 0) return;
         const time = duration * Number(miniSeek.value) / 1000;
-        if (room.yt) request({ time });
+        if (soloYouTube) together.solo.seek(time);
+        else if (!room) mainVideo.currentTime = time;
+        else if (room.yt) request({ time });
         else if (together.stream) together.stream.request({ time });
         else mainVideo.currentTime = time;
     };
@@ -8744,39 +8770,79 @@
     miniSeek?.addEventListener("pointerdown", e => e.stopPropagation());
 
     const miniSizeKey = "cinetab:miniplayer-width";
+    const miniHeightKey = "cinetab:miniplayer-height";
     const miniMobile = () => matchMedia("(max-width: 860px)").matches;
+    const miniBarHeight = () => miniMobile() ? 66 : 64;
     const miniBounds = () => {
         const mobile = miniMobile();
         const max = Math.max(mobile ? 200 : 280, Math.min(mobile ? 280 : 560, innerWidth - 24, mobile ? innerWidth * .78 : innerWidth * .48));
         const min = Math.min(max, mobile ? 190 : 300);
-        return { min, max, initial: mobile ? Math.min(248, max) : Math.min(384, max) };
+        const bar = miniBarHeight();
+        const minHeight = bar + (mobile ? 96 : 120);
+        const maxHeight = Math.max(minHeight, Math.min(innerHeight - (mobile ? 120 : 40), 900));
+        return { min, max, initial: mobile ? Math.min(248, max) : Math.min(384, max), minHeight, maxHeight, bar };
     };
-    const applyMiniSize = width => {
-        const { min, max, initial } = miniBounds();
+    const applyMiniSize = (width, height) => {
+        const { min, max, initial, minHeight, maxHeight, bar } = miniBounds();
         const value = Math.round(Math.max(min, Math.min(max, Number(width) || initial)));
+        const total = Math.round(Math.max(minHeight, Math.min(maxHeight, Number(height) || Math.round(value * 9 / 16) + bar)));
         document.body.style.setProperty("--room-mini-width", `${value}px`);
-        document.body.style.setProperty("--room-mini-video-height", `${Math.round(value * 9 / 16)}px`);
-        document.body.style.setProperty("--room-mini-bar-height", miniMobile() ? "66px" : "64px");
-        return value;
+        document.body.style.setProperty("--room-mini-video-height", `${total - bar}px`);
+        document.body.style.setProperty("--room-mini-bar-height", `${bar}px`);
+        return { width: value, height: total };
     };
-    let miniWidth = applyMiniSize(storage.get(miniSizeKey));
-    window.addEventListener("resize", () => { miniWidth = applyMiniSize(miniWidth); });
-    miniResize?.addEventListener("pointerdown", e => {
+    let miniSize = applyMiniSize(storage.get(miniSizeKey), storage.get(miniHeightKey));
+    window.addEventListener("resize", () => {
+        document.body.style.removeProperty("--room-mini-right");
+        document.body.style.removeProperty("--room-mini-bottom");
+        miniSize = applyMiniSize(miniSize.width, miniSize.height);
+    });
+    const startMiniResize = (e, direction, target) => {
         if (e.button !== undefined && e.button !== 0) return;
         e.preventDefault();
-        const startX = e.clientX;
-        const startWidth = miniWidth;
-        miniResize.setPointerCapture?.(e.pointerId);
-        const move = event => { miniWidth = applyMiniSize(startWidth + startX - event.clientX); };
-        const finish = () => {
-            miniResize.removeEventListener("pointermove", move);
-            miniResize.removeEventListener("pointerup", finish);
-            miniResize.removeEventListener("pointercancel", finish);
-            storage.set(miniSizeKey, String(miniWidth));
+        e.stopPropagation();
+        const box = homeBar.getBoundingClientRect();
+        const startX = e.clientX, startY = e.clientY;
+        const startWidth = box.width, startHeight = box.height;
+        target.setPointerCapture?.(e.pointerId);
+        homeBar.classList.add("resizing");
+        const move = event => {
+            const dx = event.clientX - startX, dy = event.clientY - startY;
+            let width = startWidth, height = startHeight;
+            if (direction.includes("e")) width += dx;
+            if (direction.includes("w")) width -= dx;
+            if (direction.includes("s")) height += dy;
+            if (direction.includes("n")) height -= dy;
+            const { min, max, minHeight, maxHeight } = miniBounds();
+            width = Math.round(Math.max(min, Math.min(max, width)));
+            height = Math.round(Math.max(minHeight, Math.min(maxHeight, height)));
+            const right = direction.includes("e") ? innerWidth - box.left - width : innerWidth - box.right;
+            const bottom = direction.includes("s") ? innerHeight - box.top - height : innerHeight - box.bottom;
+            document.body.style.setProperty("--room-mini-right", `${Math.max(8, Math.min(innerWidth - width - 8, right))}px`);
+            document.body.style.setProperty("--room-mini-bottom", `${Math.max(8, Math.min(innerHeight - height - 8, bottom))}px`);
+            miniSize = applyMiniSize(width, height);
         };
-        miniResize.addEventListener("pointermove", move);
-        miniResize.addEventListener("pointerup", finish, { once: true });
-        miniResize.addEventListener("pointercancel", finish, { once: true });
+        const finish = () => {
+            target.removeEventListener("pointermove", move);
+            target.removeEventListener("pointerup", finish);
+            target.removeEventListener("pointercancel", finish);
+            homeBar.classList.remove("resizing");
+            storage.set(miniSizeKey, String(miniSize.width));
+            storage.set(miniHeightKey, String(miniSize.height));
+        };
+        target.addEventListener("pointermove", move);
+        target.addEventListener("pointerup", finish, { once: true });
+        target.addEventListener("pointercancel", finish, { once: true });
+    };
+    miniResize?.addEventListener("pointerdown", e => startMiniResize(e, "se", miniResize));
+    miniUI?.resizeEdges?.forEach(handle => handle.addEventListener("pointerdown", e => startMiniResize(e, handle.dataset.edge, handle)));
+    miniResize?.addEventListener("keydown", e => {
+        const [dw, dh] = ({ ArrowRight: [12, 0], ArrowLeft: [-12, 0], ArrowDown: [0, 12], ArrowUp: [0, -12] })[e.key] || [];
+        if (dw === undefined) return;
+        e.preventDefault();
+        miniSize = applyMiniSize(miniSize.width + dw, miniSize.height + dh);
+        storage.set(miniSizeKey, String(miniSize.width));
+        storage.set(miniHeightKey, String(miniSize.height));
     });
     // Leave: just leave (it goes on for everyone); its host: end it for everyone and delete it;
     // a guest: leave and delete it from this browser
@@ -8795,6 +8861,13 @@
     };
     miniLeave?.addEventListener("click", e => {
         e.stopPropagation();
+        if (!room && together.soloMini) {
+            together.soloMini = false;
+            if (together.solo?.active) together.solo.pause();
+            else mainVideo.pause();
+            renderHomeBar();
+            return;
+        }
         if (!room) return;
         const host = room.role === "host" || room.ownerSecret;
         miniMenu.replaceChildren();
@@ -8816,6 +8889,11 @@
         if (room) {
             showPlayer();
             return showPanel(true);
+        }
+        if (together.soloMini) {
+            together.soloMini = false;
+            showPlayer();
+            return;
         }
         const item = savedRooms().find(saved => saved.code === homeBar.dataset.code);
         if (item) reopen(item);
