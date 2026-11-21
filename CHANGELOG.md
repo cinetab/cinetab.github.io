@@ -6,6 +6,20 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-11-21
+
+### Home and navigation
+- Returning viewers land on their watch history, with Search YouTube available from the header and mobile navigation
+- Home and Saved show more videos in consistent thumbnail grids; room controls stay in a compact floating menu
+- The collapsed desktop sidebar keeps its logo in view and expands from a dedicated hover control
+- Mobile navigation places Search between Saved and Rooms, with a raised, outlined button
+- The information section is now called Guide, with a book icon
+
+### Player and rooms
+- Mobile room panels can be resized in landscape, and switching room tabs no longer flashes a dark gap
+- Minimized calls move out of the room rail and tuck away after inactivity, with touch and pointer activity restoring them
+- Reloading an active room rejoins it, and remembered rooms remain available in the room menu
+
 ## [1.8.0] - 2026-11-21
 
 ### Rooms

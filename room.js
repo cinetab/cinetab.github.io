@@ -1114,15 +1114,16 @@
     // narrower, the video beside it following (arrow keys too, once it has focus; a double-click
     // goes back to its own width). Remembered; never more than half the screen.
     const PANEL_KEY = "cinetab:panel-w";
-    const PANEL_MIN = 280;
-    const panelMax = () => Math.max(PANEL_MIN, Math.min(640, playerPage.getBoundingClientRect().width * 0.5));
+    const panelMin = () => matchMedia("(pointer: coarse) and (max-width: 900px) and (orientation: landscape)").matches
+        ? Math.min(168, playerPage.getBoundingClientRect().width * 0.3) : 280;
+    const panelMax = () => Math.max(panelMin(), Math.min(640, playerPage.getBoundingClientRect().width * 0.62));
     let panelW = (() => {
         const saved = +storage.get(PANEL_KEY);
         return finite(saved, 200, 4000) ? saved : null;
     })();
     const applyPanelW = () => {
         if (!panelW) return playerPage.style.removeProperty("--panel-w");
-        playerPage.style.setProperty("--panel-w", `${Math.round(Math.max(PANEL_MIN, Math.min(panelW, panelMax())))}px`);
+        playerPage.style.setProperty("--panel-w", `${Math.round(Math.max(panelMin(), Math.min(panelW, panelMax())))}px`);
     };
     const panelInMotion = () => {
         if (calmer()) return;
@@ -1149,7 +1150,7 @@
     panelEdge.addEventListener("pointermove", e => {
         if (!panelSizing || panelSizing.id !== e.pointerId) return;
         // (its left edge: dragged left, it's wider)
-        panelW = Math.round(Math.max(PANEL_MIN, Math.min(panelSizing.w - (e.clientX - panelSizing.x0), panelMax())));
+        panelW = Math.round(Math.max(panelMin(), Math.min(panelSizing.w - (e.clientX - panelSizing.x0), panelMax())));
         applyPanelW();
     });
     const endPanelSizing = e => {
@@ -1172,7 +1173,7 @@
         if (!step) return;
         e.preventDefault();
         e.stopPropagation();
-        panelW = Math.round(Math.max(PANEL_MIN, Math.min(panel.offsetWidth + step * (e.shiftKey ? 3 : 1), panelMax())));
+        panelW = Math.round(Math.max(panelMin(), Math.min(panel.offsetWidth + step * (e.shiftKey ? 3 : 1), panelMax())));
         applyPanelW();
         savePanelW();
     });
@@ -1254,7 +1255,9 @@
             const edge = (swipe.dx > 0 && index <= 0) || (swipe.dx < 0 && index >= tabs.length - 1);
             const x = edge ? swipe.dx / 4 : swipe.dx * 0.6;
             swipe.section.style.transform = `translateX(${x}px)`;
-            swipe.section.style.opacity = String(Math.max(0.4, 1 - Math.abs(x) / 320));
+            // Keep the outgoing tab opaque while it tracks the finger so the panel underneath
+            // never flashes through as a black gap between tabs.
+            swipe.section.style.opacity = "1";
         }
     }, { passive: false });
 
@@ -1288,9 +1291,9 @@
         // The new tab comes in from the side the finger went toward
         const incoming = openSection();
         if (incoming && !calmer()) incoming.animate([
-            { transform: `translateX(${done.dx < 0 ? 40 : -40}px)`, opacity: 0 },
+            { transform: `translateX(${done.dx < 0 ? 24 : -24}px)`, opacity: 0.92 },
             { transform: "none", opacity: 1 }
-        ], { duration: 240, easing: PANEL_EASE });
+        ], { duration: 200, easing: PANEL_EASE });
         // Its tab button in view (the row of tabs can be narrower than all of them)
         panel.querySelector(`.room-tab-btn[data-tab="${tabs[next]}"]`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     };
@@ -2655,6 +2658,16 @@
     };
     // (its buttons used: it stays a while longer)
     roomFoot.addEventListener("pointerdown", () => callWin.classList.contains("bar-open") && showUnitBar(true));
+    callWin.addEventListener("click", e => {
+        if (!callWin.classList.contains("unit") || !call.collapsed || e.target.closest("button")) return;
+        if (callWin.classList.contains("peek-open")) showUnitBar(true);
+        else {
+            callWin.classList.add("peek-open");
+            placePill();
+            clearTimeout(unitBarTimer);
+            unitBarTimer = setTimeout(() => callWin.classList.remove("peek-open"), 4500);
+        }
+    });
 
     // A phone: is your own video too small for your mic and camera buttons on it? (A little
     // larger to take them back than to give them up, so they don't flicker at the edge.)
@@ -2771,6 +2784,10 @@
         renderCallButtons();
         layoutCall();
         saveCall();
+        // A minimized call should not stay as a small bar inside the room panel. Keep its pinned
+        // preference, but move it to the compact bottom dock; restoring the videos returns it to
+        // the panel rail.
+        placeDock(true);
         placeCall();
         // (minimized on a phone sideways: it may step aside in a while)
         wakeCall();
@@ -2902,7 +2919,8 @@
                 // video ("rail"); with the panel closed, a column left of the video ("side")
                 const pinned = call.dockPos === "side" && call.dockable && !callWin.classList.contains("no-people");
                 const panelOpen = !panel.hidden && playerPage.classList.contains("room-open");
-                if (wanted && !callWin.hidden && !playerPage.hidden) dock = !pinned ? "bottom" : panelOpen ? "rail" : "side";
+                if (wanted && !callWin.hidden && !playerPage.hidden) dock = !pinned ? "bottom"
+                    : panelOpen ? call.collapsed ? "bottom" : "rail" : "side";
             } else if (wanted && !callWin.hidden && !playerPage.hidden && call.dockable) {
                 // Phones: a strip at the bottom held upright, a column on the left held sideways
                 dock = upright ? "strip" : "side";
@@ -3007,13 +3025,11 @@
     };
     together.callDocked = () => !callWin.hidden && !!call.dock;
 
-    // ---------- A phone, sideways or fullscreen, with the call minimized: after a few seconds
-    // without a touch it steps aside (a slim column slides away, the video taking its place; a
-    // floating pill fades out), like a video call's buttons; a touch anywhere brings it back
+    // ---------- A minimized call steps out of the way after a few seconds. Touch, pointer or
+    // keyboard activity brings it back; this works for floating and docked layouts.
     const CALL_IDLE_MS = 4000;
     let callIdleTimer = null;
-    const callIdleWanted = () => !callWin.hidden && callWin.classList.contains("unit") && call.collapsed && call.dock !== "strip"
-        && (phoneSideways.matches || !!(document.fullscreenElement || document.webkitFullscreenElement))
+    const callIdleWanted = () => !callWin.hidden && call.collapsed && call.dock !== "strip"
         && callMoreMenu.hidden && (!leavePopover || leavePopover.hidden);
     const setCallIdle = idle => {
         callWin.classList.toggle("idle", idle);
@@ -3025,6 +3041,7 @@
         if (callIdleWanted()) callIdleTimer = setTimeout(() => callIdleWanted() && setCallIdle(true), CALL_IDLE_MS);
     };
     playerPage.addEventListener("pointerdown", wakeCall, true);
+    playerPage.addEventListener("pointermove", () => callWin.classList.contains("idle") && wakeCall(), { passive: true });
     document.addEventListener("keydown", wakeCall, true);
     document.addEventListener("fullscreenchange", wakeCall);
     document.addEventListener("webkitfullscreenchange", wakeCall);
@@ -7917,6 +7934,10 @@
 
     window.addEventListener("beforeunload", e => {
         if (!room || (room.role === "guest" && room.phase !== "in")) return;
+        try {
+            rememberRoom();
+            sessionStorage.setItem("cinetab:reload-room", room.code);
+        } catch (error) {}
         e.preventDefault();
         e.returnValue = "";
     });
@@ -7965,7 +7986,7 @@
     };
 
     const rememberRoom = () => {
-        if (!room || !room.remember || !room.title) return;
+        if (!room || !room.title) return;
         const entry = { code: room.code, password: room.password, title: room.title, role: room.role, ticket: room.ticket || room.myTicket || null,
             owner: room.ownerSecret || null, ownerTag: room.ownerTag || null, at: Date.now() };
         writeRooms([entry, ...savedRooms().filter(item => item.code !== room.code)]);
@@ -8027,6 +8048,61 @@
         return startGuest({ code: item.code, password: item.password, name, avatar, remember: true, ticket: item.ticket,
             owner: item.owner || null, ownerTag: item.ownerTag || null, hostIfAlone: item.owner ? { title: item.title } : null });
     };
+    const roomMenuRoot = document.querySelector(".home-room-menu-root");
+    const roomMenuTrigger = roomMenuRoot?.querySelector(".home-room-menu-trigger");
+    const roomMenu = roomMenuRoot?.querySelector(".home-room-menu");
+    const renderRoomMenu = () => {
+        if (!roomMenuRoot || !roomMenu) return;
+        const live = room && (room.role === "host" || room.phase === "in") ? room : null;
+        const rooms = savedRooms();
+        const items = live ? [{ ...rooms.find(item => item.code === live.code), code: live.code, title: live.title, role: live.role, active: true }, ...rooms.filter(item => item.code !== live.code)] : rooms;
+        const miniRoomVisible = !!(room && homeBar && !homeBar.hidden);
+        roomMenuRoot.hidden = !items.length || miniRoomVisible;
+        roomMenuTrigger.querySelector(".home-room-menu-count").textContent = String(items.length);
+        roomMenu.replaceChildren(...items.map(item => {
+            const button = el("button", "home-room-menu-item");
+            button.type = "button";
+            button.setAttribute("role", "menuitem");
+            button.dataset.room = item.code;
+            button.dataset.live = item.active ? "1" : "";
+            const people = item.active && room ? room.memberCount : Array.isArray(item.people) ? item.people.length : 0;
+            const members = el("small", "home-room-menu-members");
+            members.append(el("i", "fa-solid fa-user-group"), document.createTextNode(` ${people || 1}`));
+            button.append(el("i", `fa-solid ${item.active ? "fa-circle-play" : "fa-door-open"}`), el("span", null, roomLabel(item)), members,
+                el("small", "home-room-menu-action", item.active ? "Open" : item.role === "host" ? "Open" : "Join"));
+            return button;
+        }));
+    };
+    roomMenuTrigger?.addEventListener("click", () => {
+        const open = roomMenu.hidden;
+        roomMenu.hidden = !open;
+        roomMenuTrigger.setAttribute("aria-expanded", String(open));
+    });
+    const showRoomMenu = () => {
+        if (!roomMenu || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+        roomMenu.hidden = false;
+        roomMenuTrigger?.setAttribute("aria-expanded", "true");
+    };
+    const hideRoomMenu = () => {
+        if (!roomMenu || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+        roomMenu.hidden = true;
+        roomMenuTrigger?.setAttribute("aria-expanded", "false");
+    };
+    roomMenuRoot?.addEventListener("pointerenter", showRoomMenu);
+    roomMenuRoot?.addEventListener("pointerleave", hideRoomMenu);
+    roomMenuRoot?.addEventListener("focusin", showRoomMenu);
+    roomMenuRoot?.addEventListener("focusout", e => !roomMenuRoot.contains(e.relatedTarget) && hideRoomMenu());
+    roomMenu?.addEventListener("click", e => {
+        const button = e.target.closest("button[data-room]");
+        if (!button) return;
+        if (button.dataset.live && room) { showPlayer(); showPanel(true); }
+        else {
+            const item = savedRooms().find(saved => saved.code === button.dataset.room);
+            if (item) reopen(item);
+        }
+        roomMenu.hidden = true;
+        roomMenuTrigger?.setAttribute("aria-expanded", "false");
+    });
 
     // ---------- The home page's room cards (My rooms, and a few on Home): the room you're in
     // ("Live now", with everyone in it), then the rooms remembered in this browser, each with who
@@ -8320,6 +8396,7 @@
         renderRoomCards();
         renderHomeBar();
         renderTogetherRooms();
+        renderRoomMenu();
     };
 
     // ---------- The panel's Watch together tab (not in a room): create a room, join one with its
@@ -8815,7 +8892,14 @@
     renderRooms();
     const openedInvite = new URLSearchParams(location.hash.slice(1)).has("join");
     joinFromLink();
-    if (!openedInvite && !location.hash && savedRooms().length && storage.get(NAME_KEY)) {
-        setTimeout(() => !room && reopen(savedRooms()[0]), 0);
+    let reloadRoom = "";
+    try {
+        const nav = performance.getEntriesByType("navigation")[0];
+        if (nav && nav.type === "reload") reloadRoom = sessionStorage.getItem("cinetab:reload-room") || "";
+        sessionStorage.removeItem("cinetab:reload-room");
+    } catch (error) {}
+    if (!openedInvite && reloadRoom && storage.get(NAME_KEY)) {
+        const previousRoom = savedRooms().find(item => item.code === reloadRoom);
+        if (previousRoom) setTimeout(() => !room && reopen(previousRoom), 0);
     }
 })();

@@ -592,7 +592,7 @@ const loadVideoFile = async (file, handle = null) => {
     if (silentAudio) return startConversion("audio", silentAudio);
 
     setSource(file, "native");
-    showFeedback("fa-play", "Playing");
+    playFeedback();
 };
 
 browseBtn.addEventListener("click", pickVideo);
@@ -1686,9 +1686,14 @@ sheetMain.addEventListener("click", e => {
     else if (act === "open") openFileBtn.click();
 });
 
-// Play / Pause. On a touch screen with the controls showing, the big button itself shows it.
-const playFeedback = icon => {
-    if (!(isTouch && container.classList.contains("show-controls"))) showFeedback(icon, "");
+// Play / Pause: briefly highlight the actual control rather than raising a separate flyout.
+let playFeedbackTimer = null;
+const playFeedback = () => {
+    clearTimeout(playFeedbackTimer);
+    container.classList.remove("play-feedback");
+    void container.offsetWidth;
+    container.classList.add("play-feedback");
+    playFeedbackTimer = setTimeout(() => container.classList.remove("play-feedback"), 700);
 };
 // When the person last paused (Background play never undoes their own pause)
 let userPausedAt = 0;
@@ -1706,16 +1711,16 @@ const togglePlay = () => {
     if (together.stream) {
         const play = together.stream.paused;
         if (!play) userPausedAt = Date.now();
-        if (together.stream.request({ paused: !play })) playFeedback(play ? "fa-play" : "fa-pause");
+        if (together.stream.request({ paused: !play })) playFeedback();
         return;
     }
     if(mainVideo.paused) {
         mainVideo.play().catch(() => {});
-        playFeedback("fa-play");
+        playFeedback();
     } else {
         userPausedAt = Date.now();
         mainVideo.pause();
-        playFeedback("fa-pause");
+        playFeedback();
     }
 };
 
@@ -3225,7 +3230,7 @@ const cmdPalette = (() => {
     foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> back · close</span>";
     box.append(form, body, foot);
     overlay.append(box);
-    playerPage.append(overlay);
+    document.body.append(overlay);
 
     const showNote = (text = "", error = false) => {
         note.textContent = text;
@@ -3831,7 +3836,6 @@ const cmdPalette = (() => {
 
     // ---------- Opening and closing
     const open = (text = "", message = "", search = false) => {
-        if (playerPage.hidden) showPlayer();
         if (overlay.hidden) {
             ensureResults();
             followSaved();
@@ -3918,11 +3922,9 @@ const cmdPalette = (() => {
         }
         e.stopPropagation();
     });
-    // The player going away closes it
-    new MutationObserver(() => playerPage.hidden && close()).observe(playerPage, { attributes: true, attributeFilter: ["hidden"] });
-
     together.openSearch = open;
     together.searchOpen = () => !overlay.hidden;
+    window.CineLauncher = { open, close, toggle };
     return { open, close, toggle, get isOpen() { return !overlay.hidden; } };
 })();
 

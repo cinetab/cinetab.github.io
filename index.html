@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.8.0">
+  <meta name="version" content="1.8.1">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.8.0",
+      "softwareVersion": "1.8.1",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -90,7 +90,7 @@
 <body>
 
   <!-- ============ HOME PAGE ============ -->
-  <div class="home app-shell" id="top">
+  <div class="home app-shell side-collapsed" id="top">
     <!-- Mica: soft colour glows behind frosted glass (style.css) -->
     <div class="home-backdrop" aria-hidden="true"><i class="glow g1"></i><i class="glow g2"></i><i class="glow g3"></i></div>
 
@@ -101,14 +101,16 @@
           <img src="logo.svg" alt="" width="34" height="34">
           <span>Cine<b>Tab</b></span>
         </a>
+        <button type="button" class="side-expand-hover" title="Expand sidebar" aria-label="Expand sidebar"><i class="fa-solid fa-angles-right"></i></button>
         <button type="button" class="side-collapse" title="Shrink the sidebar to icons" aria-label="Shrink the sidebar" aria-pressed="false"><i class="fa-solid fa-angles-left"></i></button>
       </div>
       <nav class="side-nav" aria-label="Sections">
         <button type="button" class="side-link" data-view="home" title="Home"><i class="fa-solid fa-house"></i><span>Home</span></button>
-        <button type="button" class="side-link" data-view="dashboard" title="Search YouTube and what you watched"><i class="fa-solid fa-clapperboard"></i><span>Dashboard</span><b class="side-count" data-count="history" hidden></b></button>
-        <button type="button" class="side-link" data-view="favorites" title="YouTube videos and playlists you saved"><i class="fa-solid fa-heart"></i><span>Saved</span><b class="side-count" data-count="favorites" hidden></b></button>
-        <button type="button" class="side-link" data-view="rooms" title="The room you're in, and your rooms"><i class="fa-solid fa-users"></i><span>My rooms</span><i class="side-live" hidden title="You're in a room"></i><b class="side-count" data-count="rooms" hidden></b></button>
-        <button type="button" class="side-link" data-view="help" title="How it works, features and questions"><i class="fa-solid fa-circle-question"></i><span>Help &amp; FAQ</span></button>
+        <button type="button" class="side-link" data-view="dashboard" title="Search YouTube and what you watched"><i class="fa-solid fa-clapperboard"></i><span>Dashboard</span></button>
+        <button type="button" class="side-link" data-view="favorites" title="YouTube videos and playlists you saved"><i class="fa-solid fa-heart"></i><span>Saved</span></button>
+        <button type="button" class="mobile-search-link" title="Search YouTube" aria-label="Search YouTube"><span class="mobile-search-icon"><i class="fa-solid fa-magnifying-glass"></i></span><span>Search</span></button>
+        <button type="button" class="side-link" data-view="rooms" title="Rooms"><i class="fa-solid fa-users"></i><span>Rooms</span><i class="side-live" hidden title="You're in a room"></i></button>
+        <button type="button" class="side-link" data-view="help" title="How CineTab works"><i class="fa-solid fa-book-open"></i><span>Guide</span></button>
       </nav>
       <div class="side-section">
         <p class="side-label">Start</p>
@@ -129,6 +131,7 @@
         </a>
         <p class="topbar-title" aria-live="polite">Home</p>
         <div class="header-actions">
+          <button class="header-search" type="button" title="Search YouTube and open the launcher" aria-label="Search YouTube"><i class="fa-solid fa-magnifying-glass"></i><span>Search YouTube</span><kbd>/</kbd></button>
           <button class="btn btn-ghost btn-sm install-app" hidden title="Install CineTab as an app on this device" aria-label="Install CineTab as an app"><i class="fa-solid fa-download"></i> <span class="label-long">Install app</span></button>
           <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create</span></button>
           <button class="btn btn-ghost btn-sm room-join-open header-join" title="Join a friend's room with its code and password" aria-label="Join a room"><i class="fa-solid fa-right-to-bracket"></i> <span class="label-long">Join a room</span><span class="label-short">Join</span></button>
@@ -202,13 +205,6 @@
           <ul class="dash-grid home-favs"></ul>
         </section>
 
-        <section class="home-strip home-rooms-strip" hidden>
-          <div class="strip-head">
-            <h2><i class="fa-solid fa-users"></i> Your rooms</h2>
-            <button type="button" class="strip-more" data-go="rooms">See all <i class="fa-solid fa-arrow-right"></i></button>
-          </div>
-          <ul class="room-cards home-room-cards"></ul>
-        </section>
       </section>
 
       <!-- ============ DASHBOARD VIEW ============ -->
@@ -310,13 +306,13 @@
       </section>
       </section>
 
-      <!-- ============ MY ROOMS ============ -->
-      <section class="home-view" data-view="rooms" aria-label="My rooms" hidden>
+      <!-- ============ ROOMS ============ -->
+      <section class="home-view" data-view="rooms" aria-label="Rooms" hidden>
       <section class="section saved-section" id="rooms">
         <div class="saved-panel">
           <div class="saved-header">
             <div>
-              <h1 class="saved-title"><i class="fa-solid fa-users"></i> My rooms</h1>
+              <h1 class="saved-title"><i class="fa-solid fa-users"></i> Rooms</h1>
               <p class="saved-sub">The room you're in, and rooms remembered in this browser &middot; one click to get back in</p>
             </div>
             <div class="rooms-head-actions">
@@ -344,7 +340,7 @@
       <section class="home-view" data-view="help" aria-label="Help and FAQ" hidden>
       <section class="section" id="how">
         <div class="section-header">
-          <h1 class="section-title">Help &amp; FAQ</h1>
+          <h1 class="section-title">Guide</h1>
           <p class="section-sub">Open a video, share it, and invite friends if you like.</p>
         </div>
         <div class="how-steps">
@@ -405,7 +401,7 @@
 
       <section class="section" id="faq">
         <div class="faq-showcase">
-          <div class="faq-showcase-badge"><i class="fa-solid fa-circle-question"></i> Help &amp; FAQ</div>
+          <div class="faq-showcase-badge"><i class="fa-solid fa-book-open"></i> Guide</div>
           <h2 class="section-title">Frequently Asked Questions</h2>
           <p class="section-sub">Quick answers about privacy, sharing tab audio, supported formats, rooms, and offline use.</p>
           <div class="faq-showcase-action">
@@ -506,7 +502,7 @@
         </a>
         <p>Made for movie nights. Your files stay on your device.</p>
         <p class="footer-meta">
-          <span class="app-version" title="The version of CineTab you're using">v1.8.0</span>
+          <span class="app-version" title="The version of CineTab you're using">v1.8.1</span>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -517,6 +513,10 @@
 
       </section>
     </main>
+    <div class="home-room-menu-root" hidden>
+      <button class="home-room-menu-trigger" type="button" aria-expanded="false"><i class="fa-solid fa-users"></i><span>Rooms</span><b class="home-room-menu-count">0</b></button>
+      <div class="home-room-menu" role="menu" hidden></div>
+    </div>
 
     <div class="room-home-bar" hidden>
       <span class="room-home-icon"><i class="fa-solid fa-door-open"></i></span>
@@ -1036,7 +1036,7 @@
         <small class="together-hint">The host shares the code and password, or a link with both.</small>
       </form>
       <div class="together-recent" hidden>
-        <p class="room-section-title">Your rooms</p>
+        <p class="room-section-title">Rooms</p>
         <ul class="together-rooms"></ul>
       </div>
       <button type="button" class="together-other" title="How to watch together on Google Meet, Zoom or Teams"><i class="fa-solid fa-display"></i> <span>Or share this tab on a video call</span></button>

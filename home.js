@@ -72,9 +72,20 @@
     const views = [...home.querySelectorAll(".home-view")];
     const sideLinks = [...home.querySelectorAll(".side-link")];
     const topbarTitle = home.querySelector(".topbar-title");
+    const homeView = views.find(item => item.dataset.view === "home");
+    const dashboardView = views.find(item => item.dataset.view === "dashboard");
+    const dashboardSection = home.querySelector("#dashboard");
+    const returningViewer = !!(window.CineHistory && CineHistory.list().length);
+    if (returningViewer && homeView && dashboardView && dashboardSection) {
+        home.classList.add("returning-viewer");
+    }
     let currentView = null;
     const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
     const showView = (name, target = null) => {
+        if (name === "dashboard") {
+            window.CineLauncher?.open();
+            return;
+        }
         const view = views.find(item => item.dataset.view === name) || views[0];
         if (!view) return;
         if (view !== currentView) {
@@ -112,10 +123,14 @@
         // (a question open on the page, or a dialog: not now)
         if (document.querySelector("body > .player-ask, .install-dialog:not([hidden])")) return;
         const onSaved = currentView && currentView.dataset.view === "favorites";
-        const searchInput = home.querySelector(onSaved ? ".fav-search input" : ".yt-search-input");
+        if (!onSaved) {
+            e.preventDefault();
+            window.CineLauncher?.open();
+            return;
+        }
+        const searchInput = home.querySelector(".fav-search input");
         if (!searchInput || (onSaved && searchInput.closest("[hidden]"))) return;
         e.preventDefault();
-        if (!onSaved) showView("dashboard");
         setTimeout(() => {
             searchInput.focus();
             searchInput.select();
@@ -125,6 +140,7 @@
     // The sidebar shrunk to its icons (remembered): pointed at (or tabbed into), it opens out
     // over the page with their names, and folds back as the pointer leaves
     const collapseBtn = home.querySelector(".side-collapse");
+    const expandHoverBtn = home.querySelector(".side-expand-hover");
     const SIDE_KEY = "cinetab:side-collapsed";
     const setCollapsed = on => {
         home.classList.toggle("side-collapsed", on);
@@ -134,36 +150,28 @@
         collapseBtn.setAttribute("aria-label", on ? "Keep the sidebar open" : "Shrink the sidebar");
         collapseBtn.querySelector("i").className = `fa-solid ${on ? "fa-angles-right" : "fa-angles-left"}`;
     };
-    setCollapsed(storage.get(SIDE_KEY) === "1");
+    setCollapsed(storage.get(SIDE_KEY) !== "0");
     collapseBtn?.addEventListener("click", () => {
         const on = !home.classList.contains("side-collapsed");
         storage.set(SIDE_KEY, on ? "1" : "0");
         setCollapsed(on);
         // (shrunk: it folds back straight away, not only once the pointer leaves)
-        if (on) foldBack();
         collapseBtn.blur();
     });
-    // (folded back straight away, until the pointer leaves and comes back)
-    const sidebarEl = home.querySelector(".home-sidebar");
-    const foldBack = () => {
-        if (!sidebarEl || sidebarEl.classList.contains("no-peek")) return;
-        sidebarEl.classList.add("no-peek");
-        sidebarEl.addEventListener("pointerleave", () => sidebarEl.classList.remove("no-peek"), { once: true });
-    };
-    // Shrunk, a click on one of its items (a section, or a quick start) folds it back - the
-    // button let go of, so it doesn't hold the sidebar open either
-    sidebarEl?.addEventListener("click", e => {
-        const item = e.target.closest(".side-link, .side-action");
-        if (!item || !home.classList.contains("side-collapsed") || matchMedia("(max-width: 860px)").matches) return;
-        if (e.detail > 0) item.blur();
-        foldBack();
+    expandHoverBtn?.addEventListener("click", () => {
+        storage.set(SIDE_KEY, "0");
+        setCollapsed(false);
+        expandHoverBtn.blur();
     });
     sideLinks.forEach(link => link.addEventListener("click", () => showView(link.dataset.view)));
+    const dashboardLink = sideLinks.find(link => link.dataset.view === "dashboard");
+    if (dashboardLink) dashboardLink.hidden = true;
+    home.querySelector(".header-search")?.addEventListener("click", () => window.CineLauncher?.open());
+    home.querySelector(".mobile-search-link")?.addEventListener("click", () => window.CineLauncher?.open());
     home.addEventListener("click", e => {
         const go = e.target.closest("[data-go]");
         if (go) {
             showView(go.dataset.go);
-            if ("focusSearch" in go.dataset) setTimeout(() => home.querySelector(".yt-search-input")?.focus({ preventScroll: true }), 250);
             return;
         }
         const link = e.target.closest('a[href^="#"]');
@@ -184,6 +192,8 @@
         const id = location.hash.slice(1);
         const target = /^[\w-]+$/.test(id) && home.querySelector(`#${id}`);
         const view = target && target.closest(".home-view");
+        // A first visit gets the introduction. Returning viewers land on their local watch history.
+        // Explicit section links always take precedence.
         showView(view ? view.dataset.view : "home", view && view.dataset.view === "help" ? target : null);
     }
 
@@ -538,13 +548,8 @@
             favNoMatch.querySelector(".fav-nomatch-clear").hidden = !words.length;
         }
         if (homeFavs) {
-            homeFavs.replaceChildren(...list.slice(0, 4).map(favCard));
+            homeFavs.replaceChildren(...list.slice(0, 36).map(favCard));
             homeFavs.closest(".home-fav-strip").hidden = !list.length;
-        }
-        const sideCount = home.querySelector('.side-count[data-count="favorites"]');
-        if (sideCount) {
-            sideCount.hidden = !list.length;
-            sideCount.textContent = list.length > 99 ? "99+" : String(list.length);
         }
     };
     favFilterBtns.forEach(button => button.addEventListener("click", () => {
@@ -618,15 +623,10 @@
         clearBtn.hidden = !list.length;
         const shown = list.filter(matches);
         grid.replaceChildren(...(showAll ? shown : shown.slice(0, SHOWN)).map(card));
-        // Home: the last four, to carry on with; the sidebar: how many
+        // Home: the last four, to carry on with
         if (continueGrid) {
-            continueGrid.replaceChildren(...list.slice(0, 4).map(card));
+            continueGrid.replaceChildren(...list.slice(0, 36).map(card));
             continueGrid.closest(".home-continue-strip").hidden = !list.length;
-        }
-        const sideCount = home.querySelector('.side-count[data-count="history"]');
-        if (sideCount) {
-            sideCount.hidden = !list.length;
-            sideCount.textContent = list.length > 99 ? "99+" : String(list.length);
         }
         empty.hidden = list.length > 0;
         moreBtn.hidden = shown.length <= SHOWN;
