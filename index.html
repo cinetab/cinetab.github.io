@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.7.0">
+  <meta name="version" content="1.7.1">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -48,12 +48,12 @@
       "@id": "https://cinetab.github.io/#app",
       "name": "CineTab",
       "url": "https://cinetab.github.io/",
-      "description": "Play videos and music from your own computer in a browser tab, then watch together: share that tab with sound in Google Meet, Zoom or Microsoft Teams, or invite friends to a private CineTab room with chat. Files are never uploaded.",
+      "description": "Play videos and music from your device in a browser tab, then watch together by sharing that tab or inviting friends to a private CineTab room. Files are not hosted online.",
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.7.0",
+      "softwareVersion": "1.7.1",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -117,7 +117,7 @@
         <button class="side-action room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i><span>Join a room</span></button>
       </div>
       <div class="side-foot">
-        <p class="side-privacy"><i class="fa-solid fa-shield-halved"></i> Private &middot; peer-to-peer &middot; nothing uploaded</p>
+        <p class="side-privacy"><i class="fa-solid fa-shield-halved"></i> Peer-to-peer &middot; no file hosting &middot; no account</p>
       </div>
     </aside>
 
@@ -141,16 +141,16 @@
       <section class="home-view" data-view="home" aria-label="Home">
       <section class="hero">
         <div class="hero-text">
-          <span class="eyebrow"><i class="fa-solid fa-shield-halved"></i> 100% Private &middot; Peer-to-Peer &middot; No Sign-Up</span>
-          <h1>Watch movies together <span class="gradient-text">in perfect sync.</span></h1>
-          <p class="lead">Play any video from your computer or YouTube in sync with friends on any video call or in private rooms. No uploads, no accounts &mdash; simple and instant.</p>
+          <span class="eyebrow"><i class="fa-solid fa-shield-halved"></i> Private rooms &middot; Peer-to-peer &middot; No sign-up</span>
+          <h1>Watch movies together <span class="gradient-text">in sync.</span></h1>
+          <p class="lead">Open a video from your device or find one on YouTube. Share your tab with friends, or invite them to a CineTab room.</p>
           <div class="hero-actions">
             <button class="btn btn-primary btn-lg choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Choose a video</button>
             <button class="btn btn-ghost btn-lg room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i> Create room</button>
             <button class="btn btn-ghost btn-lg room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i> Join room</button>
           </div>
           <div class="hero-notes">
-            <p class="hero-note"><i class="fa-solid fa-lock"></i> Your files are never uploaded &middot; Best in Chrome &amp; Edge</p>
+            <p class="hero-note"><i class="fa-solid fa-lock"></i> Files are not hosted online &middot; Best in Chrome &amp; Edge</p>
             <p class="hero-note offline-note" data-online-only><i class="fa-solid fa-download"></i> <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download CineTab as a single HTML file you can open from your computer">Download standalone offline player</a></p>
           </div>
         </div>
@@ -219,7 +219,7 @@
       <section class="section dash-section" id="dashboard">
         <div class="dash-panel">
           <div class="dash-head">
-            <h2 class="saved-title"><i class="fa-solid fa-house"></i> Your dashboard</h2>
+            <h1 class="saved-title"><i class="fa-solid fa-house"></i> Your dashboard</h1>
             <p class="saved-sub">Search YouTube or paste a link, open a movie from your device, or pick up where you left off</p>
           </div>
           <form class="yt-search" role="search" novalidate>
@@ -246,7 +246,7 @@
             <ul class="dash-grid"></ul>
             <div class="dash-empty">
               <i class="fa-solid fa-film"></i>
-              <p>Nothing here yet. Videos you watch, from YouTube or from your device, show up here so you can carry on with one click.</p>
+              <p role="status">Nothing here yet. Videos you watch, from YouTube or from your device, show up here so you can carry on with one click.</p>
               <button type="button" class="btn btn-ghost btn-sm choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i> Open a movie</button>
             </div>
             <button type="button" class="dash-more" hidden></button>
@@ -277,7 +277,7 @@
       <section class="section dash-section" id="favorites">
         <div class="dash-panel">
           <div class="dash-head">
-            <h2 class="saved-title"><i class="fa-solid fa-heart"></i> Saved</h2>
+            <h1 class="saved-title"><i class="fa-solid fa-heart"></i> Saved</h1>
             <p class="saved-sub">YouTube videos and playlists you kept &middot; the <i class="fa-regular fa-heart"></i> on any of them adds it</p>
           </div>
           <div class="dash-history fav-box">
@@ -302,7 +302,7 @@
             </div>
             <div class="dash-empty fav-empty">
               <i class="fa-regular fa-heart"></i>
-              <p>Nothing saved yet. Tap the heart on a YouTube video or playlist - in search, on your dashboard, or while it plays - to keep it here.</p>
+              <p role="status">Nothing saved yet. Tap the heart on a YouTube video or playlist - in search, on your dashboard, or while it plays - to keep it here.</p>
               <button type="button" class="btn btn-ghost btn-sm" data-go="dashboard" data-focus-search><i class="fa-solid fa-magnifying-glass"></i> Search YouTube</button>
             </div>
           </div>
@@ -316,7 +316,7 @@
         <div class="saved-panel">
           <div class="saved-header">
             <div>
-              <h2 class="saved-title"><i class="fa-solid fa-users"></i> My rooms</h2>
+              <h1 class="saved-title"><i class="fa-solid fa-users"></i> My rooms</h1>
               <p class="saved-sub">The room you're in, and rooms remembered in this browser &middot; one click to get back in</p>
             </div>
             <div class="rooms-head-actions">
@@ -328,7 +328,7 @@
           <ul class="room-cards room-list"></ul>
           <div class="rooms-empty" hidden>
             <span class="rooms-empty-icon"><i class="fa-solid fa-users"></i></span>
-            <b>No rooms yet</b>
+            <b role="status">No rooms yet</b>
             <p>Rooms you create or join are remembered here, with who was in them, so you can get back in with one click.</p>
             <div class="rooms-empty-actions">
               <button class="btn btn-primary btn-sm room-create-open"><i class="fa-solid fa-plus"></i> Create a room</button>
@@ -344,26 +344,26 @@
       <section class="home-view" data-view="help" aria-label="Help and FAQ" hidden>
       <section class="section" id="how">
         <div class="section-header">
-          <h2 class="section-title">How it works</h2>
-          <p class="section-sub">Three simple steps to watch anything together &mdash; in CineTab rooms or on your favorite call.</p>
+          <h1 class="section-title">Help &amp; FAQ</h1>
+          <p class="section-sub">Open a video, share it, and invite friends if you like.</p>
         </div>
         <div class="how-steps">
           <div class="step-card">
             <div class="step-num">1</div>
             <div class="step-icon"><i class="fa-solid fa-folder-open"></i></div>
-            <h3>Pick your video</h3>
+            <h2>Pick your video</h2>
             <p>Drop any movie from your computer or search YouTube. Formats like MKV, AVI or DTS convert automatically in your browser.</p>
           </div>
           <div class="step-card">
             <div class="step-num">2</div>
             <div class="step-icon"><i class="fa-solid fa-users"></i></div>
-            <h3>Share or invite</h3>
+            <h2>Share or invite</h2>
             <p>Create a private room with one link, or share your CineTab browser tab with audio on Google Meet, Zoom, or Teams.</p>
           </div>
           <div class="step-card">
             <div class="step-num">3</div>
             <div class="step-icon"><i class="fa-solid fa-play"></i></div>
-            <h3>Watch in sync</h3>
+            <h2>Watch in sync</h2>
             <p>Everyone stays in frame-accurate sync with real-time video chat, text messages, subtitles, and individual volume controls.</p>
           </div>
         </div>
@@ -376,18 +376,18 @@
 
       <section class="section" id="features">
         <div class="section-header">
-          <h2 class="section-title">Built for seamless movie nights</h2>
-          <p class="section-sub">Everything you need for watching alone or together &mdash; without bloat or tracking.</p>
+          <h2 class="section-title">The useful bits</h2>
+          <p class="section-sub">Local playback, simple controls, and a few ways to watch together.</p>
         </div>
         <div class="features">
           <article class="feature">
             <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
-            <h3>100% Private &amp; Local</h3>
-            <p>Your movie plays straight from your disk. No file uploads, no server logs, no accounts, and no tracking.</p>
+            <h3>Plays from your device</h3>
+            <p>Your original file stays on your device. CineTab does not upload it.</p>
           </article>
           <article class="feature">
             <div class="feature-icon"><i class="fa-solid fa-photo-film"></i></div>
-            <h3>Plays All Formats</h3>
+            <h3>Most formats work</h3>
             <p>MP4, MKV, AVI, WMV, DTS &amp; Dolby sound. Unsupported browser formats convert automatically on your computer.</p>
           </article>
           <article class="feature">
@@ -397,7 +397,7 @@
           </article>
           <article class="feature">
             <div class="feature-icon"><i class="fa-solid fa-sliders"></i></div>
-            <h3>Subtitles &amp; Rich Player</h3>
+            <h3>Subtitles and playback tools</h3>
             <p>Load .srt/.vtt subtitles, timeline scene previews, playback speed controls, PiP, and full keyboard shortcuts.</p>
           </article>
         </div>
@@ -411,7 +411,7 @@
           <div class="faq-showcase-action">
             <button type="button" class="btn btn-primary faq-toggle-btn" id="faq-toggle-btn" aria-expanded="false" aria-controls="faq-drawer">
               <i class="fa-solid fa-chevron-down faq-btn-icon"></i>
-              <span class="faq-btn-text">Browse all questions (17)</span>
+              <span class="faq-btn-text">Browse all questions (16)</span>
             </button>
           </div>
         </div>
@@ -506,7 +506,7 @@
         </a>
         <p>Made for movie nights. Your files stay on your device.</p>
         <p class="footer-meta">
-          <span class="app-version" title="The version of CineTab you're using">v1.7.0</span>
+          <span class="app-version" title="The version of CineTab you're using">v1.7.1</span>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -980,6 +980,8 @@
 
     <!-- The tabs -->
     <div class="room-tabbar">
+      <!-- At the start of the bar: slides the panel away (R does too; the top bar's buttons bring it back) -->
+      <button class="room-icon-btn room-hide-btn" title="Hide the panel (R)" aria-label="Hide the panel"><i class="fa-solid fa-angles-right"></i></button>
       <nav class="room-tabs" role="tablist" aria-label="Room">
         <button class="room-tab-btn" role="tab" data-tab="chat" title="Chat with everyone"><i class="fa-regular fa-message"></i><span>Chat</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="queue" title="The YouTube queue: what plays next"><i class="fa-solid fa-list-ol"></i><span>Queue</span></button>
@@ -988,8 +990,6 @@
         <button class="room-tab-btn" role="tab" data-tab="people" title="Who's in the room, and inviting more people"><i class="fa-solid fa-user-group"></i><span>People</span><b class="room-tab-badge" hidden></b></button>
         <button class="room-tab-btn" role="tab" data-tab="settings" title="Room settings"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
       </nav>
-      <!-- At the end of the tabs: slides the panel away (R does too; the top bar's buttons bring it back) -->
-      <button class="room-icon-btn room-hide-btn" title="Hide the panel (R)" aria-label="Hide the panel"><i class="fa-solid fa-angles-right"></i></button>
     </div>
 
     <ul class="room-requests"></ul>
@@ -1054,7 +1054,7 @@
       <div class="room-queue-empty" hidden>
         <i class="fa-solid fa-list-ol"></i>
         <b>Nothing in the queue</b>
-        <small class="room-queue-empty-text"></small>
+        <small class="room-queue-empty-text" role="status"></small>
       </div>
       <button type="button" class="room-wide-btn secondary room-queue-more"><i class="fa-solid fa-magnifying-glass"></i> <span>Find more videos</span></button>
     </section>

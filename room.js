@@ -2138,21 +2138,8 @@
     const unitFloatBtn = el("button", "room-unit-only room-mic-btn room-unit-float");
     unitFloatBtn.type = "button";
     unitFloatBtn.append(el("i"));
-    // Minimized: everyone's video back, from the call bar
-    const unitExpandBtn = el("button", "room-unit-only room-mic-btn room-unit-expand");
-    unitExpandBtn.type = "button";
-    unitExpandBtn.title = "Show everyone's video";
-    unitExpandBtn.setAttribute("aria-label", unitExpandBtn.title);
-    unitExpandBtn.append(el("i", "fa-solid fa-up-right-and-down-left-from-center"));
     roomFoot.insertBefore(unitPeopleBtn, leaveWrap);
-    roomFoot.insertBefore(unitExpandBtn, leaveWrap);
     roomFoot.insertBefore(unitFloatBtn, leaveWrap);
-    // On the call itself, floating or docked: minimize it (to its call bar)
-    const unitMinBtn = el("button", "room-call-unit-min");
-    unitMinBtn.type = "button";
-    unitMinBtn.title = "Minimize";
-    unitMinBtn.setAttribute("aria-label", "Minimize the video call");
-    unitMinBtn.append(el("i", "fa-solid fa-minus"));
     // (also a computer's window made as narrow as a phone: the phone's call window)
     const phoneUpright = matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 900px), (orientation: portrait) and (max-width: 600px)");
     const phoneSideways = matchMedia("(pointer: coarse) and (orientation: landscape) and (max-height: 500px)");
@@ -2237,7 +2224,7 @@
     callStripGrip.type = "button";
     callStripGrip.title = "Drag to make the videos taller or shorter (tap: taller / back)";
     callStripGrip.setAttribute("aria-label", "Video call height (drag, or tap)");
-    callWin.append(callStripGrip, unitMinBtn, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
+    callWin.append(callStripGrip, callBar, callGrid, ...callEdges, callResize, callDockEdge, callMoreMenu);
     playerPage.append(callWin);
 
     // ---------- Its size, and the pictures inside it
@@ -2629,18 +2616,44 @@
     // just the videos. A tap on it shows its call bar as a pill below it (above it, low on the
     // screen) for a few seconds; minimized, or with nobody's video yet, it's the bar itself.
     let unitBarTimer = null;
-    // The pill below the window (above it when it's low on the screen), kept on the screen: moved
-    // across when the window is near an edge
+    // Keep the call's option pill on screen. On a computer, it opens beside a window near either
+    // side edge; otherwise it opens below or above it.
     const placePill = () => {
         const pill = callWin.classList.contains("unit") ? roomFoot : callBar;
         const box = callWin.getBoundingClientRect();
         const page = playerPage.getBoundingClientRect();
         const tall = (pill.offsetHeight || 50) + 16;
-        callWin.classList.toggle("bar-up", box.bottom + tall > page.bottom && box.top - tall > page.top);
         const wide = pill.offsetWidth;
+        const leftSpace = box.left - page.left;
+        const rightSpace = page.right - box.right;
+        const edge = Math.max(80, Math.min(180, wide * 0.4));
+        const sideRoom = Math.min(wide + 16, page.width * 0.35);
+        let side = "";
+        if (!callWin.classList.contains("unit")) {
+            const nearLeft = leftSpace < edge;
+            const nearRight = rightSpace < edge;
+            if (nearLeft || nearRight) {
+                const preferred = nearLeft && nearRight
+                    ? rightSpace >= leftSpace ? "bar-to-right" : "bar-to-left"
+                    : nearLeft ? "bar-to-right" : "bar-to-left";
+                const other = preferred === "bar-to-right" ? "bar-to-left" : "bar-to-right";
+                const preferredSpace = preferred === "bar-to-right" ? rightSpace : leftSpace;
+                const otherSpace = other === "bar-to-right" ? rightSpace : leftSpace;
+                if (preferredSpace >= sideRoom) side = preferred;
+                else if (otherSpace >= sideRoom) side = other;
+            }
+        }
+        callWin.classList.remove("bar-to-left", "bar-to-right");
+        if (side) callWin.classList.add(side);
+        callWin.classList.toggle("bar-up", !side && box.bottom + tall > page.bottom && box.top - tall > page.top);
         const left = box.left + box.width / 2 - wide / 2;
         const fits = Math.max(page.left + 8, Math.min(left, page.right - 8 - wide));
         callWin.style.setProperty("--bar-dx", `${Math.round(fits - left)}px`);
+        if (side) {
+            const pillTop = box.top + box.height / 2 - (pill.offsetHeight || 50) / 2;
+            const safeTop = Math.max(page.top + 8, Math.min(pillTop, page.bottom - 8 - (pill.offsetHeight || 50)));
+            callWin.style.setProperty("--bar-dy", `${Math.round(safeTop - pillTop)}px`);
+        }
     };
     // (a computer's: placed as it's pointed at, and as it's dragged or resized)
     const placeDeskPill = () => callWin.classList.contains("mini") && !callWin.classList.contains("unit") && placePill();
@@ -2660,9 +2673,9 @@
     roomFoot.addEventListener("pointerdown", () => callWin.classList.contains("bar-open") && showUnitBar(true));
 
     const renderCallButtons = () => {
-        // Docked, it doesn't fold up (it can float again, and fold up there); a phone's does
+        // The bottom dock has its own video toggle; floating, pinned to the side, and phone calls fold here.
         const unit = callWin.classList.contains("unit");
-        const folded = call.collapsed && (!call.dock || unit);
+        const folded = call.collapsed && (!call.dock || unit || call.dock === "side" || call.dock === "rail");
         const alone = callWin.classList.contains("no-people");
         // Floating with everyone's video (phones and computers): just the videos; the buttons are
         // a pill outside it - a tap shows it on a phone, pointing at it on a computer
@@ -2687,8 +2700,6 @@
         unitFloatBtn.setAttribute("aria-label", unitFloatBtn.title);
         unitFloatBtn.hidden = !call.dock && !call.dockable;
         // (minimize on the call, restore in its bar; docked at the bottom, a chevron down)
-        unitExpandBtn.hidden = !(unit && call.collapsed && !alone);
-        unitMinBtn.firstChild.className = `fa-solid ${call.dock === "strip" ? "fa-chevron-down" : "fa-minus"}`;
         // Hide 3-dot more menu; pin and minimize buttons are shown directly in the bar
         callMoreBtn.hidden = true;
         showCallMore(false);
@@ -2698,10 +2709,14 @@
         const bottom = call.dock === "bottom";
         const videos = callWin.classList.contains("has-video");
         callWin.classList.toggle("expanded", bottom && videos && !call.collapsed);
-        callFoldBtn.hidden = bottom ? !videos : !!call.dock;
-        callFoldBtn.firstChild.className = `fa-solid ${bottom ? (call.collapsed ? "fa-chevron-up" : "fa-chevron-down")
+        const foldsVideos = bottom || call.dock === "side" || call.dock === "rail";
+        callFoldBtn.hidden = bottom ? !videos : !!call.dock && !foldsVideos;
+        callFoldBtn.firstChild.className = `fa-solid ${foldsVideos
+            ? call.collapsed ? "fa-chevron-up" : "fa-chevron-down"
             : call.collapsed ? "fa-up-right-and-down-left-from-center" : "fa-minus"}`;
-        callFoldBtn.title = bottom ? (call.collapsed ? "Show everyone's video" : "Hide everyone's video") : call.collapsed ? "Show everyone" : "Minimize";
+        callFoldBtn.title = foldsVideos
+            ? call.collapsed ? "Show everyone's video" : "Hide everyone's video"
+            : call.collapsed ? "Show everyone" : "Minimize";
         callFoldBtn.setAttribute("aria-label", callFoldBtn.title);
         callFoldBtn.setAttribute("aria-expanded", String(!call.collapsed));
         callChatBtn.hidden = unit;
@@ -2732,11 +2747,6 @@
     callWin.addEventListener("pointerdown", showCallNames);
 
     unitPeopleBtn.addEventListener("click", () => callFoldBtn.click());
-    unitExpandBtn.addEventListener("click", () => call.collapsed && callFoldBtn.click());
-    unitMinBtn.addEventListener("click", e => {
-        e.stopPropagation();
-        if (!call.collapsed) callFoldBtn.click();
-    });
     callFoldBtn.addEventListener("click", () => {
         call.collapsed = !call.collapsed;
         renderCallButtons();
@@ -6132,7 +6142,7 @@
             ? "Search YouTube or paste a link to add videos to your queue."
             : edit
             ? "Search YouTube or paste a link, then Add to queue: everyone watches the videos in turn."
-            : `YouTube videos ${room.hostName || "the host"} and others line up show here.`;
+            : "Only people allowed to share videos can add to this queue.";
         queueMoreBtn.hidden = room ? !edit : false;
         queueMoreBtn.querySelector("span").textContent = items.length ? "Find more videos" : "Find videos";
         // No "Queue" heading over an empty queue (searching before anything plays)

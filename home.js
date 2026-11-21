@@ -218,7 +218,7 @@
         const closeFaq = () => {
             faqDrawer.hidden = true;
             faqToggleBtn.setAttribute("aria-expanded", "false");
-            if (btnText) btnText.textContent = "Browse all questions (17)";
+            if (btnText) btnText.textContent = `Browse all questions (${faqDrawer.querySelectorAll(".faq-item").length})`;
         };
         const toggleFaq = () => {
             if (faqDrawer.hidden) openFaq();

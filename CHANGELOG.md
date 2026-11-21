@@ -6,6 +6,18 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-21
+
+### Polish
+- Compact the home-page views, simplify the copy, and keep mobile navigation focused on its sections
+- Announce empty states to screen readers and respect reduced-motion preferences when scrolling
+- Keep the floating call options beside the window near screen edges; compact self-video controls on very small tiles
+- Use smoother video show/hide transitions and remove duplicate call controls
+
+### Fixed
+- Correct the Help question count and clarify queue permissions, file privacy, and supported formats
+- Improve the 404 page's copy and keyboard focus state
+
 ## [1.7.0] - 2026-11-21
 
 ### Search
