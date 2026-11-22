@@ -6,6 +6,13 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.9.20] - 2026-11-22
+
+### Player and rooms
+- Reworked laptop audio mode into a two-column layout with artwork on the left and track details, save, timeline and controls on the right
+- Kept playback controls below the video settings sheet and improved room-panel animation cleanup to prevent lingering blur
+- Refined responsive player layering and removed audio seek controls
+
 ## [1.8.4] - 2026-11-21
 
 ### Player

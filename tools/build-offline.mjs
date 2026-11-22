@@ -25,10 +25,36 @@ const download = async (url, as = "text") => {
     return as === "text" ? res.text() : Buffer.from(await res.arrayBuffer());
 };
 const dataURI = (mime, buffer) => `data:${mime};base64,${buffer.toString("base64")}`;
+let embeddedStyleCache;
+const cachedEmbeddedStyles = async () => {
+    if (!embeddedStyleCache) embeddedStyleCache = (async () => {
+        const html = await read("cinetab-offline.html");
+        const styleStart = html.indexOf("<style>");
+        const styleEnd = html.indexOf("</style>", styleStart);
+        const style = html.slice(styleStart + "<style>".length, styleEnd);
+        const awesomeMarker = style.indexOf("Font Awesome Free");
+        const awesomeStart = style.lastIndexOf("/*", awesomeMarker);
+        const appCssStart = style.indexOf(":root {", awesomeStart);
+        if (styleStart < 0 || styleEnd < 0 || awesomeMarker < 0 || awesomeStart < 0 || appCssStart < 0) {
+            throw new Error("Offline font cache could not be read from cinetab-offline.html");
+        }
+        return {
+            poppins: style.slice(0, awesomeStart),
+            fontAwesome: style.slice(awesomeStart, appCssStart)
+        };
+    })();
+    return embeddedStyleCache;
+};
 
 // Poppins: only the latin + latin-ext subsets the page actually uses
 const poppinsCSS = async () => {
-    const css = await download(POPPINS_CSS);
+    let css;
+    try {
+        css = await download(POPPINS_CSS);
+    } catch (error) {
+        console.warn(`Poppins download failed; using the existing offline font: ${error.message}`);
+        return (await cachedEmbeddedStyles()).poppins;
+    }
     const blocks = [...css.matchAll(/\/\* ([\w-]+) \*\/\s*(@font-face\s*\{[^}]*\})/g)]
         .filter(([, subset]) => subset === "latin" || subset === "latin-ext")
         .map(([, , block]) => block);
@@ -41,7 +67,13 @@ const poppinsCSS = async () => {
 
 // Font Awesome: keep the solid + regular woff2 fonts (no brand icons are used)
 const fontAwesomeCSS = async () => {
-    let css = await download(`${FONT_AWESOME}/css/all.min.css`);
+    let css;
+    try {
+        css = await download(`${FONT_AWESOME}/css/all.min.css`);
+    } catch (error) {
+        console.warn(`Font Awesome download failed; using the existing offline icons: ${error.message}`);
+        return (await cachedEmbeddedStyles()).fontAwesome;
+    }
     const fonts = {};
     for (const name of ["fa-solid-900", "fa-regular-400"]) {
         fonts[name] = dataURI("font/woff2", await download(`${FONT_AWESOME}/webfonts/${name}.woff2`, "binary"));

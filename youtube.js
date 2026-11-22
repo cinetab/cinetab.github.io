@@ -1145,6 +1145,13 @@
     const play = (ref, meta = {}, opts = {}) => {
         if (!ref || (!ref.id && !ref.list)) return "That isn't a YouTube video or playlist.";
         const isMusicTrack = !!(ref.music || meta.music || opts.music);
+        if (isMusicTrack) {
+            container.dataset.musicTrack = "true";
+            window._isYouTubeMusicActive = true;
+        } else {
+            delete container.dataset.musicTrack;
+            window._isYouTubeMusicActive = false;
+        }
         if (together.active()) {
             if (!together.shareYouTube) return "You're in a room.";
             const refused = together.shareYouTube(ref);

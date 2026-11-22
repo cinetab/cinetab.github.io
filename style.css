@@ -13664,7 +13664,7 @@ button.room-call-title:not(.folds) {
   font-weight: 700;
 }
 
-.more-menu-row[data-more-action="pip"] {
+.more-menu-row[data-more-action="pip"]:not([hidden]) {
   display: flex;
 }
 
@@ -13751,7 +13751,7 @@ button.room-call-title:not(.folds) {
 
   .container.audio-mode-only {
     width: 100%;
-    height: calc(100dvh - 112px) !important;
+    height: auto;
     max-height: none;
     border: 0;
     border-radius: 0 0 18px 18px;
@@ -14050,6 +14050,151 @@ button.room-call-title:not(.folds) {
     flex-basis: 40px;
     min-height: 40px;
   }
+}
+
+/* Keep the touch settings sheet above every in-player control layer. The playback
+   buttons are also removed from hit testing while the modal is open. */
+.container.sheet-open .player-center-controls.options.center {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.container .player-sheet:not([hidden]) {
+  z-index: 1000 !important;
+}
+
+/* Laptop audio uses a stable two-column layout: artwork stays on the left while
+   all track information and playback controls align in the right column. */
+@media (min-width: 901px) {
+  .player-page:has(.container.audio-mode-only) .container.audio-mode-only {
+    align-items: stretch !important;
+  }
+
+  .container.audio-mode-only .audio-mode-view {
+    grid-template-columns: minmax(120px, clamp(140px, 18vw, 220px)) minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: clamp(16px, 2.4vw, 30px) !important;
+    overflow: visible !important;
+  }
+
+  .container.audio-mode-only .audio-mode-art {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1 !important;
+    margin: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-visual {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    align-items: stretch !important;
+    gap: 3px !important;
+  }
+
+  .container.audio-mode-only .audio-mode-header {
+    display: none !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap {
+    display: flex !important;
+    width: 100% !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap .audio-mode-title {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    text-align: left !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap .player-save-wrap:not([hidden]) {
+    display: inline-flex !important;
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap .player-save-btn {
+    display: grid !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    place-items: center !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+  }
+
+  .container.audio-mode-only .audio-mode-meta {
+    width: 100% !important;
+    text-align: left !important;
+  }
+
+  .container.audio-mode-only .audio-mode-timeline-slot {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: clamp(8px, 1.4vh, 14px) !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls {
+    position: relative !important;
+    display: flex !important;
+    width: 100% !important;
+    min-height: 52px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-top: 6px !important;
+    overflow: visible !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls .player-center-controls.options.center {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    display: flex !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    gap: clamp(5px, 1.1vw, 14px) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls .volume-group {
+    position: absolute !important;
+    left: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    margin: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-visual canvas {
+    width: 100% !important;
+    height: 16px !important;
+    margin-top: 2px !important;
+  }
+}
+
+/* Avoid backdrop-filter compositing during room-panel motion, which can leave
+   the page underneath appearing blurred in browsers that glitch on cancellation. */
+.player-page.panel-moving .room-panel {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 @media (max-width: 600px) and (orientation: portrait) {
@@ -14788,6 +14933,207 @@ button.room-call-title:not(.folds) {
 .container.audio-mode-only .audio-mode-actions .audio-mode-choice i {
   width: 16px !important;
   font-size: 16px !important;
+}
+
+/* Responsive player authority:
+   one layout for laptop video/audio, one portrait layout for mobile video/audio,
+   and one full-viewport landscape layout for mobile video. */
+@media (pointer: fine) and (min-width: 901px),
+       screen and (min-width: 901px) {
+  .player-page:not(.room-open) .container:not(.audio-mode-only):not(.fullscreen) {
+    width: min(98vw, calc(96vh * 16 / 9)) !important;
+    height: auto !important;
+  }
+
+  .player-page.room-open .container:not(.audio-mode-only):not(.fullscreen) {
+    width: calc(100% - var(--panel-w, 360px) - var(--right-side-gap, 14px)) !important;
+    max-width: none !important;
+    height: auto !important;
+  }
+
+  .player-page.room-open .container.fullscreen:not(.audio-mode-only) {
+    width: calc(100% - var(--panel-w, 360px) - var(--right-side-gap, 14px)) !important;
+  }
+
+  .container.audio-mode-only {
+    width: min(880px, calc(100vw - 48px)) !important;
+  }
+
+  .player-page.room-open .container.audio-mode-only {
+    width: calc(100% - var(--panel-w, 360px) - 38px) !important;
+  }
+}
+
+@media screen and (max-width: 900px) and (orientation: portrait),
+       screen and (max-width: 600px) and (orientation: portrait),
+       (pointer: coarse) and (orientation: portrait) {
+  .player-page {
+    overflow: hidden;
+  }
+
+  .player-page.title-below:not(.audio-mode-active) {
+    height: 100dvh;
+  }
+
+  .player-page.title-below:not(.audio-mode-active) > .container {
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+  }
+
+  .player-page.title-below:not(.audio-mode-active) > .player-details {
+    min-height: 0;
+  }
+
+  .player-page.room-open:not(.audio-mode-active) {
+    flex-direction: column;
+  }
+
+  .player-page.room-open:not(.audio-mode-active) > .container {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .player-page.room-open:not(.audio-mode-active) > .room-panel {
+    width: calc(100% - 16px) !important;
+    min-height: 0;
+  }
+
+  .player-page:has(.container.audio-mode-only) {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .container.audio-mode-only {
+    width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(14px, env(safe-area-inset-left)) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-view {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto minmax(96px, 1fr) auto !important;
+    justify-content: center !important;
+    align-content: center !important;
+    align-items: center !important;
+    gap: 10px 0 !important;
+    padding: 8px 8px 4px !important;
+  }
+
+  .container.audio-mode-only .audio-mode-art {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: clamp(168px, 48vw, 220px) !important;
+    max-width: 220px !important;
+    max-height: 220px !important;
+    justify-self: center !important;
+  }
+
+  .container.audio-mode-only .audio-mode-visual {
+    grid-column: 1 !important;
+    grid-row: 2 / 5 !important;
+    width: 100% !important;
+    max-width: 520px !important;
+    justify-self: center !important;
+    text-align: center !important;
+    align-self: stretch !important;
+    display: flex;
+    flex-direction: column;
+    padding: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-header,
+  .container.audio-mode-only .audio-mode-actions {
+    position: static !important;
+    width: 100%;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap {
+    width: 100%;
+  }
+
+  .container.audio-mode-only .audio-mode-visual b.audio-mode-title {
+    max-width: 100%;
+    font-size: clamp(20px, 6vw, 28px) !important;
+  }
+
+  .container.audio-mode-only .audio-mode-meta {
+    justify-content: center !important;
+  }
+
+  .container.audio-mode-only .audio-mode-timeline-slot {
+    margin-top: 10px !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls {
+    display: grid !important;
+    grid-template-columns: 46px minmax(0, 1fr) 46px !important;
+    width: 100% !important;
+    min-height: 58px !important;
+    margin-top: 4px !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls .volume-group {
+    justify-content: flex-start;
+  }
+
+  .container.audio-mode-only .audio-collapsed-bar {
+    display: none !important;
+  }
+
+  .player-page:has(.container.audio-mode-only) .room-panel,
+  .player-page.room-open:has(.container.audio-mode-only) .room-panel,
+  .player-page:has(.container.audio-mode-only) .room-call,
+  .player-page:has(.container.audio-mode-only) .room-foot {
+    display: none !important;
+  }
+}
+
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .player-page {
+    padding: 0;
+  }
+
+  .player-page:not(.room-open) .container:not(.audio-mode-only),
+  .player-page.room-open .container:not(.audio-mode-only) {
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0;
+  }
+
+  .container.audio-mode-only {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .container.audio-mode-only .audio-mode-view {
+    grid-template-columns: minmax(150px, 34%) minmax(0, 66%) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    height: 100% !important;
+  }
+
+  .container.audio-mode-only .audio-mode-art {
+    width: min(36vh, 220px) !important;
+  }
+
+  .container.audio-mode-only .audio-mode-visual {
+    grid-column: 2 !important;
+  }
   line-height: 32px !important;
 }
 
@@ -14812,31 +15158,33 @@ button.room-call-title:not(.folds) {
   display: inline !important;
 }
 
-.container.audio-mode-only {
-  aspect-ratio: auto !important;
-  width: calc(100% - 24px) !important;
-  max-width: none !important;
-  height: calc(100vh - 24px) !important;
-  max-height: none !important;
-  min-height: 420px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: flex-start !important;
-  align-items: stretch !important;
-  padding: 16px 24px 12px !important;
-  border: 1px solid rgba(160, 196, 255, 0.12) !important;
-  border-radius: 20px !important;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 18% 42%, rgba(82, 144, 222, 0.18), transparent 30%),
-    linear-gradient(145deg, #101622 0%, #090b12 70%, #0c1019 100%) !important;
-}
+@media (min-width: 901px) {
+  .container.audio-mode-only {
+    aspect-ratio: auto !important;
+    width: calc(100% - 24px) !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 420px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    padding: 16px 24px 12px !important;
+    border: 1px solid rgba(160, 196, 255, 0.12) !important;
+    border-radius: 20px !important;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 18% 42%, rgba(82, 144, 222, 0.18), transparent 30%),
+      linear-gradient(145deg, #101622 0%, #090b12 70%, #0c1019 100%) !important;
+  }
 
-.player-page.room-open .container.audio-mode-only {
-  width: calc(100% - var(--panel-w, 360px) - 38px) !important;
-  height: calc(100vh - 24px) !important;
-  max-width: none !important;
-  align-self: stretch;
+  .player-page.room-open .container.audio-mode-only {
+    width: calc(100% - var(--panel-w, 360px) - 38px) !important;
+    height: auto !important;
+    max-width: none !important;
+    align-self: stretch;
+  }
 }
 
 .container.audio-mode-only.fullscreen,
@@ -20259,30 +20607,54 @@ body .room-home-bar.mini {
   font-size: 13px;
 }
 
-/* Keep all Quick start choices visible and consistently sized. */
+/* Keep all Quick start choices visible, consistently sized, and centered on all screens. */
 .room-source-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 8px !important;
   max-width: 620px;
 }
 
-.room-source-grid .header-search.room-source-pill {
+.room-source-pills .room-source-pill,
+.room-source-grid .room-source-pill,
+.room-source-grid .header-search.room-source-pill,
+.app-shell .room-source-grid .header-search.room-source-pill {
   display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
   width: 100% !important;
   min-width: 0 !important;
   max-width: none !important;
   height: 40px !important;
-  padding: 0 8px !important;
+  min-height: 40px !important;
+  padding: 0 10px !important;
   border-radius: 10px !important;
-}
-
-.room-source-pill {
-  min-height: 40px;
-  border-radius: 10px;
   font: 600 12px/1 var(--font-body) !important;
   letter-spacing: 0;
   text-transform: none;
   white-space: nowrap;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+}
+
+.room-source-grid .room-source-pill span,
+.room-source-grid .header-search.room-source-pill span,
+.app-shell .room-source-grid .header-search.room-source-pill span {
+  display: inline-block !important;
+  text-align: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.room-source-grid .room-source-pill i,
+.room-source-grid .header-search.room-source-pill i,
+.app-shell .room-source-grid .header-search.room-source-pill i {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
 }
 
 @media (max-width: 600px) {
@@ -20297,21 +20669,19 @@ body .room-home-bar.mini {
     max-width: 320px;
   }
 
-  .room-source-pill {
-    min-height: 36px;
-    min-width: 0;
-    padding: 0 5px;
-    border-radius: 9px;
-    gap: 5px;
-    font-size: 10px !important;
-  }
-
-  .room-source-grid .header-search.room-source-pill {
-    height: 36px !important;
+  .room-source-pills .room-source-pill,
+  .room-source-grid .room-source-pill,
+  .room-source-grid .header-search.room-source-pill,
+  .app-shell .room-source-grid .header-search.room-source-pill {
     min-height: 36px !important;
-    padding: 0 4px !important;
+    height: 36px !important;
+    padding: 0 12px !important;
     border-radius: 9px !important;
+    font-size: 11px !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
+}
 
   .room-source-pill i {
     font-size: 12px;
@@ -21274,140 +21644,7 @@ body .room-home-bar.mini {
   box-shadow: 0 0 14px rgba(128, 157, 255, 0.46);
 }
 
-@media (pointer: coarse), screen and (max-width: 900px) {
-  .container.audio-mode-only {
-    height: 100dvh !important;
-    min-height: 0 !important;
-    padding:
-      max(8px, env(safe-area-inset-top))
-      14px
-      max(8px, env(safe-area-inset-bottom)) !important;
-  }
-
-  .player-page.room-open .container.audio-mode-only {
-    height: clamp(210px, 30dvh, 270px) !important;
-  }
-
-  .container.audio-mode-only .top-bar {
-    display: none !important;
-  }
-
-  .container.audio-mode-only .audio-mode-view {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: minmax(0, 1fr) auto !important;
-    align-content: center;
-    justify-items: center;
-    gap: 12px !important;
-    padding: 10px 4px 4px !important;
-  }
-
-  .container.audio-mode-only .audio-mode-art {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    width: min(48vw, 220px) !important;
-    height: min(48vw, 220px) !important;
-    max-width: 220px !important;
-    max-height: 220px !important;
-    justify-self: center;
-  }
-
-  .container.audio-mode-only .audio-mode-visual {
-    grid-column: 1 !important;
-    grid-row: 2 !important;
-    width: 100%;
-    max-width: 520px;
-    padding-top: 46px;
-    text-align: center;
-  }
-
-  .container.audio-mode-only .audio-mode-actions {
-    left: 0;
-    right: 0;
-    justify-content: center;
-  }
-
-  .container.audio-mode-only .audio-mode-label {
-    display: none;
-  }
-
-  .container.audio-mode-only .audio-mode-visual b.audio-mode-title {
-    max-width: 100%;
-    font-size: clamp(18px, 5.2vw, 24px) !important;
-    text-align: center;
-  }
-
-  .container.audio-mode-only .audio-mode-meta {
-    justify-content: center !important;
-  }
-
-  .container.audio-mode-only .audio-mode-timeline-slot {
-    margin-top: 10px !important;
-  }
-
-  .container.audio-mode-only .audio-mode-controls {
-    min-height: 54px;
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 6px;
-    padding: 4px 8px;
-  }
-
-  .container.audio-mode-only .audio-mode-controls .volume-group,
-  .container.audio-mode-only .audio-mode-controls .video-controls-spacer {
-    display: none;
-  }
-
-  .container.audio-mode-only .audio-mode-controls .player-center-controls.options.center {
-    height: 48px !important;
-  }
-}
-
-@media (pointer: coarse) and (max-width: 900px) and (orientation: portrait),
-       screen and (max-width: 900px) and (orientation: portrait) {
-  .player-page.room-open .container.audio-mode-only .audio-mode-view {
-    grid-template-columns: clamp(82px, 22vw, 118px) minmax(0, 1fr) !important;
-    grid-template-rows: minmax(0, 1fr) !important;
-    align-items: center !important;
-    justify-items: initial !important;
-    gap: 12px !important;
-  }
-
-  .player-page.room-open .container.audio-mode-only .audio-mode-art {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    width: clamp(82px, 22vw, 118px) !important;
-    height: clamp(82px, 22vw, 118px) !important;
-    justify-self: start;
-  }
-
-  .player-page.room-open .container.audio-mode-only .audio-mode-visual {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-    padding-top: 42px;
-    text-align: left;
-  }
-
-  .player-page.room-open .container.audio-mode-only .audio-mode-actions {
-    left: 0;
-    right: auto;
-    justify-content: flex-start;
-  }
-
-  .player-page.room-open .container.audio-mode-only .audio-mode-meta,
-  .player-page.room-open .container.audio-mode-only .audio-mode-timeline-slot,
-  .player-page.room-open .container.audio-mode-only .audio-mode-visual canvas {
-    display: none;
-  }
-
-  .player-page.room-open .container.audio-mode-only .audio-mode-controls {
-    min-height: 44px;
-    margin-top: 4px;
-    border: 0;
-    background: transparent;
-    backdrop-filter: none;
-  }
-}
+/* Mobile audio mode rules are consolidated cleanly in the final section */
 
 /* Final audio-player authority: compact, balanced, and never scattered. */
 .video-controls .right .audio-mode-toggle,
@@ -21465,7 +21702,7 @@ body .room-home-bar.mini {
   box-shadow: 0 5px 16px rgba(62,151,253,.32) !important;
 }
 
-@media (min-width: 901px), (pointer: fine) {
+@media (min-width: 901px) {
   .container.audio-mode-only {
     min-height: 420px !important;
   }
@@ -22058,22 +22295,37 @@ body .room-home-bar.mini {
   .player-page:has(.container.audio-mode-only) {
     display: flex !important;
     flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
     width: 100vw !important;
     height: 100dvh !important;
     overflow: hidden !important;
+    --panel-w: clamp(280px, 28vw, 360px) !important;
+  }
+
+  .player-page:has(.container.audio-mode-only) .room-panel {
+    width: var(--panel-w, 360px) !important;
+    height: 100dvh !important;
+    flex-shrink: 0 !important;
+    margin-left: auto !important;
+    border-radius: 0 !important;
+    border-top: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    background: #11141c !important;
   }
 
   .player-page:has(.container.audio-mode-only) .container.audio-mode-only {
-    flex: 1 1 auto !important;
+    flex: 0 1 auto !important;
     max-width: 860px !important;
-    width: min(860px, calc(100% - 48px)) !important;
+    width: min(860px, calc(100% - 32px)) !important;
     height: auto !important;
-    max-height: min(480px, calc(100dvh - 64px)) !important;
-    min-height: 380px !important;
+    max-height: min(480px, calc(100dvh - 48px)) !important;
+    min-height: auto !important;
     margin: auto !important;
-    padding: 26px 32px !important;
-    border-radius: 28px !important;
-    background: rgba(14, 18, 28, 0.76) !important;
+    padding: clamp(18px, 2.2vw, 26px) clamp(18px, 2.5vw, 32px) !important;
+    border-radius: clamp(20px, 2.5vw, 28px) !important;
+    background: rgba(14, 18, 28, 0.78) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
     backdrop-filter: blur(36px) saturate(1.4) !important;
@@ -22084,31 +22336,36 @@ body .room-home-bar.mini {
     justify-content: center !important;
     align-items: center !important;
     position: relative !important;
+    overflow: hidden !important;
   }
 
   .container.audio-mode-only .audio-mode-view {
     display: grid !important;
-    grid-template-columns: 240px minmax(320px, 1fr) !important;
+    grid-template-columns: clamp(140px, 18vw, 220px) minmax(0, 1fr) !important;
     align-items: center !important;
-    gap: 32px !important;
+    gap: clamp(16px, 2.5vw, 32px) !important;
     width: 100% !important;
+    max-width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   .container.audio-mode-only .audio-mode-art {
-    width: 240px !important;
-    height: 240px !important;
-    max-width: 240px !important;
-    max-height: 240px !important;
+    width: clamp(140px, 18vw, 220px) !important;
+    height: clamp(140px, 18vw, 220px) !important;
+    max-width: 220px !important;
+    max-height: 220px !important;
     aspect-ratio: 1 / 1 !important;
-    border-radius: 20px !important;
+    border-radius: clamp(14px, 1.8vw, 20px) !important;
     box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
     overflow: hidden !important;
     margin: 0 auto !important;
+    flex-shrink: 0 !important;
   }
 
   .container.audio-mode-only .audio-mode-art img {
@@ -22124,32 +22381,25 @@ body .room-home-bar.mini {
     justify-content: center !important;
     width: 100% !important;
     min-width: 0 !important;
+    max-width: 100% !important;
     text-align: left !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
   }
 
   .container.audio-mode-only .audio-mode-header {
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-content: flex-end !important;
     width: 100% !important;
-    margin-bottom: 6px !important;
+    margin-bottom: 4px !important;
     position: relative !important;
+    min-height: 34px !important;
   }
 
-  .container.audio-mode-only .audio-mode-label {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    letter-spacing: 1.5px !important;
-    text-transform: uppercase !important;
-    color: #4dabf7 !important;
-    background: rgba(77, 171, 247, 0.12) !important;
-    padding: 4px 10px !important;
-    border-radius: 999px !important;
-    border: 1px solid rgba(77, 171, 247, 0.25) !important;
-    margin: 0 !important;
+  .container.audio-mode-only .audio-mode-label,
+  .audio-mode-label {
+    display: none !important;
   }
 
   .container.audio-mode-only .audio-mode-actions {
@@ -22162,53 +22412,66 @@ body .room-home-bar.mini {
     display: flex !important;
     align-items: center !important;
     justify-content: flex-end !important;
-    gap: 8px !important;
+    gap: clamp(4px, 0.8vw, 8px) !important;
     z-index: 10 !important;
+    max-width: 100% !important;
   }
 
   .container.audio-mode-only .audio-mode-actions button,
   .container.audio-mode-only .audio-mode-actions .player-save-btn,
   .container.audio-mode-only .audio-mode-actions .player-queue-btn,
-  .container.audio-mode-only .audio-mode-actions .pic-in-pic,
   .container.audio-mode-only .audio-mode-actions .shuffle-btn {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
+    width: clamp(32px, 3.2vw, 36px) !important;
+    height: clamp(32px, 3.2vw, 36px) !important;
+    min-width: clamp(32px, 3.2vw, 36px) !important;
     border-radius: 50% !important;
     background: rgba(255, 255, 255, 0.08) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     color: rgba(255, 255, 255, 0.85) !important;
     display: grid !important;
     place-items: center !important;
-    font-size: 13px !important;
+    font-size: clamp(12px, 1.2vw, 13px) !important;
     cursor: pointer !important;
-    transition: background 0.15s ease, color 0.15s ease !important;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease !important;
+    flex-shrink: 0 !important;
   }
 
   .container.audio-mode-only .audio-mode-actions button:hover {
     background: rgba(255, 255, 255, 0.16) !important;
     color: #fff !important;
+    transform: scale(1.05) !important;
+  }
+
+  .container.audio-mode-only .audio-mode-actions .audio-mode-toggle {
+    width: clamp(66px, 6.5vw, 76px) !important;
+    height: clamp(30px, 3.2vw, 34px) !important;
+    flex-shrink: 0 !important;
   }
 
   .container.audio-mode-only .audio-mode-title {
-    font-size: clamp(20px, 2.2vw, 25px) !important;
+    font-size: clamp(17px, 1.9vw, 24px) !important;
     font-weight: 700 !important;
     color: #fff !important;
     line-height: 1.25 !important;
-    margin: 4px 0 3px !important;
+    margin: 2px 0 4px !important;
     overflow: hidden !important;
     display: -webkit-box !important;
     -webkit-box-orient: vertical !important;
     -webkit-line-clamp: 2 !important;
+    word-break: break-word !important;
   }
 
   .container.audio-mode-only .audio-mode-meta {
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
-    margin: 0 0 12px !important;
-    font-size: 13.5px !important;
-    color: rgba(255, 255, 255, 0.7) !important;
+    gap: 6px !important;
+    margin: 0 0 clamp(6px, 1.2vh, 12px) !important;
+    font-size: clamp(12px, 1.1vw, 13.5px) !important;
+    color: rgba(255, 255, 255, 0.72) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-width: 0 !important;
   }
 
   .container.audio-mode-only .audio-meta-artist {
@@ -22226,7 +22489,8 @@ body .room-home-bar.mini {
 
   .container.audio-mode-only .audio-mode-timeline-slot {
     width: 100% !important;
-    margin: 0 0 10px !important;
+    margin: 0 0 clamp(6px, 1.2vh, 10px) !important;
+    min-width: 0 !important;
   }
 
   .container.audio-mode-only .audio-mode-controls {
@@ -22234,6 +22498,8 @@ body .room-home-bar.mini {
     align-items: center !important;
     justify-content: space-between !important;
     width: 100% !important;
+    min-width: 0 !important;
+    gap: 8px !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
@@ -22243,44 +22509,65 @@ body .room-home-bar.mini {
   .container.audio-mode-only .player-center-controls {
     display: flex !important;
     align-items: center !important;
-    gap: 14px !important;
+    gap: clamp(6px, 1.1vw, 14px) !important;
     margin: 0 !important;
+    flex-shrink: 0 !important;
   }
 
   .container.audio-mode-only .player-center-controls .play-pause {
-    width: 50px !important;
-    height: 50px !important;
-    min-width: 50px !important;
+    width: clamp(42px, 4.5vw, 50px) !important;
+    height: clamp(42px, 4.5vw, 50px) !important;
+    min-width: clamp(42px, 4.5vw, 50px) !important;
     border-radius: 50% !important;
     background: #fff !important;
     color: #0b0f19 !important;
-    font-size: 19px !important;
+    font-size: clamp(16px, 1.8vw, 20px) !important;
     box-shadow: 0 4px 16px rgba(255, 255, 255, 0.22) !important;
     display: grid !important;
     place-items: center !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  }
+
+  .container.audio-mode-only .player-center-controls .play-pause:hover {
+    transform: scale(1.06) !important;
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.35) !important;
   }
 
   .container.audio-mode-only .player-center-controls button:not(.play-pause) {
-    width: 38px !important;
-    height: 38px !important;
+    width: clamp(32px, 3.4vw, 38px) !important;
+    height: clamp(32px, 3.4vw, 38px) !important;
+    min-width: clamp(32px, 3.4vw, 38px) !important;
     border-radius: 50% !important;
     background: rgba(255, 255, 255, 0.08) !important;
     color: rgba(255, 255, 255, 0.85) !important;
-    font-size: 15px !important;
+    font-size: clamp(13px, 1.4vw, 15px) !important;
     display: grid !important;
     place-items: center !important;
+    transition: background 0.15s ease, transform 0.15s ease !important;
+  }
+
+  .container.audio-mode-only .player-center-controls button:not(.play-pause):hover {
+    background: rgba(255, 255, 255, 0.16) !important;
+    transform: scale(1.06) !important;
   }
 
   .container.audio-mode-only .audio-mode-controls .volume-group {
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
+    gap: clamp(4px, 0.8vw, 8px) !important;
+    flex-shrink: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls .volume-slider {
+    width: clamp(48px, 6vw, 80px) !important;
+    flex-shrink: 1 !important;
   }
 
   .container.audio-mode-only .audio-mode-visual canvas {
     width: 100% !important;
-    height: 28px !important;
-    margin-top: 8px !important;
+    height: clamp(18px, 2.5vh, 26px) !important;
+    margin-top: clamp(4px, 0.8vh, 8px) !important;
   }
 
   .mobile-audio-expand-panel,
@@ -22290,467 +22577,1193 @@ body .room-home-bar.mini {
   }
 }
 
-/* 4. Mobile Rebuild: Standard Vertically Stacked Music Player, Mini-Player & Pinned Call Dock */
-@media (max-width: 900px) {
-  .player-page:has(.container.audio-mode-only) .audio-corner-actions {
-    top: max(10px, env(safe-area-inset-top)) !important;
-    right: 12px !important;
-    z-index: 100 !important;
-  }
-
-  .player-page:has(.container.audio-mode-only) .audio-player-brand {
-    top: max(10px, env(safe-area-inset-top)) !important;
-    left: 12px !important;
-    z-index: 100 !important;
-  }
-}
-
-@media (max-width: 600px) {
-  /* On mobile in audio mode, override the old room-open squish rules completely */
-  .player-page:not(.audio-player-collapsed):has(.container.audio-mode-only) .room-panel {
-    display: none !important;
-  }
-
-  .player-page:not(.audio-player-collapsed) .container.audio-mode-only {
-    display: flex !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    max-height: none !important;
-    min-height: 0 !important;
-    border-radius: 0 !important;
-  }
-
-  .player-page:not(.audio-player-collapsed) .container.audio-mode-only .audio-mode-art {
-    width: min(72vw, 280px) !important;
-    height: min(72vw, 280px) !important;
-    max-width: 280px !important;
-    max-height: 280px !important;
-    aspect-ratio: 1 / 1 !important;
-    border-radius: 20px !important;
-    margin: 4px auto 12px !important;
-    flex-shrink: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .player-page:not(.audio-player-collapsed) .container.audio-mode-only .audio-mode-view {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
-    height: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  .player-page:has(.container.audio-mode-only) {
-    width: 100vw !important;
-    height: 100dvh !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-    position: relative !important;
-  }
-
+@media (min-width: 901px) and (max-width: 1100px) {
   .player-page:has(.container.audio-mode-only) .container.audio-mode-only {
-    position: relative !important;
-    width: 100% !important;
-    height: 100dvh !important;
-    max-height: none !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    border: none !important;
-    padding: max(12px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom)) !important;
-    background: #0a0d14 !important;
-    box-shadow: none !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-    box-sizing: border-box !important;
-    z-index: 10 !important;
+    padding: 14px 16px !important;
+    margin: auto 8px !important;
   }
 
-  /* When collapsed to show panels, hide the expanded container */
-  .player-page.audio-player-collapsed .container.audio-mode-only {
-    display: none !important;
-  }
-
-  /* Mobile vertical stack */
   .container.audio-mode-only .audio-mode-view {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
-    height: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-
-  .container.audio-mode-only .mobile-player-handle {
-    display: block !important;
-    width: 40px !important;
-    height: 4px !important;
-    border-radius: 999px !important;
-    background: rgba(255, 255, 255, 0.28) !important;
-    margin: 4px auto 8px !important;
-    flex-shrink: 0 !important;
+    grid-template-columns: clamp(120px, 15vw, 160px) minmax(0, 1fr) !important;
+    gap: 14px !important;
   }
 
   .container.audio-mode-only .audio-mode-art {
-    width: min(72vw, 280px) !important;
-    height: min(72vw, 280px) !important;
-    max-width: 280px !important;
-    max-height: 280px !important;
-    aspect-ratio: 1 / 1 !important;
-    border-radius: 20px !important;
-    margin: 4px auto 12px !important;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
-    flex-shrink: 0 !important;
-    overflow: hidden !important;
+    width: clamp(120px, 15vw, 160px) !important;
+    height: clamp(120px, 15vw, 160px) !important;
   }
 
-  .container.audio-mode-only .audio-mode-art img {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-  }
-
-  .container.audio-mode-only .audio-mode-visual {
-    display: flex !important;
-    flex-direction: column !important;
-    width: 100% !important;
-    flex: 1 1 auto !important;
-    justify-content: space-evenly !important;
-  }
-
-  .container.audio-mode-only .audio-mode-header {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
-    margin-bottom: 6px !important;
-  }
-
-  .container.audio-mode-only .audio-mode-label {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 5px !important;
-    font-size: 10.5px !important;
-    font-weight: 700 !important;
-    letter-spacing: 1.2px !important;
-    text-transform: uppercase !important;
-    color: #4dabf7 !important;
-    background: rgba(77, 171, 247, 0.12) !important;
-    padding: 3px 8px !important;
-    border-radius: 999px !important;
-    border: 1px solid rgba(77, 171, 247, 0.25) !important;
+  .container.audio-mode-only .player-center-controls {
+    gap: 6px !important;
   }
 
   .container.audio-mode-only .audio-mode-actions {
-    position: relative !important;
-    top: auto !important;
-    right: auto !important;
-    left: auto !important;
-    bottom: auto !important;
-    transform: none !important;
+    gap: 4px !important;
+  }
+}
+
+/* 4. Complete Removal of Miniplayer / PiP in Audio Mode */
+.container.audio-mode-only .pic-in-pic,
+.container.audio-mode-only .solo-miniplayer-toggle,
+.container.audio-mode-only [data-more-action="pip"],
+.audio-settings-menu [data-more-action="pip"],
+.player-page:has(.container.audio-mode-only) [data-more-action="pip"],
+.player-page:has(.container.audio-mode-only) .pic-in-pic,
+.player-page:has(.container.audio-mode-only) .solo-miniplayer-toggle,
+.more-options [data-more-action="pip"][hidden],
+.mobile-audio-expand-panel,
+.mobile-player-handle,
+.audio-mini-bar {
+  display: none !important;
+}
+
+/* 5. Mobile Audio Mode Layout: Fully Responsive, Polished Vertical Stack */
+@media (max-width: 900px) {
+  /* Page layout in mobile audio mode */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) {
     display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    background: #080b12 !important;
+    position: relative !important;
+    padding: 0 !important;
     margin: 0 !important;
   }
 
-  .container.audio-mode-only .audio-mode-actions button,
-  .container.audio-mode-only .audio-mode-actions .player-save-btn,
-  .container.audio-mode-only .audio-mode-actions .player-queue-btn,
-  .container.audio-mode-only .audio-mode-actions .pic-in-pic,
-  .container.audio-mode-only .audio-mode-actions .shuffle-btn {
+  /* 1. Top bar: Left CineTab logo, Right Actions (Search, Audio/Video Switch, More) */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .audio-player-brand {
+    display: flex !important;
+    position: fixed !important;
+    top: max(10px, env(safe-area-inset-top, 10px)) !important;
+    left: 14px !important;
+    z-index: 500 !important;
+    pointer-events: auto !important;
+  }
+
+  .audio-brand-button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    background: transparent !important;
+    border: none !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 17px !important;
+    padding: 0 !important;
+    cursor: pointer !important;
+  }
+
+  .audio-brand-button img {
+    width: 26px !important;
+    height: 26px !important;
+    object-fit: contain !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .audio-corner-actions {
+    display: flex !important;
+    position: fixed !important;
+    top: max(10px, env(safe-area-inset-top, 10px)) !important;
+    right: 14px !important;
+    left: auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    z-index: 500 !important;
+    pointer-events: auto !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions button,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle {
     width: 36px !important;
     height: 36px !important;
     min-width: 36px !important;
     border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    color: rgba(255, 255, 255, 0.85) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    color: #ffffff !important;
     display: grid !important;
     place-items: center !important;
+    padding: 0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle {
+    border-radius: 18px !important;
+    width: auto !important;
+    padding: 0 4px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .share-help-btn {
+    display: none !important; /* In mobile audio mode, room tabs are inside the wide bar */
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .more-content {
+    position: relative !important;
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .more-options {
+    position: fixed !important;
+    top: calc(max(10px, env(safe-area-inset-top, 10px)) + 44px) !important;
+    right: 14px !important;
+    left: auto !important;
+    bottom: auto !important;
+    z-index: 550 !important;
+  }
+
+  /* Full Player Container */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .container.audio-mode-only,
+  .player-page.room-open:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .container.audio-mode-only,
+  .player-page.room-open .container.audio-mode-only {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    padding: max(50px, calc(env(safe-area-inset-top, 0px) + 44px)) 16px 2px !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  /* Redundant video headers and panels */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .player-meta,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .player-details,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-head,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-now,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .top-bar {
+    display: none !important;
+  }
+
+  /* Audio View Stack */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .audio-mode-view {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    max-width: 420px !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* 2. Middle album art or thumbnail */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-art {
+    width: min(48vw, 190px) !important;
+    height: min(48vw, 190px) !important;
+    min-width: min(48vw, 190px) !important;
+    min-height: min(48vw, 190px) !important;
+    max-width: 190px !important;
+    max-height: 190px !important;
+    border-radius: 18px !important;
+    margin: 0 auto 8px !important;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-art img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-visual {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+    overflow: visible !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-header {
+    display: none !important;
+  }
+
+  /* 3. Below: Moving Name in one big line, 2nd line moving artist name (only if YouTube Music) */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title-wrap {
+    width: 100% !important;
+    max-width: 90% !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    display: flex !important;
+    justify-content: center !important;
+    margin: 0 auto 3px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title {
+    display: inline-block !important;
+    white-space: nowrap !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.25 !important;
+  }
+
+  .audio-title-text,
+  .audio-artist-text {
+    display: inline-block !important;
+    white-space: nowrap !important;
+    will-change: transform !important;
+  }
+
+  /* 2nd line artist: ONLY shown if playing YouTube Music */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-meta {
+    width: 100% !important;
+    max-width: 88% !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto 4px !important;
+    color: rgba(255, 255, 255, 0.72) !important;
     font-size: 13px !important;
   }
 
-  .container.audio-mode-only .audio-mode-title {
-    font-size: clamp(19px, 5.5vw, 23px) !important;
-    font-weight: 700 !important;
-    text-align: left !important;
-    line-height: 1.25 !important;
-    margin: 0 0 3px !important;
-    color: #fff !important;
-    display: -webkit-box !important;
-    -webkit-box-orient: vertical !important;
-    -webkit-line-clamp: 2 !important;
-    overflow: hidden !important;
-  }
-
-  .container.audio-mode-only .audio-mode-meta {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-    font-size: 13.5px !important;
-    color: rgba(255, 255, 255, 0.72) !important;
-    margin-bottom: 10px !important;
-    text-align: left !important;
-  }
-
-  .container.audio-mode-only .audio-meta-artist {
-    font-weight: 600 !important;
-    color: rgba(255, 255, 255, 0.95) !important;
-  }
-
-  .container.audio-mode-only .audio-mode-timeline-slot {
-    width: 100% !important;
-    margin: 0 0 8px !important;
-  }
-
-  .container.audio-mode-only .timeline-container {
-    width: 100% !important;
-  }
-
-  .container.audio-mode-only .video-timeline {
-    height: 6px !important;
-    border-radius: 3px !important;
-  }
-
-  .container.audio-mode-only .timeline-times {
-    font-size: 12px !important;
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-meta-artist {
+    display: inline-block !important;
+    white-space: nowrap !important;
     font-weight: 500 !important;
-    color: rgba(255, 255, 255, 0.75) !important;
-    margin-top: 4px !important;
   }
 
-  .container.audio-mode-only .audio-mode-controls {
+  /* Only artist name in 2nd line; hide dot, album, year */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-meta .audio-meta-dot,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-meta .audio-meta-album,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-meta .audio-meta-year {
+    display: none !important;
+  }
+
+  /* Hide artist line strictly when not playing YouTube Music */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.is-yt-music) .audio-mode-meta,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-meta[hidden] {
+    display: none !important;
+  }
+
+  /* 4. Full-width seekbar */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-timeline-slot {
+    display: block !important;
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 2px auto !important;
+    min-width: 0 !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .timeline-container {
+    width: 100% !important;
+    padding: 0 4px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .video-timeline {
+    height: 4px !important;
+    border-radius: 2px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .timeline-times {
+    font-size: 11px !important;
+    font-family: var(--font-mono, monospace) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    margin-top: 2px !important;
+  }
+
+  /* 4. Standard music player controllers with shuffle and repeat buttons */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-controls {
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-content: center !important;
     width: 100% !important;
-    margin: 4px 0 !important;
+    margin: 4px auto 0 !important;
     padding: 0 !important;
     border: none !important;
     background: transparent !important;
   }
 
-  .container.audio-mode-only .player-center-controls {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .player-center-controls {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
     width: 100% !important;
-    padding: 0 4px !important;
+    max-width: 310px !important;
+    margin: 0 auto !important;
   }
 
-  .container.audio-mode-only .player-center-controls .play-pause {
-    width: 62px !important;
-    height: 62px !important;
-    min-width: 62px !important;
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .player-center-controls .play-pause {
+    width: 52px !important;
+    height: 52px !important;
+    min-width: 52px !important;
     border-radius: 50% !important;
     background: #ffffff !important;
     color: #0b0f19 !important;
-    font-size: 24px !important;
-    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.28) !important;
+    font-size: 20px !important;
+    box-shadow: 0 4px 18px rgba(255, 255, 255, 0.32) !important;
     display: grid !important;
     place-items: center !important;
+    border: none !important;
   }
 
-  .container.audio-mode-only .player-center-controls button:not(.play-pause) {
-    width: 44px !important;
-    height: 44px !important;
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .player-center-controls button:not(.play-pause) {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
     border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: rgba(255, 255, 255, 0.88) !important;
-    font-size: 18px !important;
+    background: transparent !important;
+    border: none !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-size: 16px !important;
     display: grid !important;
     place-items: center !important;
   }
 
-  .container.audio-mode-only .mobile-audio-expand-panel {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 8px !important;
-    width: 100% !important;
-    max-width: 260px !important;
-    height: 40px !important;
-    margin: 8px auto 0 !important;
-    border-radius: 999px !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    color: rgba(255, 255, 255, 0.9) !important;
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
-    cursor: pointer !important;
-    touch-action: manipulation !important;
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .player-center-controls .shuffle-btn.active,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .player-center-controls .repeat-btn.active {
+    color: #3e97fd !important;
   }
 
-  /* Mini player bar on mobile */
-  .player-page:not(.audio-player-collapsed) .audio-mini-bar {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .volume-group,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only .audio-mode-visual canvas {
     display: none !important;
   }
 
-  .player-page.audio-player-collapsed .audio-mini-bar {
+  /* 5. Wide bar containing chat, queue, people, settings buttons */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-tab-btn[data-tab="together"] {
+    display: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-panel,
+  .player-page.room-open:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-panel {
     display: flex !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    height: 60px !important;
-    z-index: 150 !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 350px !important;
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 12px auto 0 !important;
+    padding: 0 12px !important;
+    background: transparent !important;
+    border: none !important;
+    position: relative !important;
+    z-index: 5 !important;
+    box-sizing: border-box !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tabbar {
+    display: flex !important;
+    width: 100% !important;
+    height: 48px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 16px !important;
+    padding: 3px 6px !important;
+    margin: 0 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+    box-sizing: border-box !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tabbar .room-hide-btn {
+    display: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tabs {
+    display: flex !important;
     align-items: center !important;
-    gap: 12px !important;
+    justify-content: space-around !important;
+    width: 100% !important;
+    gap: 4px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tab-btn {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    height: 40px !important;
+    border-radius: 12px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    color: rgba(255, 255, 255, 0.72) !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tab-btn span {
+    display: inline !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tab-btn:hover,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tab-btn:active {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  /* Exclude Watch Together button strictly from the wide bar in audio mode */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-tab-btn[data-tab="together"],
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-tab-together {
+    display: none !important;
+  }
+
+  /* In Full Music Player Mode, hide the tab panel bodies */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tab {
+    display: none !important;
+  }
+
+  /* 6. Extended Mode: Collapsed top bar + Full room panel */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .audio-mode-view,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .audio-player-brand,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .audio-corner-actions {
+    display: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .container.audio-mode-only {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .audio-collapsed-bar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    height: 56px !important;
     padding: 0 14px !important;
-    background: rgba(14, 18, 28, 0.96) !important;
+    background: rgba(18, 23, 34, 0.98) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
     box-sizing: border-box !important;
     cursor: pointer !important;
-  }
-
-  .audio-mini-bar .mini-bar-progress {
-    position: absolute !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    height: 2px !important;
-    background: rgba(255, 255, 255, 0.15) !important;
-  }
-
-  .audio-mini-bar .mini-bar-progress-fill {
-    height: 100% !important;
-    width: 0%;
-    background: #3e97fd !important;
-    transition: width 0.1s linear !important;
-  }
-
-  .audio-mini-bar .mini-bar-art {
-    width: 42px !important;
-    height: 42px !important;
-    border-radius: 8px !important;
-    overflow: hidden !important;
-    background: rgba(255, 255, 255, 0.08) !important;
     flex-shrink: 0 !important;
   }
 
-  .audio-mini-bar .mini-bar-art img {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .audio-collapsed-bar {
+    display: none !important;
+  }
+
+  .audio-collapsed-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .audio-collapsed-thumb {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .audio-collapsed-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .audio-collapsed-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .audio-collapsed-artist {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.65);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .audio-collapsed-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .audio-collapsed-play,
+  .audio-collapsed-expand {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-panel {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    background: #0b0f19 !important;
+    position: relative !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tabbar {
+    display: flex !important;
+    flex-shrink: 0 !important;
+    width: 100% !important;
+    background: rgba(14, 18, 28, 0.96) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 4px 6px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tabbar .room-hide-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tabs {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 4px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tab-btn {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    height: 40px !important;
+    padding: 0 4px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: rgba(255, 255, 255, 0.65) !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tab-btn.active,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tab-btn[aria-selected="true"] {
+    color: #3e97fd !important;
+    border-bottom-color: #3e97fd !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tab {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    padding: 10px 12px calc(68px + env(safe-area-inset-bottom, 8px)) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tab[hidden] {
+    display: none !important;
+  }
+
+  /* 7 & 8. Bottom Pinned Call Dock & Floating Video Card */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: none !important;
+    z-index: 50 !important;
+    background: rgba(14, 18, 28, 0.98) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding: 6px 12px max(6px, env(safe-area-inset-bottom, 6px)) !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Call bar cannot be unpinned: hide unpin and float handles */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call .room-unit-float,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call .room-call-dock-edge,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call .room-call-edge,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call .room-call-resize,
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call .room-call-strip-grip {
+    display: none !important;
+    pointer-events: none !important;
+  }
+
+  /* Floating Video Card: displayed only when camera/video is active */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call.has-video .room-call-grid {
+    position: fixed !important;
+    right: 14px !important;
+    bottom: calc(64px + env(safe-area-inset-bottom, 8px)) !important;
+    width: 135px !important;
+    height: 100px !important;
+    border-radius: 14px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65) !important;
+    z-index: 60 !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    background: #000000 !important;
+    display: block !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call.has-video .room-call-grid .room-call-tile {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute !important;
+    inset: 0 !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call.has-video .room-call-grid .room-call-tile video {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
   }
 
-  .audio-mini-bar .mini-bar-info {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    text-align: left !important;
-  }
-
-  .audio-mini-bar .mini-bar-title {
-    font-size: 13.5px !important;
-    font-weight: 600 !important;
-    color: #fff !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-
-  .audio-mini-bar .mini-bar-artist {
-    font-size: 11.5px !important;
-    color: rgba(255, 255, 255, 0.65) !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-
-  .audio-mini-bar .mini-bar-controls {
-    display: flex !important;
-    align-items: center !important;
-    gap: 10px !important;
-    flex-shrink: 0 !important;
-  }
-
-  .audio-mini-bar .mini-bar-play {
-    width: 36px !important;
-    height: 36px !important;
-    border-radius: 50% !important;
-    background: #fff !important;
-    color: #000 !important;
-    font-size: 14px !important;
-    border: none !important;
-    display: grid !important;
-    place-items: center !important;
-    cursor: pointer !important;
-  }
-
-  .audio-mini-bar .mini-bar-expand {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #fff !important;
-    font-size: 13px !important;
-    border: none !important;
-    display: grid !important;
-    place-items: center !important;
-    cursor: pointer !important;
-  }
-
-  /* When collapsed on mobile, the room panel slides up below the mini bar */
-  .player-page.audio-player-collapsed .room-panel {
-    position: fixed !important;
-    top: 60px !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: var(--call-dock-h, 0px) !important;
-    width: 100% !important;
-    height: calc(100dvh - 60px - var(--call-dock-h, 0px)) !important;
-    z-index: 100 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    border-radius: 0 !important;
-    background: #0b0e17 !important;
-    transform: none !important;
-    opacity: 1 !important;
-    border: none !important;
-  }
-
-  .player-page.audio-player-collapsed .audio-corner-actions,
-  .player-page.audio-player-collapsed .audio-player-brand {
+  /* When video is off, hide call grid */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .room-call:not(.has-video) .room-call-grid {
     display: none !important;
   }
 
-  /* Call dock pinned bottom on mobile */
-  .player-page:has(.container.audio-mode-only) .room-call,
-  .player-page:has(.container.audio-mode-only) .room-foot {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    z-index: 200 !important;
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):has(.room-call:not([hidden])):not(.mobile-audio-extended) {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Player layout authority: keep the media area and optional room panel in separate flex tracks.
+   The older percentage widths subtracted the panel but forgot page padding, so flex overflow could
+   push controls and the sidebar on top of each other. */
+@media (min-width: 901px) {
+  .player-page:not([hidden]) {
+    box-sizing: border-box;
+    min-width: 0;
   }
 
-  .player-page:has(.container.audio-mode-only) .room-call {
-    border-radius: 18px 18px 0 0 !important;
-    background: rgba(16, 20, 30, 0.96) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    border-bottom: none !important;
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6) !important;
+  .player-page:not(.room-open) > .container:not(.audio-mode-only) {
+    flex: 0 1 auto;
+    width: min(98vw, calc((100dvh - 24px) * 16 / 9));
+    max-width: calc((100dvh - 24px) * 16 / 9);
+    max-height: calc(100dvh - 24px);
+    margin: auto;
   }
+
+  .player-page.room-open:not(:has(.container.audio-mode-only)) {
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .player-page.room-open:not(:has(.container.audio-mode-only)) > .container:not(.audio-mode-only) {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    height: auto;
+    margin: auto 0;
+  }
+
+  .player-page.room-open:not(:has(.container.audio-mode-only)) > .room-panel {
+    flex: 0 1 clamp(280px, var(--panel-w, 360px), 42vw);
+    width: clamp(280px, var(--panel-w, 360px), 42vw);
+    min-width: 240px;
+    max-width: 42vw;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+  }
+
+  .player-page:has(.container.audio-mode-only) {
+    gap: 16px;
+    padding: 12px;
+    box-sizing: border-box;
+  }
+
+  .player-page:has(.container.audio-mode-only) > .container.audio-mode-only {
+    flex: 0 1 860px;
+    width: min(860px, calc(100vw - 32px));
+    min-width: 0;
+    max-width: 860px;
+    min-height: 0;
+    max-height: calc(100dvh - 24px);
+    height: auto;
+    margin: auto;
+  }
+
+  .player-page.room-open:has(.container.audio-mode-only) > .container.audio-mode-only {
+    flex: 1 1 0;
+    width: auto;
+    max-width: 860px;
+    margin: auto 0;
+  }
+
+  .player-page.room-open:has(.container.audio-mode-only) > .room-panel {
+    flex: 0 1 clamp(280px, var(--panel-w, 360px), 36vw);
+    width: clamp(280px, var(--panel-w, 360px), 36vw);
+    min-width: 240px;
+    max-width: 36vw;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+  }
+}
+
+/* Mobile audio stays a portrait, scroll-safe music surface. Video can use the full landscape
+   viewport when fullscreen; its room panel takes a reserved side track on smaller landscape
+   devices so it never floats over the playback controls. */
+@media (max-width: 900px) and (orientation: portrait) {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .player-page.room-open:not(:has(.container.audio-mode-only)) {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+  }
+
+  .player-page.room-open:not(:has(.container.audio-mode-only)) > .container:not(.audio-mode-only) {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+
+  .player-page.room-open:not(:has(.container.audio-mode-only)) > .room-panel {
+    flex: 0 1 clamp(240px, 34vw, 320px);
+    width: clamp(240px, 34vw, 320px);
+    min-width: 220px;
+    max-width: 42vw;
+    min-height: 0;
+    height: 100dvh;
+    border-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .player-page:not(.room-open) > .container.fullscreen:not(.audio-mode-only) {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+}
+
+/* Mobile audio finish: compact header, Spotify-style track controls, and a bottom sheet / dock
+   that respects the call strip. These rules are last so earlier audio experiments cannot collide. */
+.container.audio-mode-only .skip-backward,
+.container.audio-mode-only .skip-forward {
+  display: none !important;
+}
+
+.container.audio-mode-only .timeline-times .current-time {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+@media (min-width: 901px) {
+  /* Laptop audio supports both panel states. The prior permanent-panel rule also overrode hidden. */
+  .player-page:has(.container.audio-mode-only) .room-hide-btn {
+    display: inline-flex !important;
+    pointer-events: auto !important;
+  }
+
+  .player-page:has(.container.audio-mode-only) .room-panel[hidden] {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .container.audio-mode-only {
+    padding-top: max(74px, calc(env(safe-area-inset-top, 0px) + 64px)) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    display: inline-grid !important;
+    grid-template-columns: 1fr !important;
+    place-items: center !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle .audio-mode-choice {
+    display: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle .audio-mode-choice.active {
+    display: grid !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle .audio-mode-choice b {
+    display: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .audio-mode-toggle .audio-mode-choice i {
+    font-size: 15px !important;
+  }
+
+  /* A full-width sheet rises from the bottom; its backdrop keeps the app and dock distinct. */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-menu-backdrop:not([hidden]) {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 499 !important;
+    background: rgba(5, 7, 12, 0.58) !important;
+    backdrop-filter: blur(5px) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .more-options {
+    position: fixed !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: min(78dvh, 680px) !important;
+    padding: 14px 16px max(20px, env(safe-area-inset-bottom, 12px)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-bottom: 0 !important;
+    border-radius: 22px 22px 0 0 !important;
+    background: rgba(18, 22, 32, 0.98) !important;
+    box-shadow: 0 -20px 56px rgba(0, 0, 0, 0.5) !important;
+    transform-origin: bottom center !important;
+    z-index: 510 !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-corner-actions .more-options::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 0 auto 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  /* The heart lives beside the track title in the compact portrait player. */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title-wrap {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title-wrap .audio-mode-title {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 42px) !important;
+    text-align: center !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title-wrap .player-save-wrap:not([hidden]) {
+    display: inline-flex !important;
+    flex: 0 0 34px !important;
+    width: 34px !important;
+    height: 34px !important;
+    margin: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title-wrap .player-save-btn {
+    width: 34px !important;
+    height: 34px !important;
+    display: grid !important;
+    place-items: center !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.88) !important;
+    font-size: 18px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .audio-mode-title-wrap .player-save-btn.on {
+    color: #ff5c77 !important;
+  }
+
+  /* Keep shuffle, previous, play, next and repeat together; never expose +/- seek controls. */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .player-center-controls {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: clamp(8px, 3vw, 16px) !important;
+    width: 100% !important;
+    max-width: 340px !important;
+    margin-inline: auto !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .player-center-controls :is(.prev-track, .next-track)[hidden] {
+    display: none !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)) .player-center-controls :is(.prev-track, .next-track):not([hidden]) {
+    display: grid !important;
+    place-items: center !important;
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 18px !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-tabbar .room-hide-btn {
+    display: none !important;
+  }
+
+  /* Compact room tabs float above the pinned call controls, rather than under the media card. */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-panel {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: calc(68px + max(8px, env(safe-area-inset-bottom, 8px))) !important;
+    width: min(calc(100vw - 28px), 430px) !important;
+    max-width: 430px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: translateX(-50%) !important;
+    z-index: 480 !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tabbar {
+    height: 58px !important;
+    padding: 4px 8px !important;
+    border-radius: 20px !important;
+    backdrop-filter: blur(22px) !important;
+    -webkit-backdrop-filter: blur(22px) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .room-tab-btn {
+    min-width: 0 !important;
+    gap: 5px !important;
+    padding-inline: 3px !important;
+    font-size: clamp(10px, 2.8vw, 12px) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended {
+    padding-bottom: calc(68px + max(8px, env(safe-area-inset-bottom, 8px))) !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .room-panel {
+    margin-bottom: 0 !important;
+  }
+
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)).mobile-audio-extended .audio-collapsed-expand {
+    color: rgba(255, 255, 255, 0.8) !important;
+  }
+}
+
+/* Final player-layer and laptop-audio layout authority. */
+.container.sheet-open .player-center-controls.options.center {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.container .player-sheet:not([hidden]) {
+  z-index: 1000 !important;
+}
+
+@media (min-width: 901px) {
+  .player-page:has(.container.audio-mode-only) .container.audio-mode-only {
+    align-items: stretch !important;
+  }
+
+  .container.audio-mode-only .audio-mode-view {
+    grid-template-columns: minmax(120px, clamp(140px, 18vw, 220px)) minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: clamp(16px, 2.4vw, 30px) !important;
+    overflow: visible !important;
+  }
+
+  .container.audio-mode-only .audio-mode-art {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1 !important;
+    margin: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-visual {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    align-items: stretch !important;
+    gap: 3px !important;
+  }
+
+  .container.audio-mode-only .audio-mode-header {
+    display: none !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap {
+    display: flex !important;
+    width: 100% !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap .audio-mode-title {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    text-align: left !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap .player-save-wrap:not([hidden]) {
+    display: inline-flex !important;
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-title-wrap .player-save-btn {
+    display: grid !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    place-items: center !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+  }
+
+  .container.audio-mode-only .audio-mode-meta {
+    width: 100% !important;
+    text-align: left !important;
+  }
+
+  .container.audio-mode-only .audio-mode-timeline-slot {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: clamp(8px, 1.4vh, 14px) !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls {
+    position: relative !important;
+    display: flex !important;
+    width: 100% !important;
+    min-height: 52px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-top: 6px !important;
+    overflow: visible !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls .player-center-controls.options.center {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    display: flex !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    gap: clamp(5px, 1.1vw, 14px) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .container.audio-mode-only .audio-mode-controls .volume-group {
+    position: absolute !important;
+    left: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    margin: 0 !important;
+  }
+
+  .container.audio-mode-only .audio-mode-visual canvas {
+    width: 100% !important;
+    height: 16px !important;
+    margin-top: 2px !important;
+  }
+}
+
+.player-page.panel-moving .room-panel {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }

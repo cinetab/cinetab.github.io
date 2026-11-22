@@ -658,13 +658,10 @@
         updateBadges();
     };
 
-    const isLaptopAudio = () => container.classList.contains("audio-mode-only") && matchMedia("(min-width: 901px)").matches;
+    const isAudioMode = () => container.classList.contains("audio-mode-only");
+    const isLaptopAudio = () => isAudioMode();
 
     const setPanel = show => {
-        if (!show && isLaptopAudio()) return;
-        if (container.classList.contains("audio-mode-only") && matchMedia("(max-width: 600px)").matches) {
-            playerPage.classList.toggle("audio-player-collapsed", show);
-        }
         panel.hidden = !show;
         playerPage.classList.toggle("room-open", show);
         playerPage.classList.toggle("queue-open", show && activeTab === "queue");
@@ -732,6 +729,7 @@
     // make room; closing is the same backwards. Instant for people who asked for less motion.
     const PANEL_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
     let panelClosing = null;
+    let panelOpening = null;
     const calmer = () => matchMedia("(prefers-reduced-motion: reduce)").matches || typeof panel.animate !== "function";
     // Where the panel comes from: below the player when they're stacked, beside it otherwise
     const panelOffset = () => isUprightPhone() ? "translateY(28px)" : "translateX(28px)";
@@ -753,15 +751,21 @@
 
     // `from`: where a swipe down left it (a transform and opacity), to close from there
     const showPanel = (show, from = null) => {
-        if (!show && isLaptopAudio()) return;
         const open = !panel.hidden && !panelClosing;
         const move = show !== open && !playerPage.hidden && !calmer();
-        // Opened again while it was going: it stays
+        // Cancel either direction before starting the next one. Stale animations can leave the
+        // panel composited with a transform/filter after a fast open-close-open sequence.
         if (panelClosing) {
             panelClosing.cancel();
             panelClosing = null;
         }
+        if (panelOpening) {
+            panelOpening.cancel();
+            panelOpening = null;
+        }
+        playerPage.classList.remove("panel-moving");
         if (!move) return setPanel(show);
+        playerPage.classList.add("panel-moving");
         if (!show) {
             const offset = from ? "translateY(100%)" : panelOffset();
             const start = from || { opacity: 1, transform: "none" };
@@ -769,16 +773,32 @@
             going.onfinish = () => {
                 if (panelClosing !== going) return;
                 panelClosing = null;
+                playerPage.classList.remove("panel-moving");
                 const before = container.getBoundingClientRect();
                 setPanel(false);
                 glidePlayer(before);
+            };
+            going.oncancel = () => {
+                if (panelClosing !== going) return;
+                panelClosing = null;
+                playerPage.classList.remove("panel-moving");
             };
             return;
         }
         const before = container.getBoundingClientRect();
         setPanel(true);
         glidePlayer(before);
-        panel.animate([{ opacity: 0, transform: panelOffset() }, { opacity: 1, transform: "none" }], { duration: 320, easing: PANEL_EASE });
+        const entering = panelOpening = panel.animate([{ opacity: 0, transform: panelOffset() }, { opacity: 1, transform: "none" }], { duration: 320, easing: PANEL_EASE });
+        entering.onfinish = () => {
+            if (panelOpening !== entering) return;
+            panelOpening = null;
+            playerPage.classList.remove("panel-moving");
+        };
+        entering.oncancel = () => {
+            if (panelOpening !== entering) return;
+            panelOpening = null;
+            playerPage.classList.remove("panel-moving");
+        };
     };
 
     // One message: what it replies to, the text, its reactions, and React / Reply buttons
@@ -1080,7 +1100,6 @@
             showPanel(panel.hidden || !!panelClosing);
         };
         together.hidePanel = () => {
-            if (isLaptopAudio()) return;
             showPanel(false);
         };
         shareHelpBtn.title = "Show or hide the room panel (R)";
@@ -1110,18 +1129,12 @@
             showPanel(panel.hidden || !!panelClosing);
         };
         together.hidePanel = () => {
-            if (isLaptopAudio()) return;
             showPanel(false);
         };
         // Picture in picture with everyone: out of the room, it closes
         if (pipCall && window.documentPictureInPicture && window.documentPictureInPicture.window) window.documentPictureInPicture.window.close();
         toggleLeaveMenu(false);
-        if (!isLaptopAudio()) showPanel(false);
-        else {
-            panel.classList.add("solo-queue");
-            showTab("queue");
-            showPanel(true);
-        }
+        showPanel(false);
         panel.classList.add("solo-queue");
         chatUnread = 0;
         updateBadges();
@@ -1141,12 +1154,16 @@
         if (activeTab === "queue") showTab("chat");
     };
 
-    tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
+    tabButtons.forEach(button => button.addEventListener("click", () => {
+        showTab(button.dataset.tab);
+        if (isAudioMode() && matchMedia("(max-width: 900px)").matches) {
+            playerPage.classList.add("mobile-audio-extended");
+        }
+    }));
     hidePanelBtn.addEventListener("click", () => {
-        if (!isLaptopAudio()) {
-            if (container.classList.contains("audio-mode-only") && matchMedia("(max-width: 600px)").matches) {
-                playerPage.classList.remove("audio-player-collapsed");
-            }
+        if (isAudioMode() && matchMedia("(max-width: 900px)").matches) {
+            playerPage.classList.remove("mobile-audio-extended");
+        } else {
             showPanel(false);
         }
     });
@@ -1437,7 +1454,12 @@
         profileSheet.hidden = false;
         profileName.focus();
     };
-    const closeProfile = () => profileSheet.hidden = true;
+    const closeProfile = () => {
+        sheetSwipe = null;
+        profileCard.style.transform = "";
+        profileSheet.style.backgroundColor = "";
+        profileSheet.hidden = true;
+    };
 
     meBtn.addEventListener("click", openProfile);
     peopleList.addEventListener("click", e => e.target.closest("button[data-edit]") && openProfile());
@@ -3073,6 +3095,11 @@
                 // Phones: a strip at the bottom held upright, a column on the left held sideways
                 dock = upright ? "strip" : "side";
             }
+            if (isAudioMode() && matchMedia("(max-width: 900px)").matches) {
+                call.unitFloat = false;
+                call.docked = true;
+                dock = "strip";
+            }
             callWin.classList.toggle("bottom", dock === "bottom");
             callWin.classList.toggle("docked", !!dock && dock !== "bottom");
             callWin.classList.toggle("side", dock === "side");
@@ -3143,6 +3170,7 @@
         if (hasRelevant) placeDock();
     }).observe(playerPage, { attributes: true, attributeOldValue: true, attributeFilter: ["class", "hidden"] });
     unitFloatBtn.addEventListener("click", () => {
+        if (isAudioMode() && matchMedia("(max-width: 900px)").matches) return;
         call.unitFloat = !!call.dock;
         // Floated from the bottom of the screen: from where it was, not where it floated before
         if (call.unitFloat) call.pos = null;
@@ -3353,7 +3381,7 @@
         const wasHidden = callWin.hidden;
         // (a computer's is the dock all through a room too: your mic, camera and the rest)
         callWin.hidden = !people.length && !unit && !room;
-        callWin.classList.toggle("has-video", people.some(person => !!person.track));
+        callWin.classList.toggle("has-video", camEnabled || people.some(person => !!person.track));
         // A camera turned on - yours, or the first in the call: everyone's video shows (not folded
         // away from before, here or on a phone)
         const myVideo = people.some(person => person.me && !!person.track);
@@ -9335,7 +9363,6 @@
         showPanel(panel.hidden || !!panelClosing);
     };
     together.hidePanel = () => {
-        if (isLaptopAudio()) return;
         showPanel(false);
     };
     together.toggleQueue = () => {
@@ -9378,17 +9405,6 @@
     };
     // Initialize right panel as solo-queue outside room
     panel.classList.add("solo-queue");
-    const checkLaptopAudioPanel = () => {
-        if (isLaptopAudio() && (panel.hidden || !playerPage.classList.contains("room-open"))) {
-            if (!room) panel.classList.add("solo-queue");
-            showTab("queue");
-            setPanel(true);
-        }
-    };
-    new MutationObserver(checkLaptopAudioPanel).observe(container, { attributes: true, attributeFilter: ["class"] });
-    window.addEventListener("resize", checkLaptopAudioPanel);
-    checkLaptopAudioPanel();
-
     // On a phone, fullscreen means the whole screen for the video: the panel steps aside (the Room
     // button brings it back, and new messages still pop up)
     const onFullscreen = () => {
