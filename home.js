@@ -71,7 +71,6 @@
     // address keeps its #join=… and the player's own history, so nothing else changes.
     const views = [...home.querySelectorAll(".home-view")];
     const sideLinks = [...home.querySelectorAll(".side-link")];
-    const topbarTitle = home.querySelector(".topbar-title");
     const homeView = views.find(item => item.dataset.view === "home");
     const dashboardView = views.find(item => item.dataset.view === "dashboard");
     const dashboardSection = home.querySelector("#dashboard");
@@ -83,8 +82,12 @@
     const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
     const showView = (name, target = null) => {
         if (name === "dashboard") {
-            window.CineLauncher?.open();
-            return;
+            if (typeof window.CineLauncher?.open === "function") {
+                window.CineLauncher.open();
+                return;
+            }
+            // Keep the YouTube search usable if the player's command launcher failed
+            // to initialize; show its regular dashboard search as a working fallback.
         }
         const view = views.find(item => item.dataset.view === name) || views[0];
         if (!view) return;
@@ -104,7 +107,6 @@
                 if (on) link.setAttribute("aria-current", "page");
                 else link.removeAttribute("aria-current");
             });
-            if (topbarTitle) topbarTitle.textContent = (sideLinks.find(link => link.dataset.view === view.dataset.view)?.querySelector("span") || {}).textContent || "";
             currentView = view;
             if (!first && !target) window.scrollTo(0, 0);
         }
@@ -137,46 +139,60 @@
         }, 40);
     });
 
-    // The sidebar shrunk to its icons (remembered): pointed at (or tabbed into), it opens out
-    // over the page with their names, and folds back as the pointer leaves
-    const collapseBtn = home.querySelector(".side-collapse");
-    const expandHoverBtn = home.querySelector(".side-expand-hover");
+    // YouTube-style 3-line hamburger menu toggles the sidebar (rail vs full drawer)
+    const toggleBtn = home.querySelector(".side-toggle-btn");
     const SIDE_KEY = "cinetab:side-collapsed";
     const setCollapsed = on => {
         home.classList.toggle("side-collapsed", on);
-        if (!collapseBtn) return;
-        collapseBtn.setAttribute("aria-pressed", String(on));
-        collapseBtn.title = on ? "Keep the sidebar open" : "Shrink the sidebar to icons";
-        collapseBtn.setAttribute("aria-label", on ? "Keep the sidebar open" : "Shrink the sidebar");
-        collapseBtn.querySelector("i").className = `fa-solid ${on ? "fa-angles-right" : "fa-angles-left"}`;
+        if (toggleBtn) {
+            toggleBtn.setAttribute("aria-expanded", String(!on));
+            toggleBtn.setAttribute("aria-pressed", String(!on));
+            toggleBtn.title = on ? "Expand guide" : "Collapse guide";
+            toggleBtn.setAttribute("aria-label", on ? "Expand guide" : "Collapse guide");
+        }
     };
+    // Default to collapsed (rail mode) like YouTube
     setCollapsed(storage.get(SIDE_KEY) !== "0");
-    collapseBtn?.addEventListener("click", () => {
-        const on = !home.classList.contains("side-collapsed");
-        storage.set(SIDE_KEY, on ? "1" : "0");
-        setCollapsed(on);
-        // (shrunk: it folds back straight away, not only once the pointer leaves)
-        collapseBtn.blur();
+
+    toggleBtn?.addEventListener("click", () => {
+        const isCollapsed = home.classList.contains("side-collapsed");
+        const nextCollapsed = !isCollapsed;
+        storage.set(SIDE_KEY, nextCollapsed ? "1" : "0");
+        setCollapsed(nextCollapsed);
+        toggleBtn.blur();
     });
-    expandHoverBtn?.addEventListener("click", () => {
-        storage.set(SIDE_KEY, "0");
-        setCollapsed(false);
-        expandHoverBtn.blur();
+    sideLinks.forEach(link => {
+        if (link.dataset.view) {
+            link.addEventListener("click", () => showView(link.dataset.view));
+        }
     });
-    sideLinks.forEach(link => link.addEventListener("click", () => showView(link.dataset.view)));
     const dashboardLink = sideLinks.find(link => link.dataset.view === "dashboard");
     if (dashboardLink) dashboardLink.hidden = true;
-    home.querySelectorAll(".header-search").forEach(button => button.addEventListener("click", () => window.CineLauncher?.open()));
-    home.querySelector(".mobile-search-link")?.addEventListener("click", () => window.CineLauncher?.open());
+    const openSearch = mode => {
+        const kind = mode === "music" ? "music" : "video";
+        const launcher = window.CineLauncher?.open || together?.openSearch;
+        if (typeof launcher === "function") launcher("", "", false, kind);
+        else {
+            // The dashboard form is an independent fallback from the player launcher.
+            showView("dashboard");
+            home.querySelector("#dashboard .yt-search-input")?.focus({ preventScroll: true });
+        }
+        if (kind === "music") {
+            const input = document.querySelector(".cmd-input, .yt-search-input, .cmd-palette input");
+            if (input) input.placeholder = "Search YouTube Music or paste song link...";
+        }
+    };
+    home.querySelectorAll(".header-search").forEach(button => button.addEventListener("click", () => {
+        const mode = button.dataset.mode;
+        openSearch(mode);
+    }));
+    home.querySelector(".mobile-search-link")?.addEventListener("click", () => openSearch());
     // The lobby launcher uses the same join dialog and validation as every other room entry.
     // Fill it before room.js handles the button, so pasted invite links keep their code/password.
     home.querySelector(".room-launcher-join")?.addEventListener("submit", e => {
         e.preventDefault();
         const value = home.querySelector(".room-launcher-code")?.value.trim() || "";
         if (!value) return home.querySelector(".room-launcher-code")?.focus();
-        const joinForm = document.querySelector('#room-overlay [data-view="join"]');
-        const code = joinForm?.querySelector('[name="code"]');
-        const password = joinForm?.querySelector('[name="password"]');
         let roomCode = value;
         let roomPassword = "";
         try {
@@ -185,10 +201,11 @@
             roomCode = params.get("join") || value;
             roomPassword = params.get("pw") || "";
         } catch (ignore) {}
-        if (code) code.value = roomCode;
-        if (password && roomPassword) password.value = roomPassword;
-        // The existing room.js document listener receives this submit button click next.
-        (e.submitter || e.currentTarget.querySelector(".room-join-open"))?.click();
+        if (window.CineRoom?.openJoin) {
+            window.CineRoom.openJoin({ code: roomCode, password: roomPassword });
+        } else if (together?.openJoin) {
+            together.openJoin({ code: roomCode, password: roomPassword });
+        }
     });
     home.addEventListener("click", e => {
         const go = e.target.closest("[data-go]");
@@ -804,12 +821,8 @@
 
     // The player's "Select a movie" box can search YouTube too: the player's own search (script.js)
     const uploadScroll = uploadOverlay.querySelector(".box-scroll");
-    const toSearch = el("button", "secondary-btn upload-yt");
-    toSearch.type = "button";
-    toSearch.title = "Search YouTube and play a video or playlist here (Ctrl+K)";
-    toSearch.append(el("i", "fa-brands fa-youtube"), " YouTube");
-    uploadScroll.querySelector("#browse-btn").after(toSearch);
-    toSearch.addEventListener("click", () => {
+    const existingEmptyYt = uploadScroll?.querySelector("#empty-youtube-btn");
+    const handleYtClick = () => {
         if (together.openSearch) return together.openSearch();
         if (together.active()) return together.openPanel && together.openPanel();
         if (location.hash === "#watch") history.back();
@@ -819,7 +832,17 @@
             else dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
             searchInput.focus({ preventScroll: true });
         }, 100);
-    });
+    };
+    if (existingEmptyYt) {
+        existingEmptyYt.addEventListener("click", handleYtClick);
+    } else if (uploadScroll) {
+        const toSearch = el("button", "secondary-btn upload-yt");
+        toSearch.type = "button";
+        toSearch.title = "Search YouTube and play a video or playlist here (Ctrl+K)";
+        toSearch.append(el("i", "fa-brands fa-youtube"), " YouTube");
+        uploadScroll.querySelector("#browse-btn")?.after(toSearch);
+        toSearch.addEventListener("click", handleYtClick);
+    }
 
     // An installed app's "Search YouTube" shortcut opens /?search
     if (new URLSearchParams(location.search).has("search")) {

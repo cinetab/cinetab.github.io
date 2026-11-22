@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="1.8.4">
+  <meta name="version" content="1.9.19">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "1.8.4",
+      "softwareVersion": "1.9.19",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -83,7 +83,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.9.19">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -94,28 +94,44 @@
     <!-- Mica: soft colour glows behind frosted glass (style.css) -->
     <div class="home-backdrop" aria-hidden="true"><i class="glow g1"></i><i class="glow g2"></i><i class="glow g3"></i></div>
 
-    <!-- The sidebar: the home page's sections (a tab bar along the bottom on a phone; home.js) -->
-    <aside class="home-sidebar" aria-label="CineTab">
-      <div class="side-top">
-        <a class="brand side-brand" href="#top" title="CineTab — home">
-          <img src="logo.svg" alt="" width="34" height="34">
+    <!-- Header spanning across the top like YouTube -->
+    <header class="site-header home-topbar">
+      <div class="topbar-left">
+        <button type="button" class="side-toggle-btn" title="Guide" aria-label="Guide" aria-pressed="false">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <a class="brand topbar-brand" href="#top" title="CineTab — home">
+          <img src="logo.svg" alt="" width="30" height="30">
           <span>Cine<b>Tab</b></span>
         </a>
-        <button type="button" class="side-expand-hover" title="Expand sidebar" aria-label="Expand sidebar"><i class="fa-solid fa-angles-right"></i></button>
-        <button type="button" class="side-collapse" title="Shrink the sidebar to icons" aria-label="Shrink the sidebar" aria-pressed="false"><i class="fa-solid fa-angles-left"></i></button>
       </div>
+      <div class="header-actions">
+        <button class="header-search" type="button" title="Search YouTube and open the launcher" aria-label="Search YouTube"><i class="fa-solid fa-magnifying-glass"></i><span>Search YouTube</span><kbd>/</kbd></button>
+        <button class="btn btn-ghost btn-sm install-app" hidden title="Install CineTab as an app on this device" aria-label="Install CineTab as an app"><i class="fa-solid fa-download"></i> <span class="label-long">Install app</span></button>
+        <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create</span></button>
+        <button class="btn btn-ghost btn-sm room-join-open header-join" title="Join a friend's room with its code and password" aria-label="Join a room"><i class="fa-solid fa-right-to-bracket"></i> <span class="label-long">Join a room</span><span class="label-short">Join</span></button>
+        <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer" aria-label="Open a movie"><i class="fa-solid fa-play"></i> <span class="label-long">Open a movie</span><span class="label-short">Open movie</span><span class="label-tiny">Open</span></button>
+      </div>
+    </header>
+
+    <!-- The sidebar: the home page's sections (a tab bar along the bottom on a phone; home.js) -->
+    <aside class="home-sidebar" aria-label="CineTab">
       <nav class="side-nav" aria-label="Sections">
         <button type="button" class="side-link" data-view="home" title="Home"><i class="fa-solid fa-house"></i><span>Home</span></button>
         <button type="button" class="side-link" data-view="rooms" title="Rooms and lobby"><i class="fa-solid fa-users"></i><span>Lobby</span><i class="side-live" hidden title="You're in a room"></i></button>
         <button type="button" class="mobile-search-link" title="Search YouTube" aria-label="Search YouTube"><span class="mobile-search-icon"><i class="fa-solid fa-magnifying-glass"></i></span><span>Search</span></button>
         <button type="button" class="side-link" data-view="favorites" title="Your video library"><i class="fa-solid fa-film"></i><span>Library</span></button>
         <button type="button" class="side-link" data-view="help" title="Guide"><i class="fa-solid fa-compass"></i><span>Guide</span></button>
+        <div class="side-nav-divider" aria-hidden="true"></div>
+        <button type="button" class="side-link side-room-btn room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i><span class="label-long">Create room</span><span class="label-short">Create</span></button>
+        <button type="button" class="side-link side-room-btn room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i><span class="label-long">Join room</span><span class="label-short">Join</span></button>
       </nav>
-      <div class="side-section">
-        <p class="side-label">Start</p>
-        <button class="side-action choose-video" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i><span>Open a movie</span></button>
-        <button class="side-action room-create-open" title="Start a private room and invite friends"><i class="fa-solid fa-plus"></i><span>Create a room</span></button>
-        <button class="side-action room-join-open" title="Join a friend's room with its code and password"><i class="fa-solid fa-right-to-bracket"></i><span>Join a room</span></button>
+      <div class="side-pinned-section">
+        <div class="side-pinned-header">
+          <p class="side-label"><i class="fa-solid fa-thumbtack"></i> Pinned Rooms</p>
+        </div>
+        <ul class="side-pinned-list" aria-label="Pinned rooms"></ul>
+        <p class="side-pinned-empty" hidden>Pin rooms to quickly return here</p>
       </div>
       <div class="side-foot">
         <p class="side-privacy"><i class="fa-solid fa-shield-halved"></i> Peer-to-peer &middot; no file hosting &middot; no account</p>
@@ -123,21 +139,6 @@
     </aside>
 
     <main class="home-main">
-      <header class="site-header home-topbar">
-        <a class="brand topbar-brand" href="#top" title="CineTab — home">
-          <img src="logo.svg" alt="" width="30" height="30">
-          <span>Cine<b>Tab</b></span>
-        </a>
-        <p class="topbar-title" aria-live="polite">Home</p>
-        <div class="header-actions">
-          <button class="header-search" type="button" title="Search YouTube and open the launcher" aria-label="Search YouTube"><i class="fa-solid fa-magnifying-glass"></i><span>Search YouTube</span><kbd>/</kbd></button>
-          <button class="btn btn-ghost btn-sm install-app" hidden title="Install CineTab as an app on this device" aria-label="Install CineTab as an app"><i class="fa-solid fa-download"></i> <span class="label-long">Install app</span></button>
-          <button class="btn btn-ghost btn-sm room-create-open" title="Start a private room and invite friends" aria-label="Create a room"><i class="fa-solid fa-plus"></i> <span class="label-long">Create a room</span><span class="label-short">Create</span></button>
-          <button class="btn btn-ghost btn-sm room-join-open header-join" title="Join a friend's room with its code and password" aria-label="Join a room"><i class="fa-solid fa-right-to-bracket"></i> <span class="label-long">Join a room</span><span class="label-short">Join</span></button>
-          <button class="btn btn-primary btn-sm choose-video" title="Pick a video or audio file from your computer" aria-label="Open a movie"><i class="fa-solid fa-play"></i> <span class="label-long">Open a movie</span><span class="label-short">Open movie</span><span class="label-tiny">Open</span></button>
-        </div>
-
-      </header>
 
       <!-- ============ HOME ============ -->
       <section class="home-view" data-view="home" aria-label="Home">
@@ -155,9 +156,12 @@
           </form>
         </div>
         <div class="room-source-pills" aria-label="Start a room with a source">
-          <span>Quick start</span>
-          <button type="button" class="header-search room-source-pill" title="Find a YouTube video to watch together"><i class="fa-brands fa-youtube"></i> YouTube URL</button>
-          <button type="button" class="choose-video room-source-pill" title="Choose a local video file to share in a room"><i class="fa-solid fa-file-video"></i> Local Video File</button>
+          <span class="room-source-label">Quick start:</span>
+          <div class="room-source-grid">
+            <button type="button" class="choose-video room-source-pill" title="Pick a video or audio file from your computer"><i class="fa-solid fa-folder-open"></i><span>Local file</span></button>
+            <button type="button" class="header-search room-source-pill" title="Find a YouTube video to watch together"><i class="fa-brands fa-youtube"></i><span>YouTube URL</span></button>
+            <button type="button" class="header-search room-source-pill music-source-pill" data-mode="music" title="Listen to YouTube Music together"><i class="fa-solid fa-music"></i><span>YouTube Music URL</span></button>
+          </div>
         </div>
       </section>
 
@@ -339,8 +343,8 @@
           <div class="step-card">
             <div class="step-num">1</div>
             <div class="step-icon"><i class="fa-solid fa-folder-open"></i></div>
-            <h2>Pick your video</h2>
-            <p>Drop any movie from your computer or search YouTube. Formats like MKV, AVI or DTS convert automatically in your browser.</p>
+            <h2>Pick your media</h2>
+            <p>Drop any video or audio file from your device, or paste YouTube video &amp; YouTube Music links. Audio tracks automatically activate low-bandwidth Audio Mode.</p>
           </div>
           <div class="step-card">
             <div class="step-num">2</div>
@@ -459,8 +463,12 @@
               <p>Yes. <a href="cinetab-offline.html" download="CineTab-Player.html" title="Download the CineTab player as a single HTML file">Download the player as a single HTML file</a>, save it anywhere and double-click it to open it in your browser. It's just the player, without this home page, and everything it needs (icons, fonts, scripts) is inside that one file, so it works with no internet connection. Two differences from the website: the converter for formats like AVI or DTS sound needs internet the first time it's used (to download ffmpeg), and because browsers don't allow file storage for pages opened from disk, converted copies aren't saved between visits and very large movies may not fit in memory while converting.</p>
             </details>
             <details class="faq-item">
-              <summary>Can I watch YouTube videos together?</summary>
-              <p>Yes. Search YouTube from the <a href="#dashboard">dashboard</a> (or paste a video or playlist link) and it plays right here with CineTab's controls. Click <b>Watch together</b> in the player to create a room: it carries on with the same video for everyone, each person watching on YouTube's own player, in sync. In the player, the search button at the top right (or <b>Ctrl+K</b>) searches YouTube too, and in a room plays or queues for everyone. Search results come from YouTube through public Piped servers; if they're busy, search on YouTube and paste the link instead.</p>
+              <summary>Can I play YouTube Music and YouTube videos together?</summary>
+              <p>Yes! Both <b>YouTube videos</b> and <b>YouTube Music links</b> (including single tracks, albums, and full playlists) are fully supported. Simply paste the link in the search bar or enter it in the Quick Start bar. Everyone in your room stays in sync seamlessly.</p>
+            </details>
+            <details class="faq-item">
+              <summary>What is Audio Mode?</summary>
+              <p>When playing music, audio files, or listening to podcasts with friends, CineTab automatically activates <b>Audio Mode</b> with an ambient audio visualizer canvas. Audio Mode is lightweight, saves significant battery and bandwidth, and lets your group enjoy shared music sessions in crystal-clear sync without heavy video decoding.</p>
             </details>
             <details class="faq-item">
               <summary>Can I install CineTab as an app on my phone?</summary>
@@ -494,7 +502,7 @@
         </a>
         <p>Made for movie nights. Your files stay on your device.</p>
         <p class="footer-meta">
-          <span class="app-version" title="The version of CineTab you're using">v1.8.4</span>
+          <span class="app-version" title="The version of CineTab you're using">v1.9.19</span>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -548,13 +556,14 @@
     <!-- Top Title Bar (YouTube Style) -->
     <div class="top-bar">
       <div class="video-title-container">
+        <button type="button" class="solo-miniplayer-toggle" title="Play in miniplayer" aria-label="Play in miniplayer"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
         <button class="player-home" title="Back to home"><img src="logo.svg" alt="CineTab home" width="26" height="26"></button>
         <h1 class="video-title" title="No video loaded">No Video Loaded</h1>
         <!-- Phones held upright, in a room: the room's name here, the video's title below it -->
         <span class="top-room-name" hidden></span>
       </div>
       <!-- A YouTube video watched on your own: when it ends, its YouTube Mix plays next (youtube.js) -->
-      <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay"><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
+      <button class="yt-autoplay" role="switch" aria-checked="true" aria-label="Autoplay" hidden><span class="yt-autoplay-track"><i class="fa-solid fa-play"></i></span></button>
       <!-- Search and commands: YouTube, a pasted link, or anything the player does (script.js) -->
       <!-- Saved: the YouTube video on (or its whole playlist) kept on the home page's Saved (script.js) -->
       <span class="player-save-wrap" hidden>
@@ -582,6 +591,15 @@
       <span></span>
     </div>
 
+    <!-- Center Playback Controller (all views: laptop, mobile, fullscreen) -->
+    <div class="player-center-controls options center">
+      <button class="prev-track" title="Previous video in the queue (Shift + P)" aria-label="Previous video in the queue" hidden><i class="fa-solid fa-backward-step"></i></button>
+      <button class="skip-backward" title="Back 5 seconds (Left arrow)"><i class="fas fa-backward"></i></button>
+      <button class="play-pause" title="Play (Space / K)"><i class="fas fa-play"></i></button>
+      <button class="skip-forward" title="Forward 5 seconds (Right arrow)"><i class="fas fa-forward"></i></button>
+      <button class="next-track" title="Next video in the queue (Shift + N)" aria-label="Next video in the queue" hidden><i class="fa-solid fa-forward-step"></i></button>
+    </div>
+
     <!-- The player's notices: a small card each - an icon, a few words, and what can be done.
          The empty player's (pick a video) sits in the middle; the rest drop in at the top like a
          notification, the player still usable behind them -->
@@ -593,6 +611,7 @@
           <div class="notice-text"><b>Pick a video</b><small>Or drop a video here</small></div>
           <div class="notice-actions">
             <button id="browse-btn" title="Pick a video or audio file from your computer - it plays here and is never uploaded. Drop an .srt / .vtt file anytime for subtitles"><i class="fa-solid fa-folder-open"></i> Browse</button>
+            <button type="button" id="empty-youtube-btn" title="Search YouTube or paste a video link"><i class="fa-brands fa-youtube"></i> YouTube</button>
           </div>
         </div>
       </div>
@@ -710,79 +729,6 @@
     </div>
 
     <!-- ============ ROOM: PLAYER ============ -->
-    <!-- Watch-together room dialogs (room.js) -->
-    <div class="room-overlay hidden" id="room-overlay" data-dialog>
-      <div class="upload-box room-box">
-        <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
-        <div class="box-scroll">
-
-          <form class="room-view" data-view="create" hidden>
-            <i class="fa-solid fa-door-open"></i>
-            <h2 class="room-create-title">Create a room</h2>
-            <p class="room-create-text">Friends join with a link, a QR code, or the room code and password. They can watch the video you play here, or play their own copy in sync, and chat with everyone.</p>
-            <div class="room-field"><span>Your name and avatar</span>
-              <span class="room-input-row">
-                <button type="button" class="room-avatar-btn" title="Choose an avatar"><span class="room-avatar"></span></button>
-                <input name="name" maxlength="30" autocomplete="nickname" placeholder="Shown to everyone in the room" aria-label="Your name" required>
-              </span>
-            </div>
-            <div class="room-avatar-grid" hidden></div>
-            <label class="room-field"><span>Room name <small>(optional)</small></span><input name="title" maxlength="40" autocomplete="off" placeholder="e.g. Friday movie night"></label>
-            <label class="room-field"><span>Room password</span>
-              <span class="room-input-row">
-                <input name="password" minlength="4" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-                <button type="button" class="room-input-btn room-new-password" title="Make a new random password"><i class="fa-solid fa-rotate"></i></button>
-              </span>
-            </label>
-            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> <span>Hide my IP address from guests <small>Sends everything through a relay server.</small></span></label>
-            <label class="room-check room-localnet" title="Campus, office or hostel Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off."><input type="checkbox" name="localnet"> <span>Friends are on the same Wi-Fi <small>Campus, office or hostel Wi-Fi often hides devices from each other: this helps theirs find mine. Your browser asks to use the microphone; it stays off.</small></span></label>
-            <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to open it again (saves the code and password in this browser).</small></span></label>
-            <div class="convert-actions">
-              <button type="submit"><i class="fa-solid fa-door-open"></i> Create room</button>
-              <button type="button" class="secondary-btn room-cancel">Cancel</button>
-            </div>
-            <p class="privacy-note"><i class="fa-solid fa-lock"></i> Peer-to-peer and encrypted. Nothing is uploaded, and messages aren't stored.</p>
-            <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
-          </form>
-
-          <form class="room-view" data-view="join" hidden>
-            <i class="fa-solid fa-right-to-bracket"></i>
-            <h2>Join a room</h2>
-            <p>Enter the room code and password from the person hosting it, or open the invite link they sent.</p>
-            <label class="room-field"><span>Room code</span><input name="code" maxlength="15" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC-DEF-GHJ" required></label>
-            <label class="room-field"><span>Password</span><input name="password" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
-            <div class="room-field"><span>Your name and avatar</span>
-              <span class="room-input-row">
-                <button type="button" class="room-avatar-btn" title="Choose an avatar"><span class="room-avatar"></span></button>
-                <input name="name" maxlength="30" autocomplete="nickname" placeholder="Shown to everyone in the room" aria-label="Your name" required>
-              </span>
-            </div>
-            <div class="room-avatar-grid" hidden></div>
-            <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> <span>Hide my IP address from the host <small>Sends everything through a relay server.</small></span></label>
-            <label class="room-check room-localnet" title="Campus, office or hostel Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off."><input type="checkbox" name="localnet"> <span>I'm on the same Wi-Fi as the host <small>Campus, office or hostel Wi-Fi often hides devices from each other: this helps ours find each other. Your browser asks to use the microphone; it stays off.</small></span></label>
-            <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to join next time (saves the code and password in this browser).</small></span></label>
-            <p class="room-error" hidden></p>
-            <div class="convert-actions">
-              <button type="submit"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
-              <button type="button" class="secondary-btn room-cancel">Cancel</button>
-            </div>
-            <p class="privacy-note"><i class="fa-solid fa-lock"></i> You connect directly to the host's browser, encrypted. The host can see your IP address, as on any video call.</p>
-            <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
-          </form>
-
-          <div class="room-view" data-view="status" hidden>
-            <i class="room-status-icon fa-solid fa-satellite-dish"></i>
-            <h2 class="room-status-title"></h2>
-            <p class="room-status-text"></p>
-            <ul class="room-status-list" hidden></ul>
-            <div class="convert-progress indeterminate room-status-progress"><div class="convert-progress-bar"></div></div>
-            <div class="convert-actions room-status-actions"></div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
     <!-- Subtitles drawn over the host's stream, and chat pop-ups -->
     <div class="room-cue" hidden></div>
     <div class="room-stream-wait" hidden><i class="fa-solid fa-circle-notch fa-spin"></i> <span></span></div>
@@ -799,14 +745,20 @@
 
     <!-- Controls Wrapper -->
     <div class="wrapper">
-      <div class="video-timeline">
-        <div class="progress-area">
-          <!-- Live Hover Preview Thumbnail Box -->
-          <div class="thumbnail-preview">
-            <video id="preview-video" muted preload="auto" playsinline webkit-playsinline></video>
-            <span class="preview-time">00:00</span>
+      <div class="timeline-container">
+        <div class="timeline-times">
+          <span class="current-time" role="button" tabindex="0" title="Click to show remaining time">00:00</span>
+          <span class="video-duration">00:00</span>
+        </div>
+        <div class="video-timeline">
+          <div class="progress-area">
+            <!-- Live Hover Preview Thumbnail Box -->
+            <div class="thumbnail-preview">
+              <video id="preview-video" muted preload="auto" playsinline webkit-playsinline></video>
+              <span class="preview-time">00:00</span>
+            </div>
+            <div class="progress-bar"></div>
           </div>
-          <div class="progress-bar"></div>
         </div>
       </div>
       <ul class="video-controls">
@@ -816,32 +768,23 @@
             <button class="volume" title="Mute (M)"><i class="fa-solid fa-volume-high"></i></button>
             <input type="range" class="volume-slider" min="0" max="1" step="any" value="1" title="Volume (Up / Down arrows)" aria-label="Volume">
           </div>
-          <div class="video-timer">
-            <p class="current-time">00:00</p>
-            <p class="separator"> / </p>
-            <p class="video-duration">00:00</p>
-          </div>
         </li>
 
-        <!-- Play/Pause in Center -->
-        <li class="options center">
-          <!-- The previous / next video in a room's YouTube queue (room.js shows them) -->
-          <button class="prev-track" title="Previous video in the queue (Shift + P)" aria-label="Previous video in the queue" hidden><i class="fa-solid fa-backward-step"></i></button>
-          <button class="skip-backward" title="Back 5 seconds (Left arrow)"><i class="fas fa-backward"></i></button>
-          <button class="play-pause" title="Play (Space / K)"><i class="fas fa-play"></i></button>
-          <button type="button" class="player-stop-btn" id="player-stop-btn" title="Stop video" aria-label="Stop video" hidden><i class="fa-solid fa-stop"></i></button>
-          <button class="skip-forward" title="Forward 5 seconds (Right arrow)"><i class="fas fa-forward"></i></button>
-          <button class="next-track" title="Next video in the queue (Shift + N)" aria-label="Next video in the queue" hidden><i class="fa-solid fa-forward-step"></i></button>
-        </li>
+        <li class="options center-dock-spacer" aria-hidden="true"></li>
 
         <li class="options right">
           <!-- Shuffle: while a YouTube playlist (or the queue) plays (room.js) -->
           <button class="shuffle-btn" title="Shuffle" aria-label="Shuffle" aria-pressed="false" hidden><i class="fa-solid fa-shuffle"></i></button>
-          <button class="open-file" title="Open another video or audio file"><i class="fa-solid fa-folder-open"></i></button>
+          <button class="open-file" title="Open another video or audio file" hidden><i class="fa-solid fa-folder-open"></i></button>
           <!-- Subtitles and speed are in More (C and Shift + < / > still work); these stay for the
                keyboard and the phone's settings sheet, out of sight -->
           <button class="subtitles" title="Load subtitles from an .srt / .vtt file (C)" hidden><i class="fa-regular fa-closed-captioning"></i></button>
           <button class="playback-speed" title="Playback speed (Shift + &lt; / &gt;)" hidden><i class="fa-solid fa-gauge-high"></i></button>
+
+          <button type="button" class="audio-mode-toggle" title="Switch between video and audio mode" aria-label="Switch to audio mode" aria-pressed="false">
+            <span class="audio-mode-choice video-choice"><i class="fa-solid fa-video"></i><b>Video</b></span>
+            <span class="audio-mode-choice audio-choice"><i class="fa-solid fa-headphones"></i><b>Audio</b></span>
+          </button>
 
           <!-- More: speed, subtitles, the picture's shape, ambient mode, a volume boost, shortcuts -->
           <div class="popup-menu-wrapper more-content">
@@ -849,11 +792,19 @@
             <div class="popup-menu more-options">
               <div class="more-menu-main" data-more-main>
                 <div class="more-menu-heading"><span>Player settings</span><i class="fa-solid fa-sliders" aria-hidden="true"></i></div>
+                <button type="button" class="more-menu-row more-toggle-row" data-more-toggle="ambient" role="switch" aria-checked="true"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Ambient mode</span><span class="more-switch"><span class="more-switch-thumb"></span></span></button>
+                <button type="button" class="more-menu-row more-toggle-row" data-more-toggle="subtitles" role="switch" aria-checked="false"><i class="fa-regular fa-closed-captioning"></i><span>Subtitles</span><span class="more-switch"><span class="more-switch-thumb"></span></span></button>
+                <button type="button" class="more-menu-row more-toggle-row" data-more-toggle="autoplay" role="switch" aria-checked="true"><i class="fa-solid fa-forward-step"></i><span>Autoplay</span><span class="more-switch"><span class="more-switch-thumb"></span></span></button>
+                <button type="button" class="more-menu-row more-toggle-row" data-more-toggle="shuffle" role="switch" aria-checked="false"><i class="fa-solid fa-shuffle"></i><span>Shuffle</span><span class="more-switch"><span class="more-switch-thumb"></span></span></button>
+                <div class="more-menu-divider"></div>
                 <button type="button" class="more-menu-row" data-more-open="speed"><i class="fa-solid fa-gauge-high"></i><span>Playback speed</span><span class="more-menu-value" data-more-value="speed">Normal</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
-                <button type="button" class="more-menu-row" data-more-open="subtitles"><i class="fa-regular fa-closed-captioning"></i><span>Subtitles</span><span class="more-menu-value" data-more-value="subtitles">Off</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
                 <button type="button" class="more-menu-row" data-more-open="picture"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>Picture</span><span class="more-menu-value" data-more-value="picture">Fit</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
-                <button type="button" class="more-menu-row" data-more-open="ambient"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Ambient mode</span><span class="more-menu-value" data-more-value="ambient">On</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
                 <button type="button" class="more-menu-row" data-more-open="boost"><i class="fa-solid fa-volume-high"></i><span>Volume boost</span><span class="more-menu-value" data-more-value="boost">Off</span><i class="fa-solid fa-chevron-right more-chevron"></i></button>
+                <div class="more-menu-divider"></div>
+                <button type="button" class="more-menu-row more-action-row more-open-file" title="Open another video or audio file"><i class="fa-solid fa-folder-open"></i><span>Open local file</span></button>
+                <button type="button" class="more-menu-row more-action-row" data-more-action="audio"><i class="fa-solid fa-headphones"></i><span>Audio mode</span><b data-more-action-value="audio">Video</b></button>
+                <button type="button" class="more-menu-row more-action-row" data-more-action="pip"><i class="fa-solid fa-clone"></i><span>Picture in picture</span></button>
+                <button type="button" class="more-menu-row more-action-row more-stop-video" id="player-stop-btn" title="Stop video" hidden><i class="fa-solid fa-stop"></i><span>Stop video</span></button>
                 <button type="button" class="more-row shortcuts-btn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i><span>Keyboard shortcuts</span><kbd>?</kbd></button>
               </div>
               <section class="more-subview" data-more-view="speed" hidden>
@@ -889,9 +840,7 @@
               </section>
             </div>
           </div>
-          <button class="pic-in-pic" title="Picture in Picture (P)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
-          <button type="button" class="audio-mode-toggle" title="Audio mode" aria-label="Switch to audio mode" aria-pressed="false"><i class="fa-solid fa-wave-square"></i></button>
-          <button type="button" class="solo-miniplayer-toggle" title="Play in miniplayer" aria-label="Play in miniplayer"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+          <button class="pic-in-pic" title="Picture in Picture (P)" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11.5" y="11" width="7" height="5.5" rx="1.2" fill="currentColor"/></svg></button>
           <!-- Phones and tablets: everything above in one settings sheet -->
           <button class="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="dialog"><i class="fa-solid fa-gear"></i></button>
           <button class="fullscreen" title="Fullscreen (F)"><i class="fa-solid fa-expand"></i></button>
@@ -1134,18 +1083,91 @@
   <!-- ============ /ROOM: PANEL ============ -->
   </div>
 
+  <!-- ============ ROOM: GLOBAL OVERLAYS (accessible anywhere) ============ -->
+  <div class="room-overlay hidden" id="room-overlay" data-dialog>
+    <div class="upload-box room-box">
+      <button type="button" class="box-close" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
+      <div class="box-scroll">
+
+        <form class="room-view" data-view="create" hidden>
+          <i class="fa-solid fa-door-open"></i>
+          <h2 class="room-create-title">Create a room</h2>
+          <p class="room-create-text">Friends join with a link, a QR code, or the room code and password. They can watch the video you play here, or play their own copy in sync, and chat with everyone.</p>
+          <div class="room-field"><span>Your name and avatar</span>
+            <span class="room-input-row">
+              <button type="button" class="room-avatar-btn" title="Choose an avatar"><span class="room-avatar"></span></button>
+              <input name="name" maxlength="30" autocomplete="nickname" placeholder="Shown to everyone in the room" aria-label="Your name" required>
+            </span>
+          </div>
+          <div class="room-avatar-grid" hidden></div>
+          <label class="room-field"><span>Room name <small>(optional)</small></span><input name="title" maxlength="40" autocomplete="off" placeholder="e.g. Friday movie night"></label>
+          <label class="room-field"><span>Room password</span>
+            <span class="room-input-row">
+              <input name="password" minlength="4" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+              <button type="button" class="room-input-btn room-new-password" title="Make a new random password"><i class="fa-solid fa-rotate"></i></button>
+            </span>
+          </label>
+          <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> <span>Hide my IP address from guests <small>Sends everything through a relay server.</small></span></label>
+          <label class="room-check room-localnet" title="Campus, office or hostel Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off."><input type="checkbox" name="localnet"> <span>Friends are on the same Wi-Fi <small>Campus, office or hostel Wi-Fi often hides devices from each other: this helps theirs find mine. Your browser asks to use the microphone; it stays off.</small></span></label>
+          <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to open it again (saves the code and password in this browser).</small></span></label>
+          <div class="convert-actions">
+            <button type="submit"><i class="fa-solid fa-door-open"></i> Create room</button>
+            <button type="button" class="secondary-btn room-cancel">Cancel</button>
+          </div>
+          <p class="privacy-note"><i class="fa-solid fa-lock"></i> Peer-to-peer and encrypted. Nothing is uploaded, and messages aren't stored.</p>
+          <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
+        </form>
+
+        <form class="room-view" data-view="join" hidden>
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <h2>Join a room</h2>
+          <p>Enter the room code and password from the person hosting it, or open the invite link they sent.</p>
+          <label class="room-field"><span>Room code</span><input name="code" maxlength="15" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC-DEF-GHJ" required></label>
+          <label class="room-field"><span>Password</span><input name="password" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+          <div class="room-field"><span>Your name and avatar</span>
+            <span class="room-input-row">
+              <button type="button" class="room-avatar-btn" title="Choose an avatar"><span class="room-avatar"></span></button>
+              <input name="name" maxlength="30" autocomplete="nickname" placeholder="Shown to everyone in the room" aria-label="Your name" required>
+            </span>
+          </div>
+          <div class="room-avatar-grid" hidden></div>
+          <label class="room-check room-relay" hidden><input type="checkbox" name="relay"> <span>Hide my IP address from the host <small>Sends everything through a relay server.</small></span></label>
+          <label class="room-check room-localnet" title="Campus, office or hostel Wi-Fi often hides devices from each other. Your browser asks to use the microphone; it stays off."><input type="checkbox" name="localnet"> <span>I'm on the same Wi-Fi as the host <small>Campus, office or hostel Wi-Fi often hides devices from each other: this helps ours find each other. Your browser asks to use the microphone; it stays off.</small></span></label>
+          <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to join next time (saves the code and password in this browser).</small></span></label>
+          <p class="room-error" hidden></p>
+          <div class="convert-actions">
+            <button type="submit"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
+            <button type="button" class="secondary-btn room-cancel">Cancel</button>
+          </div>
+          <p class="privacy-note"><i class="fa-solid fa-lock"></i> You connect directly to the host's browser, encrypted. The host can see your IP address, as on any video call.</p>
+          <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
+        </form>
+
+        <div class="room-view" data-view="status" hidden>
+          <i class="room-status-icon fa-solid fa-satellite-dish"></i>
+          <h2 class="room-status-title"></h2>
+          <p class="room-status-text"></p>
+          <ul class="room-status-list" hidden></ul>
+          <div class="convert-progress indeterminate room-status-progress"><div class="convert-progress-bar"></div></div>
+          <div class="convert-actions room-status-actions"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- Hidden File Inputs -->
   <input type="file" id="file-input" accept="video/*,audio/*,.mkv,.mka,.avi,.divx,.wmv,.wma,.asf,.flv,.f4v,.mov,.m4v,.ts,.m2ts,.mts,.mpg,.mpeg,.vob,.3gp,.ogv,.rm,.rmvb,.ac3,.dts,.aif,.aiff,.ape,.amr,.wv,.opus,.flac" hidden>
   <input type="file" id="subtitle-input" accept=".srt,.vtt" hidden>
 
-  <script src="tooltips.js"></script>
-  <script src="converter.js"></script>
-  <script src="script.js"></script>
-  <script src="history.js"></script>
-  <script src="youtube.js"></script>
+  <script src="tooltips.js?v=1.9.19"></script>
+  <script src="converter.js?v=1.9.19"></script>
+  <script src="script.js?v=1.9.19"></script>
+  <script src="history.js?v=1.9.19"></script>
+  <script src="youtube.js?v=1.9.19"></script>
   <script src="vendor/qrcode-generator.js"></script>
-  <script src="signaling.js"></script>
-  <script src="room.js"></script>
-  <script src="home.js"></script>
+  <script src="signaling.js?v=1.9.19"></script>
+  <script src="room.js?v=1.9.19"></script>
+  <script src="home.js?v=1.9.19"></script>
 </body>
 </html>

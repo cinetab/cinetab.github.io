@@ -115,7 +115,7 @@ const build = async () => {
         out = cutBlock(out, `<!-- ============ ROOM: ${part} ============ -->`, `<!-- ============ /ROOM: ${part} ============ -->`);
     }
     // So do YouTube, the dashboard's history and installing as an app (home.js)
-    for (const script of ["history.js", "youtube.js", "vendor/qrcode-generator.js", "signaling.js", "room.js", "home.js"]) swap(`  <script src="${script}"></script>\n`, "");
+    for (const script of ["history.js", "youtube.js", "vendor/qrcode-generator.js", "signaling.js", "room.js", "home.js"]) swap(`  <script src="${script}${script.includes("vendor/") ? "" : `?v=${version}`}"></script>\n`, "");
     swap(`<title>CineTab - Movie Night Together</title>`, `<title>CineTab Player</title>`);
     swap(`<body>`, `<body class="watching">`);
     swap(`<div class="player-page" hidden>`, `<div class="player-page">`);
@@ -136,16 +136,17 @@ const build = async () => {
         fontAwesome,
         playerStyles(styles)
     ].join("\n");
-    swap(`<link rel="stylesheet" href="style.css">`, `<style>\n${css}\n</style>`);
+    swap(`<link rel="stylesheet" href="style.css?v=${version}">`, `<style>\n${css}\n</style>`);
     swap(`<link rel="stylesheet" href="${FONT_AWESOME}/css/all.min.css">\n`, "");
 
-    swap(`<script src="tooltips.js"></script>`, `<script>\n${inlineScript(tooltips)}\n</script>`);
-    swap(`<script src="converter.js"></script>`, [
+    swap(`<script src="tooltips.js?v=${version}"></script>`, `<script>\n${inlineScript(tooltips)}\n</script>`);
+    swap(`<script src="converter.js?v=${version}"></script>`, [
         `<script type="text/plain" id="converter-worker-src">\n${inlineScript(worker)}\n</script>`,
         `<script>\nwindow.CINETAB_WORKER_URL = URL.createObjectURL(new Blob([document.getElementById("converter-worker-src").textContent], { type: "text/javascript" }));\n</script>`,
         `<script>\n${inlineScript(converter)}\n</script>`
     ].join("\n  "));
-    swap(`<script src="script.js"></script>`, `<script>\n${inlineScript(script)}\n</script>`);
+    swap(`<script src="script.js?v=${version}"></script>`, `<script>\n${inlineScript(script)}\n</script>`);
+    out = out.split('src="logo.svg"').join(`src="${logoURI}"`);
 
     swap(`<meta name="theme-color" content="#0f0f11">`, [
         `<meta name="theme-color" content="#0f0f11">`,

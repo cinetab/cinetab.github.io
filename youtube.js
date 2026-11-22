@@ -39,6 +39,9 @@
     const YT_HOST = "https://www.youtube-nocookie.com";
     const S = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
     const now = () => performance.now();
+    const isTouch = matchMedia("(pointer: coarse)").matches;
+    const mustTapYouTube = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+        (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
     // ---------- Links
 
@@ -52,6 +55,7 @@
         } catch (e) {
             return null;
         }
+        const isMusic = /music\.youtube\.com/i.test(url.hostname);
         const host = url.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, "");
         const parts = url.pathname.split("/").filter(Boolean);
         let id = null;
@@ -67,7 +71,7 @@
         let list = url.searchParams.get("list");
         list = list && YT_LIST.test(list) ? list : null;
         if (!id && !list) return null;
-        return { id, list, start: hms ? (+(hms[1] || 0)) * 3600 + (+(hms[2] || 0)) * 60 + (+(hms[3] || 0)) : 0 };
+        return { id, list, start: hms ? (+(hms[1] || 0)) * 3600 + (+(hms[2] || 0)) * 60 + (+(hms[3] || 0)) : 0, music: isMusic };
     };
 
     // ---------- YouTube's player API (shared with room.js)
@@ -126,10 +130,14 @@
     const text = (value, max = 200) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
     const searchYouTube = async (query, kind, token) => {
+        const isMusic = kind === "music";
+        const effectiveKind = isMusic ? "video" : kind;
+        const q = isMusic ? `${query} audio song` : query;
         const url = new URL("https://www.googleapis.com/youtube/v3/search");
         url.search = new URLSearchParams({
-            part: "snippet", maxResults: "20", q: query, type: kind, key: YOUTUBE_API_KEY,
-            ...(kind === "video" ? { videoEmbeddable: "true" } : {}),
+            part: "snippet", maxResults: "20", q, type: effectiveKind, key: YOUTUBE_API_KEY,
+            ...(effectiveKind === "video" ? { videoEmbeddable: "true" } : {}),
+            ...(isMusic ? { videoCategoryId: "10" } : {}),
             ...(token ? { pageToken: token } : {})
         });
         const data = await getJSON(url);
@@ -139,7 +147,8 @@
             const list = item.id && item.id.playlistId;
             const thumb = s.thumbnails && (s.thumbnails.medium || s.thumbnails.default);
             return {
-                kind: list ? "playlist" : "video",
+                kind: list ? "playlist" : isMusic ? "music" : "video",
+                music: isMusic,
                 id: id && YT_ID.test(id) ? id : null,
                 list: list && YT_LIST.test(list) ? list : null,
                 title: text(unescape(s.title)),
@@ -153,10 +162,23 @@
     };
 
     const searchPiped = async (base, query, kind, token) => {
-        const filter = kind === "playlist" ? "playlists" : "videos";
+        const isMusic = kind === "music";
+        const filter = kind === "playlist" ? "playlists" : isMusic ? "music_songs" : "videos";
         const params = new URLSearchParams({ q: query, filter });
         const url = token ? `${base}/nextpage/search?nextpage=${encodeURIComponent(token)}&${params}` : `${base}/search?${params}`;
-        const data = await getJSON(url);
+        let data;
+        try {
+            data = await getJSON(url);
+            if (!data || !Array.isArray(data.items) || !data.items.length) {
+                if (isMusic) throw new Error("No music songs found");
+            }
+        } catch (err) {
+            if (isMusic) {
+                const fallbackParams = new URLSearchParams({ q: `${query} audio`, filter: "videos" });
+                const fallbackUrl = token ? `${base}/nextpage/search?nextpage=${encodeURIComponent(token)}&${fallbackParams}` : `${base}/search?${fallbackParams}`;
+                data = await getJSON(fallbackUrl);
+            } else throw err;
+        }
         if (!data || !Array.isArray(data.items)) throw new Error("Not a search answer");
         const items = data.items.map(item => {
             let link;
@@ -169,7 +191,9 @@
             const list = link.searchParams.get("list");
             if (item.type === "stream" && id && YT_ID.test(id)) {
                 return {
-                    kind: "video", id, list: null,
+                    kind: isMusic ? "music" : "video",
+                    music: isMusic,
+                    id, list: null,
                     title: text(item.title), channel: text(item.uploaderName, 100), thumb: thumbOf(id),
                     duration: item.duration > 0 ? item.duration : null, live: item.duration === -1,
                     views: item.views > 0 ? item.views : null, ago: text(item.uploadedDate, 40), short: !!item.isShort,
@@ -182,6 +206,7 @@
                 const video = String(item.thumbnail || "").match(/\/vi\/([A-Za-z0-9_-]{11})\//);
                 return {
                     kind: "playlist", id: null, list,
+                    music: isMusic,
                     title: text(item.name), channel: text(item.uploaderName, 100),
                     thumb: video ? thumbOf(video[1]) : "", count: item.videos > 0 ? item.videos : null
                 };
@@ -484,7 +509,7 @@
             button.append(el("i", `fa-solid ${icon}`), el("span", null, label));
             return button;
         };
-        kinds.append(kindButton("video", "Videos", "fa-play"), kindButton("playlist", "Playlists", "fa-list"));
+        kinds.append(kindButton("video", "Videos", "fa-play"), kindButton("music", "Music", "fa-music"), kindButton("playlist", "Playlists", "fa-list"));
         const onYouTube = el("a", "yt-on-youtube");
         onYouTube.target = "_blank";
         onYouTube.rel = "noopener";
@@ -558,12 +583,13 @@
                 img.loading = "lazy";
                 img.referrerPolicy = "no-referrer";
                 thumb.append(img);
-            } else thumb.append(el("i", "fa-brands fa-youtube"));
+            } else thumb.append(el("i", item.kind === "music" ? "fa-solid fa-music" : "fa-brands fa-youtube"));
             const badge = item.kind === "playlist" ? (item.count ? `${item.count} videos` : "Playlist")
-                : item.live ? "LIVE" : shortTime(item.duration);
+                : item.live ? "LIVE" : item.kind === "music" ? (shortTime(item.duration) || "AUDIO") : shortTime(item.duration);
             if (badge) {
-                const b = el("span", `yt-badge${item.live ? " live" : ""}`);
+                const b = el("span", `yt-badge${item.live ? " live" : ""}${item.kind === "music" ? " music" : ""}`);
                 if (item.kind === "playlist") b.append(el("i", "fa-solid fa-list"), " ");
+                else if (item.kind === "music") b.append(el("i", "fa-solid fa-music"), " ");
                 b.append(badge);
                 thumb.append(b);
             }
@@ -608,8 +634,17 @@
             state.kind = kind;
             state.busy = true;
             renderKinds();
-            onYouTube.href = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${kind === "playlist" ? "&sp=EgIQAw%253D%253D" : ""}`;
-            onYouTube.title = `See “${query}” on YouTube (opens a new tab)`;
+            if (kind === "music") {
+                onYouTube.href = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
+                onYouTube.title = `See “${query}” on YouTube Music (opens a new tab)`;
+                const label = onYouTube.querySelector("span");
+                if (label) label.textContent = "YouTube Music";
+            } else {
+                onYouTube.href = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${kind === "playlist" ? "&sp=EgIQAw%253D%253D" : ""}`;
+                onYouTube.title = `See “${query}” on YouTube (opens a new tab)`;
+                const label = onYouTube.querySelector("span");
+                if (label) label.textContent = "YouTube";
+            }
             host.hidden = false;
             if (!page) {
                 state.items = [];
@@ -650,7 +685,7 @@
             const button = e.target.closest("[data-act]");
             const row = button && button.closest(".yt-result");
             const item = row && state.items[+row.dataset.i];
-            if (item) onPick(item.ref || refOf(item), button.dataset.act, item);
+            if (item) onPick(item.ref || { ...refOf(item), music: !!item.music || item.kind === "music" }, button.dataset.act, item);
         });
         // `empty`: the search box too (the Clear button, Esc)
         const clear = (empty = false) => {
@@ -713,7 +748,7 @@
             }, true);
         }
         renderKinds();
-        return { run, clear, showWatched, get open() { return !host.hidden; } };
+        return { run, clear, showWatched, get open() { return !host.hidden; }, get kind() { return state.kind; } };
     };
 
     // ---------- Playing on your own
@@ -1109,11 +1144,13 @@
     // Returns null, or why it couldn't.
     const play = (ref, meta = {}, opts = {}) => {
         if (!ref || (!ref.id && !ref.list)) return "That isn't a YouTube video or playlist.";
+        const isMusicTrack = !!(ref.music || meta.music || opts.music);
         if (together.active()) {
             if (!together.shareYouTube) return "You're in a room.";
             const refused = together.shareYouTube(ref);
             if (refused) return refused;
             showPlayer();
+            if (isMusicTrack) window.CineAudioMode?.enable();
             return null;
         }
         if (together.onSoloPlay && !opts.fromQueue) {
@@ -1133,10 +1170,10 @@
         const token = ++solo.token;
         solo.active = true;
         if (window.updatePlayerStop) window.updatePlayerStop();
-        solo.ref = { id: ref.id || null, list: ref.list || null, start: ref.start || 0 };
+        solo.ref = { id: ref.id || null, list: ref.list || null, start: ref.start || 0, music: isMusicTrack };
         // (a new playlist starts in its own order)
         solo.shuffle = false;
-        solo.meta = { ...meta };
+        solo.meta = { ...meta, ...(isMusicTrack ? { music: true } : {}) };
         solo.intent = true;
         solo.error = null;
         // YouTube's captions as the remembered setting says (off until turned on)
@@ -1157,6 +1194,9 @@
         // Straight away, while the click still counts (fullscreen on phones needs one)
         showPlayer();
         enterMobileImmersive();
+        if (isMusicTrack) {
+            window.CineAudioMode?.enable();
+        }
         // Remembered at once, with what's known; playing fills in the rest
         if (solo.ref.list) {
             CineHistory.put(`pl:${solo.ref.list}`, {
@@ -1381,6 +1421,8 @@
             const list = solo.ref.list && !solo.mix ? { kind: "playlist", list: solo.ref.list, id: (ids && ids[0]) || id, title: solo.meta.listTitle || "", channel: solo.meta.listChannel || "", count: ids ? ids.length : solo.meta.count || null } : null;
             return video || list ? { video, list } : null;
         },
+        details: id => details(id),
+        fullDescription: id => fullDescription(id),
         get autoplay() { return autoplay; },
         toggleAutoplay: () => setAutoplay(!autoplay),
         // A YouTube playlist on: YouTube's player shuffles what's left of it (or stops shuffling)

@@ -8,6 +8,8 @@
 (() => {
     const panel = document.querySelector(".room-panel");
     if (!panel) return; // The offline player has no rooms
+    const container = document.querySelector(".container");
+    const playerPage = document.querySelector(".player-page");
 
     // STUN servers tell each browser its public address. Some networks (certain mobile carriers,
     // strict office or school Wi-Fi) also need a TURN server, which relays the still-encrypted
@@ -45,6 +47,7 @@
     const NAME_KEY = "cinetab:room-name";
     const AVATAR_KEY = "cinetab:room-avatar";
     const ROOMS_KEY = "cinetab:rooms";
+    const PINNED_ROOMS_KEY = "cinetab:pinned-rooms";
     const APPROVED_KEY = "cinetab:room-approved";
     const HOST_SUBTITLES = "Host's subtitles";
     // YouTube video and playlist ids; the privacy-enhanced player (no cookies until a video plays)
@@ -61,6 +64,7 @@
 
     const supported = "RTCPeerConnection" in window && window.isSecureContext && !!(window.crypto && crypto.subtle);
     const canStream = typeof mainVideo.captureStream === "function";
+    const isTouch = matchMedia("(pointer: coarse)").matches;
 
     const overlay = document.querySelector("#room-overlay"),
     overlayClose = overlay.querySelector(".box-close"),
@@ -361,7 +365,7 @@
     // `onClose` runs for the × button and Esc
     const showView = (name, onClose = hideOverlay) => {
         const form = name === "create" ? createForm : name === "join" ? joinForm : null;
-        if (form && panelFormSlot && !room && !playerPage.hidden) {
+        if (form && panelFormSlot && !room && !playerPage.hidden && (!homePage || homePage.hidden) && (currentFile || (together.solo && together.solo.active))) {
             closeAction = onClose;
             return showPanelForm(form);
         }
@@ -376,7 +380,7 @@
         }
         roomNotice.classList.add("hidden");
         // On small screens a dialog gets the whole screen, unless the room's chat is open beside it
-        overlay.classList.toggle("room-modal", panel.hidden);
+        overlay.classList.toggle("room-modal", panel.hidden || (!homePage || !homePage.hidden));
         overlay.classList.remove("hidden");
     };
     const hideOverlay = () => {
@@ -654,7 +658,13 @@
         updateBadges();
     };
 
+    const isLaptopAudio = () => container.classList.contains("audio-mode-only") && matchMedia("(min-width: 901px)").matches;
+
     const setPanel = show => {
+        if (!show && isLaptopAudio()) return;
+        if (container.classList.contains("audio-mode-only") && matchMedia("(max-width: 600px)").matches) {
+            playerPage.classList.toggle("audio-player-collapsed", show);
+        }
         panel.hidden = !show;
         playerPage.classList.toggle("room-open", show);
         playerPage.classList.toggle("queue-open", show && activeTab === "queue");
@@ -743,6 +753,7 @@
 
     // `from`: where a swipe down left it (a transform and opacity), to close from there
     const showPanel = (show, from = null) => {
+        if (!show && isLaptopAudio()) return;
         const open = !panel.hidden && !panelClosing;
         const move = show !== open && !playerPage.hidden && !calmer();
         // Opened again while it was going: it stays
@@ -1064,7 +1075,14 @@
         panel.classList.remove("solo-queue");
         together.following = room.role === "guest";
         // (pressed again while it's closing: it opens again)
-        together.openPanel = () => showPanel(panel.hidden || !!panelClosing);
+        together.openPanel = () => {
+            if (isLaptopAudio()) return showPanel(true);
+            showPanel(panel.hidden || !!panelClosing);
+        };
+        together.hidePanel = () => {
+            if (isLaptopAudio()) return;
+            showPanel(false);
+        };
         shareHelpBtn.title = "Show or hide the room panel (R)";
         together.beforeHome = askBeforeHome;
         together.onTitle = room.role === "host" ? shareFile : () => room && room.presenting && sendPresent();
@@ -1087,11 +1105,23 @@
     };
 
     const closeRoomUI = () => {
-        together.openPanel = null;
+        together.openPanel = () => {
+            if (isLaptopAudio()) return showPanel(true);
+            showPanel(panel.hidden || !!panelClosing);
+        };
+        together.hidePanel = () => {
+            if (isLaptopAudio()) return;
+            showPanel(false);
+        };
         // Picture in picture with everyone: out of the room, it closes
         if (pipCall && window.documentPictureInPicture && window.documentPictureInPicture.window) window.documentPictureInPicture.window.close();
         toggleLeaveMenu(false);
-        showPanel(false);
+        if (!isLaptopAudio()) showPanel(false);
+        else {
+            panel.classList.add("solo-queue");
+            showTab("queue");
+            showPanel(true);
+        }
         panel.classList.add("solo-queue");
         chatUnread = 0;
         updateBadges();
@@ -1112,7 +1142,14 @@
     };
 
     tabButtons.forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
-    hidePanelBtn.addEventListener("click", () => showPanel(false));
+    hidePanelBtn.addEventListener("click", () => {
+        if (!isLaptopAudio()) {
+            if (container.classList.contains("audio-mode-only") && matchMedia("(max-width: 600px)").matches) {
+                playerPage.classList.remove("audio-player-collapsed");
+            }
+            showPanel(false);
+        }
+    });
 
     // ---------- The panel's width (with a mouse): its left edge, dragged to make it wider or
     // narrower, the video beside it following (arrow keys too, once it has focus; a double-click
@@ -2996,10 +3033,23 @@
     // its new place, a docked column slides in from its side (a strip up from below), a floating
     // window fades in where it lands
     let inPlaceDock = false;
+    const updateDockPanelMetrics = () => {
+        const panelOpen = !panel.hidden && playerPage.classList.contains("room-open");
+        const panelWidth = panelOpen ? panel.getBoundingClientRect().width : 0;
+        playerPage.style.setProperty("--room-panel-width", `${Math.round(panelWidth)}px`);
+        playerPage.style.setProperty("--right-side-gap", panelOpen ? "14px" : "0px");
+        if (panelOpen) {
+            const call = callWin.getBoundingClientRect();
+            playerPage.style.setProperty("--pinned-dock-left", `${Math.max(12, Math.round(call.left))}px`);
+        } else {
+            playerPage.style.setProperty("--pinned-dock-left", "12px");
+        }
+    };
     const placeDock = (motion = false) => {
         if (inPlaceDock) return;
         inPlaceDock = true;
         try {
+            updateDockPanelMetrics();
             const moving = motion === true && !calmer() && !callWin.hidden;
             const videoWas = moving ? container.getBoundingClientRect() : null;
             const unit = unitMode();
@@ -3072,6 +3122,10 @@
         placeDock();
         repositionUnitBar();
     });
+    if ("ResizeObserver" in window) {
+        const panelMetricsObserver = new ResizeObserver(updateDockPanelMetrics);
+        panelMetricsObserver.observe(panel);
+    }
     window.visualViewport?.addEventListener("resize", repositionUnitBar);
     window.visualViewport?.addEventListener("scroll", repositionUnitBar);
     // (the room's panel opening or closing, the title moving below the picture, fullscreen)
@@ -4467,7 +4521,7 @@
 
     // The YouTube video (and queue) the room was watching goes on from where it was
     const continueYouTube = kit => {
-        const items = kit.items.map(item => ({ k: item.k, id: item.id, title: item.title, by: { id: "", name: item.by } }));
+        const items = kit.items.map(item => ({ k: item.k, id: item.id, title: item.title, music: !!item.music, by: { id: "", name: item.by } }));
         if (!items.length) return;
         const index = Math.min(kit.index, items.length - 1);
         room.yt = { queue: items, index, id: null, title: "", by: items[index].by, duration: 0 };
@@ -5114,7 +5168,7 @@
         });
     }), () => null);
 
-    const queueItem = (id, by) => ({ k: Signaling.newId().slice(0, 10), id, title: "", by });
+    const queueItem = (id, by, music = false) => ({ k: Signaling.newId().slice(0, 10), id, title: "", music: !!music, by });
 
     // ---------- A playlist's videos in the queue: marked as one playlist (`pl`, its name `plt`), so
     // the queue shows them under the playlist's name, folded up (like YouTube's app)
@@ -5145,7 +5199,7 @@
         t: "queue",
         index: room.yt ? room.yt.index : 0,
         shuffled: !!(room.yt && room.yt.shuffled),
-        items: room.yt ? room.yt.queue.map(item => ({ k: item.k, id: item.id, title: item.title, by: item.by.name,
+        items: room.yt ? room.yt.queue.map(item => ({ k: item.k, id: item.id, title: item.title, music: !!item.music, by: item.by.name,
             ...(item.pl ? { pl: item.pl, plt: item.plt || "", ...(item.pll ? { pll: item.pll } : {}) } : {}) })) : []
     });
 
@@ -5213,6 +5267,8 @@
         y.title = item.title;
         y.by = item.by;
         y.duration = 0;
+        if (item.music) window.CineAudioMode?.enable();
+        else window.CineAudioMode?.disable();
         y.autoFor = null;
         // Clean up any unplayed autoplay items after this video so the next video matches this one
         const oldAutoIndex = y.queue.findIndex((entry, i) => i > y.index && entry.auto);
@@ -5240,7 +5296,7 @@
         if (!room.yt) where = "now";
         if (where === "now") {
             const token = room.ytToken = Signaling.newId();
-            if (ref.id) startYouTube([queueItem(ref.id, sharer)], ref.start);
+            if (ref.id) startYouTube([queueItem(ref.id, sharer, !!ref.music)], ref.start);
             else addMessage({ system: true, text: "Opening the YouTube playlist…" });
             if (!ref.list) return;
             const ids = await resolvePlaylist(ref.list);
@@ -5252,7 +5308,7 @@
             }
             const named = () => room && room.role === "host" && shareQueue();
             if (!ref.id) {
-                const all = ids.map(id => queueItem(id, sharer));
+                const all = ids.map(id => queueItem(id, sharer, !!ref.music));
                 markPlaylist(all, ref.list, named);
                 return startYouTube(all, 0);
             }
@@ -5261,8 +5317,8 @@
             const at = ids.indexOf(ref.id);
             const before = at > 0 ? ids.slice(0, at) : [];
             const after = (at >= 0 ? ids.slice(at + 1) : ids).slice(0, QUEUE_MAX - y.queue.length - before.length);
-            const afterItems = after.map(id => queueItem(id, sharer));
-            const beforeItems = before.map(id => queueItem(id, sharer));
+            const afterItems = after.map(id => queueItem(id, sharer, !!ref.music));
+            const beforeItems = before.map(id => queueItem(id, sharer, !!ref.music));
             markPlaylist([...beforeItems, y.queue[y.index], ...afterItems], ref.list, named);
             y.queue.splice(y.index + 1, 0, ...afterItems);
             y.queue.splice(y.index, 0, ...beforeItems);
@@ -5288,7 +5344,7 @@
         if (autoAt >= 0) y.queue.splice(autoAt);
         const space = QUEUE_MAX - y.queue.length;
         if (space <= 0) return notice(`The queue is full (${QUEUE_MAX} videos).`);
-        const items = ids.slice(0, space).map(id => queueItem(id, sharer));
+        const items = ids.slice(0, space).map(id => queueItem(id, sharer, !!ref.music));
         markPlaylist(items, ref.list, () => room && room.role === "host" && room.yt === y && shareQueue());
         const at = where === "end" ? y.queue.length : y.index + 1;
         y.queue.splice(at, 0, ...items);
@@ -6725,6 +6781,7 @@
             k: Math.random().toString(36).slice(2),
             id: ref.id,
             title: meta.title || meta.listTitle || "YouTube video",
+            music: !!(ref.music || meta.music),
             by: "You"
         };
         const wasEmpty = !soloQueue.items.length;
@@ -6742,7 +6799,7 @@
             }).catch(() => {});
         }
         if (wasEmpty && (!together.solo || !together.solo.active) && window.CineYouTube) {
-            CineYouTube.play({ id: item.id }, { title: item.title }, { fromQueue: true });
+            CineYouTube.play({ id: item.id, music: item.music }, { title: item.title, music: item.music }, { fromQueue: true });
         }
         return null;
     };
@@ -6864,7 +6921,7 @@
             soloQueue.index++;
             const target = soloQueue.items[soloQueue.index];
             if (target && target.id && window.CineYouTube) {
-                CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+                CineYouTube.play({ id: target.id, music: !!target.music }, { title: target.title, music: !!target.music }, { fromQueue: true });
                 saveSoloQueue();
                 renderQueue();
                 return true;
@@ -6878,7 +6935,7 @@
             soloQueue.index--;
             const target = soloQueue.items[soloQueue.index];
             if (target && target.id && window.CineYouTube) {
-                CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+                CineYouTube.play({ id: target.id, music: !!target.music }, { title: target.title, music: !!target.music }, { fromQueue: true });
                 saveSoloQueue();
                 renderQueue();
                 return true;
@@ -7116,7 +7173,8 @@
     together.roomYouTube = () => {
         const file = room && room.file;
         if (!file || !file.yt || !file.yt.id) return null;
-        return { video: { kind: "video", id: file.yt.id, title: file.title && file.title !== "YouTube video" ? file.title : "", channel: file.channel || "" }, list: together.queuePlaylist(file.yt.id) };
+        const current = room.yt && room.yt.queue ? room.yt.queue[room.yt.index] : null;
+        return { video: { kind: "video", id: file.yt.id, title: file.title && file.title !== "YouTube video" ? file.title : "", channel: file.channel || "", music: !!(current && current.music) }, list: together.queuePlaylist(file.yt.id) };
     };
 
     renderQueue();
@@ -7964,7 +8022,15 @@
         if (old.signal) setTimeout(() => old.signal.close(), tunnels ? 1500 : 0);
         together.following = false;
         together.onFile = null;
-        together.openPanel = null;
+        together.openPanel = () => {
+            if (isLaptopAudio()) return showPanel(true);
+            if (!room) panel.classList.add("solo-queue");
+            showPanel(panel.hidden || !!panelClosing);
+        };
+        together.hidePanel = () => {
+            if (isLaptopAudio()) return;
+            showPanel(false);
+        };
         together.beforeHome = null;
         together.onTitle = null;
         together.active = () => false;
@@ -8128,6 +8194,10 @@
         }
         writeRooms(savedRooms().filter(saved => saved.code !== code));
         deleteApprovedTickets(code);
+        const curPinned = getPinnedRooms();
+        if (curPinned.some(p => p.code === code)) {
+            setPinnedRooms(curPinned.filter(p => p.code !== code));
+        }
         if (room && room.code === code) {
             room.remember = false;
             rememberSwitch.checked = false;
@@ -8138,6 +8208,7 @@
     forgetAllBtn?.addEventListener("click", async () => {
         if (!await playerAsk({ icon: "fa-trash-can", title: "Delete all your rooms?", text: "From this browser - invite links still work", yes: "Delete", danger: true })) return;
         writeRooms([]);
+        setPinnedRooms([]);
         storage.remove(APPROVED_KEY);
         if (room) {
             room.remember = false;
@@ -8290,6 +8361,16 @@
             open.append(el("i", `fa-solid ${host ? "fa-play" : "fa-right-to-bracket"}`), el("span", null, host ? "Open" : "Rejoin"));
         }
         actions.append(open);
+        const isPinned = isRoomPinned(item.code);
+        const pin = el("button", `icon-btn room-card-pin${isPinned ? " pinned active" : ""}`);
+        pin.type = "button";
+        pin.dataset.room = item.code;
+        pin.dataset.pin = "";
+        pin.title = isPinned ? `Unpin “${roomLabel(item)}” from sidebar` : `Pin “${roomLabel(item)}” to sidebar`;
+        pin.setAttribute("aria-label", pin.title);
+        pin.setAttribute("aria-pressed", String(isPinned));
+        pin.append(el("i", "fa-solid fa-thumbtack"));
+        actions.append(pin);
         if (!live || item.password) {
             const forget = el("button", "icon-btn room-card-forget");
             forget.type = "button";
@@ -8341,6 +8422,115 @@
         }
         const sideLive = document.querySelector(".side-live");
         if (sideLive) sideLive.hidden = !liveItem;
+        renderPinnedRooms();
+    }
+
+    function getPinnedRooms() {
+        try {
+            const raw = storage.get(PINNED_ROOMS_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+    function setPinnedRooms(list) {
+        storage.set(PINNED_ROOMS_KEY, JSON.stringify(list));
+        renderPinnedRooms();
+    }
+    function isRoomPinned(code) {
+        return getPinnedRooms().some(item => item.code === code);
+    }
+    function toggleRoomPin(code) {
+        const list = getPinnedRooms();
+        const idx = list.findIndex(item => item.code === code);
+        if (idx >= 0) {
+            list.splice(idx, 1);
+            setPinnedRooms(list);
+            window.CineToast?.("Room unpinned from sidebar", { key: "pin-room" });
+        } else {
+            const all = savedRooms();
+            const live = room && (room.role === "host" || room.phase === "in") ? room : null;
+            const target = all.find(r => r.code === code) || (live && live.code === code ? { code: live.code, title: live.title, role: live.role, at: Date.now() } : { code });
+            list.unshift(target);
+            setPinnedRooms(list);
+            window.CineToast?.("Room pinned to sidebar", { key: "pin-room" });
+        }
+        renderRoomCards();
+    }
+    function roomInitials(item) {
+        const raw = (item.title || "").trim();
+        if (raw) {
+            const parts = raw.split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            }
+            return raw.slice(0, 2).toUpperCase();
+        }
+        const code = (item.code || "").replace(/[^A-Za-z0-9]/g, "");
+        return code.slice(0, 2).toUpperCase() || "RM";
+    }
+
+    function roomAvatarBg(item) {
+        const str = (item.code || "") + (item.title || "");
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        const palette = [
+            "linear-gradient(135deg, #2563eb, #7c3aed)",
+            "linear-gradient(135deg, #0d9488, #2563eb)",
+            "linear-gradient(135deg, #7c3aed, #db2777)",
+            "linear-gradient(135deg, #ea580c, #dc2626)",
+            "linear-gradient(135deg, #059669, #0d9488)",
+            "linear-gradient(135deg, #4f46e5, #9333ea)",
+            "linear-gradient(135deg, #0284c7, #2563eb)"
+        ];
+        return palette[Math.abs(hash) % palette.length];
+    }
+
+    function renderPinnedRooms() {
+        const listEl = document.querySelector(".side-pinned-list");
+        const emptyEl = document.querySelector(".side-pinned-empty");
+        if (!listEl) return;
+        const pinned = getPinnedRooms();
+        const live = room && (room.role === "host" || room.phase === "in") ? room : null;
+        if (!pinned.length) {
+            listEl.innerHTML = "";
+            if (emptyEl) emptyEl.hidden = false;
+            return;
+        }
+        if (emptyEl) emptyEl.hidden = true;
+        listEl.replaceChildren(...pinned.map(item => {
+            const li = el("li", "side-pinned-item");
+            const isLive = live && live.code === item.code;
+            const fullLabel = roomLabel(item);
+            const initials = roomInitials(item);
+            const link = el("button", `side-pinned-link${isLive ? " live" : ""}`);
+            link.type = "button";
+            link.dataset.room = item.code;
+            link.title = isLive ? `(Live) ${fullLabel}` : fullLabel;
+
+            const avatar = el("span", "side-pinned-avatar");
+            avatar.style.background = roomAvatarBg(item);
+            avatar.textContent = initials;
+            if (isLive) {
+                const dot = el("span", "side-pinned-live-dot");
+                avatar.append(dot);
+            }
+
+            const name = el("span", "side-pinned-name", fullLabel);
+            link.append(avatar, name);
+            if (isLive) {
+                const badge = el("span", "side-pinned-live-badge", "LIVE");
+                link.append(badge);
+            }
+            const unpin = el("button", "side-pinned-unpin");
+            unpin.type = "button";
+            unpin.dataset.unpin = item.code;
+            unpin.title = `Unpin “${fullLabel}”`;
+            unpin.setAttribute("aria-label", `Unpin “${fullLabel}”`);
+            unpin.append(el("i", "fa-solid fa-thumbtack"));
+            li.append(link, unpin);
+            return li;
+        }));
     }
     // Who's been in the room, with the remembered room (merged: the newest first, up to 30)
     function rememberPeople() {
@@ -8550,13 +8740,35 @@
             showPlayer();
             return showPanel(true);
         }
-        const item = savedRooms().find(saved => saved.code === button.dataset.room);
+        const item = savedRooms().find(saved => saved.code === button.dataset.room) || getPinnedRooms().find(p => p.code === button.dataset.room);
         if (!item) return renderRooms();
+        if ("pin" in button.dataset) return toggleRoomPin(item.code);
         if ("forget" in button.dataset) forgetRoom(item.code);
         else reopen(item);
     };
     roomList?.addEventListener("click", onRoomCard);
     homeRoomList?.addEventListener("click", onRoomCard);
+
+    const sidePinnedList = document.querySelector(".side-pinned-list");
+    sidePinnedList?.addEventListener("click", e => {
+        const unpin = e.target.closest("button[data-unpin]");
+        if (unpin) {
+            e.stopPropagation();
+            toggleRoomPin(unpin.dataset.unpin);
+            return;
+        }
+        const roomBtn = e.target.closest("button[data-room]");
+        if (roomBtn) {
+            e.stopPropagation();
+            if (room && room.code === roomBtn.dataset.room) {
+                showPlayer();
+                showPanel(true);
+                return;
+            }
+            const item = savedRooms().find(s => s.code === roomBtn.dataset.room) || getPinnedRooms().find(p => p.code === roomBtn.dataset.room);
+            if (item) reopen(item);
+        }
+    });
 
     // On the home page: the room you're in (it keeps going), or the last room to get back into
     function renderHomeBar() {
@@ -8948,8 +9160,10 @@
 
     // `saved`: a remembered room to open again with the same code and password
     const openCreate = (saved = null) => {
-        toPlayer();
-        if (room) return showPanel(true);
+        if (room) {
+            toPlayer();
+            return showPanel(true);
+        }
         if (!supported) return unsupported();
         fillProfile(createForm, createPicker);
         reopening = saved;
@@ -8966,8 +9180,10 @@
     };
 
     const openJoin = ({ code = "", password = "", remember = true, ticket = null } = {}) => {
-        toPlayer();
-        if (room) return showPanel(true);
+        if (room) {
+            toPlayer();
+            return showPanel(true);
+        }
         if (!supported) return unsupported();
         field(joinForm, "remember").checked = remember;
         const normalized = Signaling.normalizeCode(code);
@@ -8980,7 +9196,13 @@
         (empty || joinForm.querySelector('button[type="submit"]')).focus();
     };
 
-    // Handle all create and join room triggers seamlessly via delegation
+    together.openCreate = openCreate;
+    together.openJoin = openJoin;
+    window.CineRoom = { openCreate, openJoin };
+
+    // Handle all create and join triggers before a nested card, link or other page
+    // interaction can consume the click.  These controls appear in the header, sidebar,
+    // lobby and player, so a single capture-phase route keeps every copy consistent.
     document.addEventListener("click", e => {
         const createBtn = e.target.closest(".room-create-open");
         if (createBtn) {
@@ -8991,12 +9213,34 @@
         }
         const joinBtn = e.target.closest(".room-join-open");
         if (joinBtn) {
+            const launcherForm = joinBtn.closest(".room-launcher-join");
+            if (launcherForm) {
+                e.preventDefault();
+                e.stopPropagation();
+                const codeInput = launcherForm.querySelector(".room-launcher-code");
+                const val = (codeInput ? codeInput.value : "").trim();
+                if (!val) {
+                    if (codeInput) codeInput.focus();
+                    else openJoin();
+                    return;
+                }
+                let roomCode = val;
+                let roomPassword = "";
+                try {
+                    const hash = val.includes("#") ? val.slice(val.indexOf("#") + 1) : val;
+                    const params = new URLSearchParams(hash.replace(/^.*[?&](join|pw)=/, "$1="));
+                    roomCode = params.get("join") || val;
+                    roomPassword = params.get("pw") || "";
+                } catch (ignore) {}
+                openJoin({ code: roomCode, password: roomPassword });
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
             openJoin();
             return;
         }
-    });
+    }, true);
 
     const joinCodeInput = field(joinForm, "code");
     if (joinCodeInput) {
@@ -9041,6 +9285,7 @@
         storage.set(NAME_KEY, name);
         storage.set(AVATAR_KEY, createPicker.value);
         await prepareLocalNetwork(createForm);
+        toPlayer();
         startHost({
             name, avatar: createPicker.value, password,
             title: clean(field(createForm, "title").value, 40),
@@ -9063,6 +9308,7 @@
         storage.set(NAME_KEY, name);
         storage.set(AVATAR_KEY, joinPicker.value);
         await prepareLocalNetwork(joinForm);
+        toPlayer();
         const saved = savedRooms().find(item => item.code === code);
         startGuest({ code, password, name, avatar: joinPicker.value, relay: field(joinForm, "relay").checked,
             remember: field(joinForm, "remember").checked, ticket: saved?.ticket || null });
@@ -9083,8 +9329,22 @@
         renderRooms();
     };
     together.onPlayer = placeToasts;
-    together.openPanel = null;
+    together.openPanel = () => {
+        if (isLaptopAudio()) return showPanel(true);
+        if (!room) panel.classList.add("solo-queue");
+        showPanel(panel.hidden || !!panelClosing);
+    };
+    together.hidePanel = () => {
+        if (isLaptopAudio()) return;
+        showPanel(false);
+    };
     together.toggleQueue = () => {
+        if (isLaptopAudio()) {
+            if (!room) panel.classList.add("solo-queue");
+            showTab("queue");
+            showPanel(true);
+            return;
+        }
         if (panel.hidden || panelClosing) {
             if (!room) panel.classList.add("solo-queue");
             showTab("queue");
@@ -9103,6 +9363,12 @@
     // Not in a room, the Watch together button: the panel's Watch together tab (pressed again
     // while it's showing, the panel closes)
     together.toggleTogether = () => {
+        if (isLaptopAudio()) {
+            if (!room) panel.classList.add("solo-queue");
+            showTab("together");
+            showPanel(true);
+            return;
+        }
         if (room) return showPanel(true);
         panel.classList.add("solo-queue");
         if (!panel.hidden && !panelClosing && activeTab === "together") return showPanel(false);
@@ -9112,6 +9378,16 @@
     };
     // Initialize right panel as solo-queue outside room
     panel.classList.add("solo-queue");
+    const checkLaptopAudioPanel = () => {
+        if (isLaptopAudio() && (panel.hidden || !playerPage.classList.contains("room-open"))) {
+            if (!room) panel.classList.add("solo-queue");
+            showTab("queue");
+            setPanel(true);
+        }
+    };
+    new MutationObserver(checkLaptopAudioPanel).observe(container, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", checkLaptopAudioPanel);
+    checkLaptopAudioPanel();
 
     // On a phone, fullscreen means the whole screen for the video: the panel steps aside (the Room
     // button brings it back, and new messages still pop up)

@@ -62,6 +62,10 @@ savedList = document.querySelector("#saved .saved-list"),
 savedTotal = document.querySelector("#saved .saved-total"),
 clearAllBtn = document.querySelector("#saved .clear-all-btn");
 
+const isTouch = matchMedia("(pointer: coarse)").matches;
+const mustTapYouTube = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
 let idleTimer;
 let clickTimeout;
 let currentURL = null;
@@ -698,6 +702,12 @@ const loadVideoFile = async (file, handle = null) => {
 browseBtn.addEventListener("click", pickVideo);
 openFileBtn.addEventListener("click", pickVideo);
 
+const emptyYoutubeBtn = document.querySelector("#empty-youtube-btn");
+emptyYoutubeBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    container.querySelector(".player-search-btn")?.click();
+});
+
 fileInput.addEventListener("change", e => {
     const file = e.target.files[0];
     loadVideoFile(file);
@@ -1162,6 +1172,8 @@ const releaseMedia = () => {
     playbackMode = null;
     compatBanner.classList.add("hidden");
     container.classList.remove("audio-mode");
+    container.classList.remove("audio-mode-only");
+    window.CineAudioMode?.disable();
     videoTitle.innerText = audioTitle.innerText = "No Video Loaded";
     progressBar.style.width = "0%";
     videoDuration.innerText = formatTime(0);
@@ -1310,14 +1322,23 @@ window.addEventListener("beforeunload", savePosition);
 // Popup menus (speed, More): one at a time, closed by a click elsewhere or Esc
 const moreBtn = container.querySelector(".more-btn"),
 moreOptions = container.querySelector(".more-options");
+let audioMenuBackdrop = playerPage.querySelector(".audio-menu-backdrop");
+if (!audioMenuBackdrop) {
+    audioMenuBackdrop = document.createElement("div");
+    audioMenuBackdrop.className = "audio-menu-backdrop";
+    audioMenuBackdrop.setAttribute("aria-hidden", "true");
+    playerPage.append(audioMenuBackdrop);
+}
 // (speed is a section of More: speedOptions isn't a menu of its own any more)
 const popupMenus = [moreOptions];
 const togglePopup = menu => {
     const open = !menu.classList.contains("show");
     popupMenus.forEach(other => other.classList.toggle("show", other === menu && open));
+    if (!open && menu === moreOptions && audioMenuBackdrop) audioMenuBackdrop.hidden = true;
     if (open && menu === moreOptions) {
+        if (container.classList.contains("audio-mode-only")) audioMenuBackdrop.hidden = false;
         // (as tall as the player leaves room for above the control bar; it scrolls past that)
-        moreOptions.style.maxHeight = `${Math.max(180, Math.min(600, container.clientHeight - 84))}px`;
+        moreOptions.style.maxHeight = `${Math.max(180, Math.min(600, (container.classList.contains("audio-mode-only") ? window.innerHeight : container.clientHeight) - 84))}px`;
         renderMoreOptions();
         showMoreMenuMain();
     }
@@ -1326,6 +1347,19 @@ const showMoreMenuMain = () => {
     moreOptions.querySelector("[data-more-main]").hidden = false;
     moreOptions.querySelectorAll("[data-more-view]").forEach(view => view.hidden = true);
     moreOptions.classList.remove("showing-subview");
+    const heading = moreOptions.querySelector(".more-menu-heading");
+    if (heading && !heading.querySelector(".audio-menu-close")) {
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "audio-menu-close";
+        close.setAttribute("aria-label", "Close player settings");
+        close.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        close.addEventListener("click", e => {
+            e.stopPropagation();
+            closePopups();
+        });
+        heading.append(close);
+    }
 };
 moreOptions.addEventListener("click", e => {
     const back = e.target.closest("[data-more-back]");
@@ -1347,14 +1381,16 @@ const playerSheet = container.querySelector(".player-sheet");
 const closePopups = () => {
     const open = popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden;
     popupMenus.forEach(menu => menu.classList.remove("show"));
+    if (audioMenuBackdrop) audioMenuBackdrop.hidden = true;
     closeSheet();
     return open;
 };
+audioMenuBackdrop?.addEventListener("click", closePopups);
 speedBtn.addEventListener("click", () => togglePopup(speedOptions));
 moreBtn.addEventListener("click", () => togglePopup(moreOptions));
 
 document.addEventListener("click", e => {
-    if (!e.target.closest(".popup-menu-wrapper, .settings-btn, .player-sheet")) closePopups();
+    if (!e.target.closest(".popup-menu-wrapper, .audio-settings-menu, .settings-btn, .player-sheet")) closePopups();
 });
 
 // Timeline Hover Live Preview & Seeking
@@ -1651,23 +1687,106 @@ function renderMoreOptions() {
     if (subsCurrent) subsCurrent.textContent = subsOn ? "On" : hasSubs ? "Off" : "None";
     // YouTube's player fills the picture, so it can be Fit or Fill (not the other shapes)
     aspectChips.forEach(chip => chip.hidden = youtube && !["fit", "fill"].includes(chip.dataset.aspect));
-    moreOptions.querySelector(".aspect-options").classList.remove("disabled");
-    moreOptions.querySelector(".boost-options").classList.toggle("disabled", youtube);
+    moreOptions.querySelector(".aspect-options")?.classList.remove("disabled");
+    moreOptions.querySelector(".boost-options")?.classList.toggle("disabled", youtube);
     boostChips.forEach(chip => chip.classList.toggle("active", +chip.dataset.boost === boost.level));
     boostCurrent.textContent = youtube ? "—" : boost.level > 1 ? `${Math.round(boost.level * 100)}%` : "Off";
     moreNote.hidden = !youtube;
     moreNote.textContent = youtube ? "YouTube's player keeps its own volume (up to 100%)." : "";
     const menuValues = {
-        speed: moreOptions.querySelector(".speed-current").textContent,
+        speed: moreOptions.querySelector(".speed-current")?.textContent || "Normal",
         subtitles: subsCurrent?.textContent || "Off",
         picture: aspectCurrent.textContent,
-        ambient: moreOptions.querySelector(".ambient-current").textContent,
+        ambient: moreOptions.querySelector(".ambient-current")?.textContent || "On",
         boost: boostCurrent.textContent
     };
     moreOptions.querySelectorAll("[data-more-value]").forEach(value => value.textContent = menuValues[value.dataset.moreValue] || "");
+
+    // Synchronize switches in More options
+    const ambientToggle = moreOptions.querySelector('[data-more-toggle="ambient"]');
+    if (ambientToggle) {
+        const ambientIsOn = (moreOptions.querySelector(".ambient-current")?.textContent || "On") === "On";
+        ambientToggle.setAttribute("aria-checked", String(ambientIsOn));
+    }
+    const subsToggle = moreOptions.querySelector('[data-more-toggle="subtitles"]');
+    if (subsToggle) {
+        subsToggle.setAttribute("aria-checked", String(subsOn));
+    }
+    const autoplayToggle = moreOptions.querySelector('[data-more-toggle="autoplay"]');
+    if (autoplayToggle) {
+        const ap = container.querySelector(".yt-autoplay");
+        const apOn = ap ? ap.getAttribute("aria-checked") === "true" : true;
+        autoplayToggle.setAttribute("aria-checked", String(apOn));
+        const apRowVisible = !!(together.solo && (together.solo.active || container.classList.contains("yt-host")));
+        autoplayToggle.hidden = !apRowVisible;
+    }
+    const shuffleToggle = moreOptions.querySelector('[data-more-toggle="shuffle"]');
+    if (shuffleToggle) {
+        const shuffleButton = container.querySelector(".shuffle-btn");
+        const isShuffleOn = together.solo ? !!together.solo.shuffle : (shuffleButton?.getAttribute("aria-pressed") === "true");
+        shuffleToggle.setAttribute("aria-checked", String(isShuffleOn));
+    }
+    const audioAction = moreOptions.querySelector('[data-more-action="audio"]');
+    if (audioAction) {
+        const active = container.classList.contains("audio-mode-only");
+        audioAction.setAttribute("aria-pressed", String(active));
+        const value = audioAction.querySelector('[data-more-action-value="audio"]');
+        if (value) value.textContent = active ? "Audio" : "Video";
+        audioAction.hidden = !window.CineAudioMode?.canToggle;
+    }
+
     if (!playerSheet.hidden) renderSheet();
 }
 renderMoreOptions();
+moreOptions.addEventListener("click", e => {
+    const toggleRow = e.target.closest("[data-more-toggle]");
+    const actionRow = e.target.closest("[data-more-action]");
+    if (actionRow) {
+        const action = actionRow.dataset.moreAction;
+        if (action === "audio" && window.CineAudioMode) window.CineAudioMode.toggle();
+        if (action === "pip") toggleCustomPiP();
+        closePopups();
+        return;
+    }
+    if (toggleRow) {
+        const toggleType = toggleRow.dataset.moreToggle;
+        if (toggleType === "ambient") {
+            const ambientChips = moreOptions.querySelectorAll(".ambient-options li");
+            const isOn = (moreOptions.querySelector(".ambient-current")?.textContent || "On") === "On";
+            const targetChip = [...ambientChips].find(c => c.dataset.ambient === (isOn ? "off" : "on"));
+            if (targetChip) targetChip.click();
+        } else if (toggleType === "subtitles") {
+            toggleSubtitles();
+        } else if (toggleType === "autoplay") {
+            const ap = container.querySelector(".yt-autoplay");
+            if (ap) ap.click();
+        } else if (toggleType === "shuffle") {
+            const shuffleButton = container.querySelector(".shuffle-btn");
+            if (shuffleButton && !shuffleButton.hidden) {
+                shuffleButton.click();
+            } else if (together.toggleShuffle) {
+                together.toggleShuffle();
+            } else if (together.solo) {
+                together.solo.shuffle = !together.solo.shuffle;
+                showFeedback("fa-shuffle", together.solo.shuffle ? "Shuffle on" : "Shuffle off");
+            }
+        }
+        renderMoreOptions();
+        return;
+    }
+    const openFileRow = e.target.closest(".more-open-file");
+    if (openFileRow) {
+        closePopups();
+        fileInput.click();
+        return;
+    }
+    const stopRow = e.target.closest(".more-stop-video");
+    if (stopRow) {
+        closePopups();
+        if (playerStopBtn) playerStopBtn.click();
+        return;
+    }
+});
 moreOptions.querySelector(".subs-options")?.addEventListener("click", e => {
     const chip = e.target.closest("li[data-subs]");
     if (!chip) return;
@@ -1898,51 +2017,588 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
     (together.roomYouTubeId && together.roomYouTubeId()) || null;
 
 // Audio mode keeps playback and room sync untouched. YouTube's cross-origin player doesn't expose
-// decoded audio samples, so its visualization is gently animated; local media uses captured audio
-// samples when the browser supports captureStream().
+// decoded audio samples. The visualizer equalizer is shown only for local audio files; YouTube Music
+// operates in audio mode only without manual switching.
 (() => {
     const audioButton = container.querySelector(".audio-mode-toggle");
     const miniButton = container.querySelector(".solo-miniplayer-toggle");
     if (!audioButton || !miniButton) return;
+    const micaBg = document.createElement("div");
+    micaBg.className = "audio-mode-mica";
+    micaBg.setAttribute("aria-hidden", "true");
+    container.prepend(micaBg);
+
     const audioView = document.createElement("section");
     audioView.className = "audio-mode-view";
     audioView.setAttribute("aria-label", "Audio mode visualizer");
-    audioView.innerHTML = '<div class="audio-mode-art"><img alt="" /><span class="audio-mode-art-icon"><i class="fa-solid fa-music"></i></span></div><div class="audio-mode-visual"><div class="audio-mode-label">NOW PLAYING</div><b></b><p>Audio mode</p><canvas aria-hidden="true"></canvas></div>';
+    audioView.innerHTML = `
+      <div class="mobile-player-handle" aria-hidden="true"></div>
+      <div class="audio-mode-art"><img alt="" /><span class="audio-mode-art-icon"><i class="fa-solid fa-music"></i></span></div>
+      <div class="audio-mode-visual">
+        <div class="audio-mode-header">
+          <div class="audio-mode-label"><i class="fa-solid fa-waveform-lines"></i> <span>NOW PLAYING</span></div>
+          <div class="audio-mode-actions" aria-label="Audio player actions"></div>
+        </div>
+        <b class="audio-mode-title">Now playing</b>
+        <div class="audio-mode-meta">
+          <span class="audio-meta-artist"></span>
+          <span class="audio-meta-dot" hidden>•</span>
+          <span class="audio-meta-album" hidden></span>
+          <span class="audio-meta-dot" hidden>•</span>
+          <span class="audio-meta-year" hidden></span>
+        </div>
+        <div class="audio-mode-timeline-slot"></div>
+        <div class="audio-mode-controls"></div>
+        <canvas aria-hidden="true"></canvas>
+        <button type="button" class="mobile-audio-expand-panel" aria-label="Show queue and room panel">
+          <i class="fa-solid fa-list-ul"></i>
+          <span>Queue & Room</span>
+          <i class="fa-solid fa-chevron-up"></i>
+        </button>
+      </div>`;
     container.append(audioView);
     const canvas = audioView.querySelector("canvas");
     const context = canvas.getContext("2d");
     const art = audioView.querySelector("img");
-    art.addEventListener("error", () => { art.hidden = true; art.removeAttribute("src"); });
+    let miniBarArtImg = null;
+    let miniBarTitle = null;
+    let miniBarArtist = null;
+    let miniBarPlayBtn = null;
+    let miniBarPlayIcon = null;
+    let miniBarProgressFill = null;
+
+    art.addEventListener("load", () => {
+        if (!art.naturalWidth || !art.naturalHeight) return;
+        art.hidden = false;
+        if (miniBarArtImg && art.src) {
+            miniBarArtImg.src = art.src;
+            miniBarArtImg.hidden = false;
+        }
+        if (art.src && micaBg) {
+            micaBg.style.backgroundImage = `url("${art.src}")`;
+        }
+        const ratio = art.naturalWidth / art.naturalHeight;
+        art.parentElement?.style.setProperty("--audio-art-ratio", ratio > 1.35 ? "16 / 9" : "1 / 1");
+        art.parentElement?.style.setProperty("aspect-ratio", ratio > 1.35 ? "16 / 9" : "1 / 1");
+    });
+    art.addEventListener("error", () => {
+        art.hidden = true;
+        art.removeAttribute("src");
+        art.parentElement.style.aspectRatio = "";
+        micaBg.style.backgroundImage = "";
+        if (miniBarArtImg) {
+            miniBarArtImg.hidden = true;
+            miniBarArtImg.removeAttribute("src");
+        }
+    });
     let raf = 0, audioContext = null, analyser = null, sourceNode = null, samples = null, analysisTracks = [];
+    let currentMusicId = null;
+    let resolvedTrackTitle = "";
+    const artistSpan = audioView.querySelector(".audio-meta-artist");
+    const albumSpan = audioView.querySelector(".audio-meta-album");
+    const yearSpan = audioView.querySelector(".audio-meta-year");
+    const dots = audioView.querySelectorAll(".audio-meta-dot");
+    const timelineSlot = audioView.querySelector(".audio-mode-timeline-slot");
+    const timelineContainer = container.querySelector(".timeline-container");
+    const timelineParent = timelineContainer?.parentElement;
+    const centerControls = container.querySelector(".player-center-controls");
+    const centerControlsParent = centerControls?.parentElement;
+    const volumeGroup = container.querySelector(".volume-group");
+    const volumeParent = volumeGroup?.parentElement;
+    const saveWrap = container.querySelector(".player-save-wrap");
+    const saveParent = saveWrap?.parentElement;
+    const moreContent = container.querySelector(".video-controls .more-content");
+    const moreParent = moreContent?.parentElement;
+    const topSearch = container.querySelector(".player-search-btn");
+    const topSearchParent = topSearch?.parentElement;
+    const topQueue = container.querySelector(".player-queue-btn");
+    const topQueueParent = topQueue?.parentElement;
+    const topRoom = container.querySelector(".share-help-btn");
+    const topRoomParent = topRoom?.parentElement;
+    const topHome = container.querySelector(".player-home");
+    const topHomeParent = topHome?.parentElement;
+    const shuffleButton = container.querySelector(".shuffle-btn");
+    const shuffleParent = shuffleButton?.parentElement;
+    const pipButton = container.querySelector(".pic-in-pic");
+    const pipParent = pipButton?.parentElement;
+
+    let audioCorner = playerPage.querySelector(".audio-corner-actions");
+    if (!audioCorner) {
+        audioCorner = document.createElement("div");
+        audioCorner.className = "audio-corner-actions";
+        audioCorner.setAttribute("aria-label", "Audio player navigation");
+        playerPage.append(audioCorner);
+    }
+    let audioBrand = playerPage.querySelector(".audio-player-brand");
+    if (!audioBrand) {
+        audioBrand = document.createElement("div");
+        audioBrand.className = "audio-player-brand";
+        audioBrand.innerHTML = '<button type="button" class="audio-brand-button" aria-label="Back to home"><img src="logo.svg" alt="" /><span>CineTab</span></button>';
+        playerPage.append(audioBrand);
+        audioBrand.querySelector(".audio-brand-button")?.addEventListener("click", () => {
+            container.querySelector(".player-home")?.click();
+        });
+    }
+
+    let miniBar = playerPage.querySelector(".audio-mini-bar");
+    if (!miniBar) {
+        miniBar = document.createElement("div");
+        miniBar.className = "audio-mini-bar";
+        miniBar.setAttribute("aria-label", "Mini player");
+        miniBar.innerHTML = `
+          <div class="mini-bar-progress"><div class="mini-bar-progress-fill"></div></div>
+          <div class="mini-bar-art"><img alt="" /></div>
+          <div class="mini-bar-info">
+            <b class="mini-bar-title">Now playing</b>
+            <span class="mini-bar-artist">YouTube Music</span>
+          </div>
+          <div class="mini-bar-controls">
+            <button type="button" class="mini-bar-play" aria-label="Play or pause"><i class="fa-solid fa-play"></i></button>
+            <button type="button" class="mini-bar-expand" aria-label="Expand player"><i class="fa-solid fa-chevron-up"></i></button>
+          </div>`;
+        playerPage.append(miniBar);
+    }
+    miniBarArtImg = miniBar.querySelector(".mini-bar-art img");
+    miniBarTitle = miniBar.querySelector(".mini-bar-title");
+    miniBarArtist = miniBar.querySelector(".mini-bar-artist");
+    miniBarPlayBtn = miniBar.querySelector(".mini-bar-play");
+    miniBarPlayIcon = miniBarPlayBtn?.querySelector("i");
+    miniBarProgressFill = miniBar.querySelector(".mini-bar-progress-fill");
+
+    if (art && art.src && miniBarArtImg) {
+        miniBarArtImg.src = art.src;
+        miniBarArtImg.hidden = false;
+    }
+
+    const collapseMobileAudio = collapse => {
+        if (!container.classList.contains("audio-mode-only")) return;
+        playerPage.classList.toggle("audio-player-collapsed", collapse);
+        const panel = document.querySelector(".room-panel");
+        if (collapse) {
+            if (panel) panel.hidden = false;
+            playerPage.classList.add("room-open");
+            if (window.together && window.together.openQueue) window.together.openQueue();
+            else if (window.together && window.together.openPanel) window.together.openPanel();
+        } else {
+            playerPage.classList.remove("room-open");
+            if (window.together && window.together.hidePanel) window.together.hidePanel();
+            else if (panel) panel.hidden = true;
+        }
+    };
+
+    miniBarPlayBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        togglePlay();
+    });
+    miniBar.addEventListener("click", () => {
+        collapseMobileAudio(false);
+    });
+
+    const mobileExpandBtn = audioView.querySelector(".mobile-audio-expand-panel");
+    if (mobileExpandBtn) {
+        mobileExpandBtn.addEventListener("click", () => {
+            collapseMobileAudio(true);
+        });
+    }
+
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let isSwiping = false;
+
+    container.addEventListener("touchstart", e => {
+        if (!container.classList.contains("audio-mode-only")) return;
+        if (e.touches.length !== 1) return;
+        touchStartY = e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+        isSwiping = true;
+    }, { passive: true });
+
+    container.addEventListener("touchmove", e => {
+        if (!isSwiping || !container.classList.contains("audio-mode-only")) return;
+        const dy = e.touches[0].clientY - touchStartY;
+        const dx = e.touches[0].clientX - touchStartX;
+        if (matchMedia("(max-width: 600px)").matches) {
+            if (dy < -45 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+                isSwiping = false;
+                collapseMobileAudio(true);
+            }
+        }
+    }, { passive: true });
+
+    container.addEventListener("touchend", () => {
+        isSwiping = false;
+    }, { passive: true });
+
+    let miniTouchStartY = 0;
+    let miniTouchStartX = 0;
+    miniBar.addEventListener("touchstart", e => {
+        if (e.touches.length !== 1) return;
+        miniTouchStartY = e.touches[0].clientY;
+        miniTouchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    miniBar.addEventListener("touchmove", e => {
+        const dy = e.touches[0].clientY - miniTouchStartY;
+        const dx = e.touches[0].clientX - miniTouchStartX;
+        if (dy > 40 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+            collapseMobileAudio(false);
+        }
+    }, { passive: true });
+
+    const syncMiniBarPlayback = () => {
+        const paused = mediaPaused();
+        if (miniBarPlayIcon) {
+            miniBarPlayIcon.className = paused ? "fa-solid fa-play" : "fa-solid fa-pause";
+        }
+        const cur = mediaTime();
+        const dur = mainVideo.duration || (together.stream ? together.stream.duration : 0) || 0;
+        if (miniBarProgressFill && dur > 0) {
+            const pct = Math.max(0, Math.min(100, (cur / dur) * 100));
+            miniBarProgressFill.style.width = `${pct}%`;
+        }
+    };
+    mainVideo.addEventListener("timeupdate", syncMiniBarPlayback);
+    mainVideo.addEventListener("play", syncMiniBarPlayback);
+    mainVideo.addEventListener("pause", syncMiniBarPlayback);
+
+    const cleanTrackTitle = raw => {
+        if (!raw) return "";
+        return raw
+            .replace(/\s*-\s*Topic$/i, "")
+            .replace(/\s*\[(?:Official\s*)?(?:Music\s*)?(?:Video|Audio|Lyric\s*Video|HD|4K|Visualizer|Audio\s*Track)[^\]]*\]/gi, "")
+            .replace(/\s*\((?:Official\s*)?(?:Music\s*)?(?:Video|Audio|Lyric\s*Video|HD|4K|Visualizer|Audio\s*Track)[^)]*\)/gi, "")
+            .replace(/\s*\|\s*(?:Official\s*)?(?:Music\s*)?(?:Video|Audio|Visualizer)[^|]*$/gi, "")
+            .replace(/\s+-\s+topic$/i, "")
+            .trim();
+    };
+
+    const renderMetaUI = (artist = "", album = "", year = "") => {
+        const cleanArtist = (artist || "YouTube Music").replace(/\s*-\s*Topic$/i, "").trim();
+        if (artistSpan) artistSpan.textContent = cleanArtist;
+        if (miniBarArtist) miniBarArtist.textContent = cleanArtist;
+        if (albumSpan) {
+            albumSpan.textContent = album;
+            albumSpan.hidden = !album;
+        }
+        if (yearSpan) {
+            yearSpan.textContent = year;
+            yearSpan.hidden = !year;
+        }
+        if (dots[0]) dots[0].hidden = !cleanArtist || !album;
+        if (dots[1]) dots[1].hidden = !year || (!album && !cleanArtist);
+    };
+
+    const fetchYouTubeMusicMeta = async (id, initialMeta = {}) => {
+        if (!id || id === currentMusicId) return;
+        resolvedTrackTitle = "";
+        currentMusicId = id;
+
+        let artist = (initialMeta.artist || initialMeta.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
+        let album = initialMeta.album || "";
+        let year = initialMeta.year || "";
+        let title = cleanTrackTitle(initialMeta.title || videoTitle?.textContent || "");
+        const setResolvedTitle = value => {
+            if (!value || id !== currentMusicId) return;
+            title = cleanTrackTitle(value);
+            resolvedTrackTitle = title;
+            const titleNode = audioView.querySelector(".audio-mode-title");
+            if (titleNode) titleNode.textContent = title;
+            if (miniBarTitle) miniBarTitle.textContent = title;
+        };
+
+        if ((!artist || artist === "YouTube" || artist === "YouTube Music") && title.includes(" - ")) {
+            const parts = title.split(" - ");
+            artist = parts[0].trim();
+            title = cleanTrackTitle(parts.slice(1).join(" - ").trim());
+        }
+        if (!year && initialMeta.ago) {
+            const ym = initialMeta.ago.match(/\b(19\d\d|20\d\d)\b/);
+            if (ym) year = ym[1];
+        }
+
+        renderMetaUI(artist || "YouTube Music", album, year);
+
+        try {
+            try {
+                const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`, { signal: AbortSignal.timeout(2500) });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && id === currentMusicId) {
+                        if (data.author_name && (!artist || artist === "YouTube" || artist === "YouTube Music")) {
+                            artist = data.author_name.replace(/\s*-\s*Topic$/i, "").trim();
+                        }
+                        if (data.title) setResolvedTitle(data.title);
+                        renderMetaUI(artist || "YouTube Music", album, year);
+                    }
+                }
+            } catch (e) {}
+
+            // Fast commercial-music lookup: iTunes supplies reliable artist, album,
+            // release year, and high-resolution cover art for most YouTube Music tracks.
+            if (id === currentMusicId && (!album || !year || artist === "YouTube" || artist === "YouTube Music")) {
+                try {
+                    const cleanTitle = title
+                        .replace(/\s*\((?:official|lyric|audio|video|music|4k|hd)[^)]*\)/gi, "")
+                        .replace(/\s*[\[(](?:official|lyric|audio|video|music)[\])]$/gi, "")
+                        .replace(/\s+-\s+topic$/i, "")
+                        .trim();
+                    const term = `${artist && artist !== "YouTube" && artist !== "YouTube Music" ? `${artist} ` : ""}${cleanTitle}`;
+                    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=5&term=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3500) });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const results = data.results || [];
+                        const match = results.find(item =>
+                            (!artist || artist === "YouTube" || artist === "YouTube Music" ||
+                                (item.artistName || "").toLowerCase().includes(artist.toLowerCase()) ||
+                                artist.toLowerCase().includes((item.artistName || "").toLowerCase()))
+                        ) || results[0];
+                        if (match && id === currentMusicId) {
+                            artist = match.artistName || artist;
+                            album = album || match.collectionName || "";
+                            year = year || (match.releaseDate || "").slice(0, 4);
+                            if (match.artworkUrl100) {
+                                const artwork = match.artworkUrl100.replace(/\/\d+x\d+bb\.jpg/, "/600x600bb.jpg");
+                                art.hidden = false;
+                                art.src = artwork;
+                                art.dataset.src = `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
+                                micaBg.style.backgroundImage = `url("${artwork}")`;
+                            }
+                            renderMetaUI(artist || "YouTube Music", album, year);
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            const apis = [
+                `https://pipedapi.kavin.rocks/streams/${encodeURIComponent(id)}`,
+                `https://api.piped.privacydev.net/streams/${encodeURIComponent(id)}`,
+                `https://piped-api.lunar.icu/streams/${encodeURIComponent(id)}`
+            ];
+            for (const url of apis) {
+                try {
+                    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data && id === currentMusicId) {
+                        if (data.uploader && (!artist || artist === "YouTube" || artist === "YouTube Music")) {
+                            artist = data.uploader.replace(/\s*-\s*Topic$/i, "").trim();
+                        }
+                        if (data.title) setResolvedTitle(data.title);
+                        if (data.musicInfo?.artist) artist = data.musicInfo.artist;
+                        if (data.musicInfo?.album) album = data.musicInfo.album;
+                        if (data.album) album = data.album;
+                        if (!year && data.uploadDate) {
+                            const ym = data.uploadDate.match(/\b(19\d\d|20\d\d)\b/);
+                            if (ym) year = ym[1];
+                        }
+                        if (!album && data.description) {
+                            const albMatch = data.description.match(/(?:^|\n\n)([^\n·℗\r]+)\r?\n\r?\n℗/);
+                            if (albMatch && albMatch[1].trim().length < 60) album = albMatch[1].trim();
+                        }
+                        if (!year && data.description) {
+                            const ym = data.description.match(/(?:Released on:\s*|℗\s*|(?:^|\s))((?:19|20)\d\d)/i);
+                            if (ym) year = ym[1];
+                        }
+                        renderMetaUI(artist || "YouTube Music", album, year);
+                        break;
+                    }
+                } catch (e) {}
+            }
+
+            if (together.solo?.details) {
+                try {
+                    const details = await together.solo.details(id);
+                    if (details && id === currentMusicId) {
+                        if (!artist || artist === "YouTube" || artist === "YouTube Music") {
+                            artist = (details.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
+                        }
+                        if (details.title) setResolvedTitle(details.title);
+                        renderMetaUI(artist || "YouTube Music", album, year);
+                    }
+                } catch (e) {}
+            }
+
+            if (id === currentMusicId && together.solo?.fullDescription) {
+                try {
+                    const description = await together.solo.fullDescription(id);
+                    if (description && id === currentMusicId) {
+                        const released = description.match(/(?:released on|release date|℗)\s*:?\s*((?:19|20)\d{2}(?:-\d{1,2}-\d{1,2})?|(?:19|20)\d{2})/i);
+                        if (!year && released) year = released[1].match(/(?:19|20)\d{2}/)?.[0] || "";
+
+                        const byLine = description.match(/(?:provided to youtube by|released on)\s+([^\n]+)/i);
+                        if (!artist || artist === "YouTube" || artist === "YouTube Music") {
+                            const provider = byLine?.[1]?.match(/(?:by\s+)?(.+?)(?:\n|$)/i)?.[1];
+                            if (provider) artist = provider.replace(/\s*,\s*(?:under exclusive license|distributed by).*$/i, "").trim();
+                        }
+
+                        const supplied = description.match(/(?:provided to youtube by\s+)[^\n]+\n([^\n]+)/i);
+                        if (!album && supplied?.[1] && supplied[1].length < 80) album = supplied[1].trim();
+
+                        renderMetaUI(artist || "YouTube Music", album, year);
+                    }
+                } catch (e) {}
+            }
+
+            if (id === currentMusicId && (!album || !year)) {
+                try {
+                    const cleanTitle = title
+                        .replace(/\s*\((?:official|lyric|audio|video|music|4k|hd)[^)]*\)/gi, "")
+                        .replace(/\s*[\[(](?:official|lyric|audio|video|music)[\])]$/gi, "")
+                        .replace(/\s+-\s+topic$/i, "")
+                        .trim();
+                    const term = `${artist && artist !== "YouTube Music" ? `${artist} ` : ""}${cleanTitle}`;
+                    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=5&term=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3500) });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const results = data.results || [];
+                        const match = results.find(item =>
+                            (!artist || artist === "YouTube Music" || (item.artistName || "").toLowerCase().includes(artist.toLowerCase()) || artist.toLowerCase().includes((item.artistName || "").toLowerCase()))
+                        ) || results[0];
+                        if (match && id === currentMusicId) {
+                            if (!artist || artist === "YouTube Music") artist = match.artistName || artist;
+                            if (!album) album = match.collectionName || "";
+                            if (!year && match.releaseDate) year = match.releaseDate.slice(0, 4);
+                            renderMetaUI(artist || "YouTube Music", album, year);
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (id === currentMusicId && (!album || !year)) {
+                try {
+                    const cleanTitle = title
+                        .replace(/\s*\((?:official|lyric|audio|video|music|4k|hd)[^)]*\)/gi, "")
+                        .replace(/\s+-\s+topic$/i, "")
+                        .trim();
+                    const query = new URLSearchParams({
+                        query: `recording:"${cleanTitle}"${artist && artist !== "YouTube Music" ? ` AND artist:"${artist}"` : ""}`,
+                        fmt: "json",
+                        limit: "5"
+                    });
+                    const res = await fetch(`https://musicbrainz.org/ws/2/recording/?${query}`, {
+                        signal: AbortSignal.timeout(4000),
+                        headers: { Accept: "application/json" }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const recording = (data.recordings || []).find(item => {
+                            const name = (item["artist-credit"] || []).map(credit => credit.name || "").join(" ").toLowerCase();
+                            return !artist || artist === "YouTube Music" || name.includes(artist.toLowerCase()) || artist.toLowerCase().includes(name);
+                        }) || (data.recordings || [])[0];
+                        if (recording && id === currentMusicId) {
+                            if (!artist || artist === "YouTube Music") {
+                                artist = (recording["artist-credit"] || []).map(credit => credit.name || "").filter(Boolean).join(" & ");
+                            }
+                            if (!year) {
+                                year = (recording["first-release-date"] || "").match(/(?:19|20)\d{2}/)?.[0] || "";
+                            }
+                            if (!album) {
+                                album = (recording.releases || []).find(release => release.title)?.title || "";
+                            }
+                            renderMetaUI(artist || "YouTube Music", album, year);
+                        }
+                    }
+                } catch (e) {}
+            }
+        } catch (e) {}
+    };
+
+    const isLocalAudio = () => !!(currentFile && (currentFile.type?.startsWith("audio/") || (!mainVideo.videoWidth && !container.classList.contains("youtube"))));
+    const isMusicTrack = () => !!(
+        container.classList.contains("youtube") &&
+        (together.solo?.ref?.music ||
+            together.solo?.meta?.music ||
+            together.roomYouTube?.()?.video?.music ||
+            (window.CineQueue?.getCurrent?.()?.music))
+    );
     const sourceExists = () => !!(container.classList.contains("youtube") && youTubeIdShown() || currentFile || together.stream);
-    const titleText = () => (videoTitle?.textContent || audioTitle?.textContent || "Now playing").trim();
+    const titleText = () => (resolvedTrackTitle || videoTitle?.textContent || audioTitle?.textContent || "Now playing").trim();
     const update = () => {
+        const musicLocked = isMusicTrack();
+        const localAudio = isLocalAudio();
         const visible = sourceExists();
-        audioButton.hidden = !visible;
+        if (!visible && container.classList.contains("audio-mode-only")) {
+            setAudioMode(false);
+        }
+        if ((musicLocked || localAudio) && !container.classList.contains("audio-mode-only")) {
+            setAudioMode(true);
+        }
+        if (container.classList.contains("audio-mode-only") && matchMedia("(min-width: 901px)").matches) {
+            if (!playerPage.classList.contains("room-open")) {
+                if (window.together && window.together.openQueue) window.together.openQueue();
+                else if (window.together && window.together.openPanel) window.together.openPanel();
+            }
+        }
+        // YouTube Music keeps an audio-only mode, but the switch itself stays visible:
+        // Video is clearly inactive while Audio remains active.
+        const canSwitch = visible && !localAudio && !musicLocked;
+        audioButton.hidden = !canSwitch;
         miniButton.hidden = !visible || !homePage;
-        audioButton.setAttribute("aria-pressed", String(container.classList.contains("audio-mode-only")));
-        audioButton.setAttribute("aria-label", container.classList.contains("audio-mode-only") ? "Return to video" : "Switch to audio mode");
-        audioView.querySelector("b").textContent = titleText() || "Now playing";
+        const audioActive = container.classList.contains("audio-mode-only");
+        audioButton.setAttribute("aria-pressed", String(audioActive));
+        audioButton.setAttribute("aria-label", audioActive ? "Switch to video mode" : "Switch to audio mode");
+        const videoChoice = audioButton.querySelector(".video-choice");
+        const audioChoice = audioButton.querySelector(".audio-choice");
+        videoChoice?.classList.toggle("active", !audioActive && !musicLocked);
+        videoChoice?.classList.toggle("inactive", musicLocked);
+        videoChoice?.setAttribute("aria-disabled", String(musicLocked));
+        audioChoice?.classList.toggle("active", audioActive || musicLocked);
+        const curTitle = titleText() || "Now playing";
+        const bElem = audioView.querySelector(".audio-mode-title") || audioView.querySelector("b");
+        if (bElem) bElem.textContent = curTitle;
+        if (miniBarTitle) miniBarTitle.textContent = curTitle;
+
+        // Equalizer for online video removed; show ONLY for local audio file!
+        canvas.hidden = !localAudio;
+
         const id = youTubeIdShown();
         const image = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg` : "";
         const hasVisualVideo = !!(currentFile || together.stream);
         const sourceKey = image || (currentFile ? `local:${currentFile.name}:${currentFile.size}` : together.stream ? "room-stream" : "");
         if (art.dataset.src !== sourceKey || hasVisualVideo && art.hidden && mainVideo.videoWidth > 0) {
             art.dataset.src = sourceKey;
-            if (image) art.src = image;
-            else if (hasVisualVideo && mainVideo.videoWidth && mainVideo.videoHeight) {
+            if (image) {
+                art.src = image;
+                micaBg.style.backgroundImage = `url("${image}")`;
+            } else if (hasVisualVideo && mainVideo.videoWidth && mainVideo.videoHeight) {
                 try {
                     const poster = document.createElement("canvas");
                     poster.width = mainVideo.videoWidth;
                     poster.height = mainVideo.videoHeight;
                     poster.getContext("2d").drawImage(mainVideo, 0, 0, poster.width, poster.height);
-                    art.src = poster.toDataURL("image/jpeg", .82);
-                } catch (e) { art.removeAttribute("src"); }
-            } else art.removeAttribute("src");
+                    const posterUrl = poster.toDataURL("image/jpeg", .82);
+                    art.src = posterUrl;
+                    micaBg.style.backgroundImage = `url("${posterUrl}")`;
+                } catch (e) {
+                    art.removeAttribute("src");
+                    micaBg.style.backgroundImage = "";
+                }
+            } else {
+                art.removeAttribute("src");
+                micaBg.style.backgroundImage = "";
+            }
             art.hidden = !sourceKey || !art.getAttribute("src");
+        }
+
+        if (id && container.classList.contains("audio-mode-only")) {
+            const roomNow = together.roomYouTube?.();
+            const soloNow = together.solo?.current?.video;
+            fetchYouTubeMusicMeta(id, {
+                ...(together.solo?.meta || {}),
+                ...(soloNow ? { title: soloNow.title, channel: soloNow.channel } : {}),
+                ...(roomNow?.video ? { title: roomNow.video.title, channel: roomNow.video.channel, music: true } : {})
+            });
+        } else if (localAudio && currentFile) {
+            renderMetaUI("Local Audio", currentFile.name, "");
+        } else if (id) {
+            const meta = together.solo?.meta || {};
+            if (!artistSpan.textContent || artistSpan.textContent === "YouTube") {
+                renderMetaUI(meta.channel || "YouTube", "", "");
+            }
         }
     };
     const setupAnalyser = () => {
+        if (!isLocalAudio()) return;
         if (analyser || !mainVideo.captureStream) return;
         try {
             audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
@@ -1963,10 +2619,13 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         analysisTracks.forEach(track => track.stop());
         analysisTracks = [];
         analyser = sourceNode = samples = null;
-        if (container.classList.contains("audio-mode-only")) setupAnalyser();
+        if (container.classList.contains("audio-mode-only") && isLocalAudio()) setupAnalyser();
     });
     const draw = now => {
-        if (!container.classList.contains("audio-mode-only")) { raf = 0; return; }
+        if (!container.classList.contains("audio-mode-only") || !isLocalAudio()) {
+            raf = 0;
+            return;
+        }
         const box = canvas.getBoundingClientRect();
         const scale = devicePixelRatio || 1;
         if (canvas.width !== Math.round(box.width * scale) || canvas.height !== Math.round(box.height * scale)) {
@@ -1988,28 +2647,137 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             gradient.addColorStop(1, "rgba(151, 110, 255, .58)");
             context.fillStyle = gradient;
             context.beginPath();
-            context.roundRect(x, y, barW, height, Math.min(barW / 2, 5 * scale));
+            context.roundRect(x, y, Math.max(1, barW), Math.max(1, height), Math.max(0, Math.min(barW / 2, 5 * scale)));
             context.fill();
         }
         raf = requestAnimationFrame(draw);
     };
-    audioButton.addEventListener("click", () => {
-        const active = !container.classList.contains("audio-mode-only");
-        container.classList.toggle("audio-mode-only", active);
-        if (active) {
+    const audioPlaceholders = new Map();
+    const moveAudioEl = (el, target) => {
+        if (!el || !target) return;
+        if (!audioPlaceholders.has(el)) {
+            const ph = document.createComment("cine-audio-ph");
+            el.parentNode?.insertBefore(ph, el);
+            audioPlaceholders.set(el, ph);
+        }
+        target.append(el);
+    };
+    const restoreAudioEl = (el, fallbackParent) => {
+        if (!el) return;
+        const ph = audioPlaceholders.get(el);
+        if (ph && ph.parentNode) {
+            ph.parentNode.insertBefore(el, ph);
+            ph.remove();
+            audioPlaceholders.delete(el);
+        } else if (fallbackParent) {
+            fallbackParent.append(el);
+        }
+    };
+    const setAudioMode = active => {
+        const on = !!active;
+        if ((isMusicTrack() || isLocalAudio()) && !on) return; // Music and local audio have no video view
+        if (container.classList.contains("audio-mode-only") === on) return;
+        container.classList.toggle("audio-mode-only", on);
+        if (on) {
+            if (fullscreenElement()) {
+                try { exitFullscreen(); } catch (e) {}
+            }
+            container.classList.remove("fullscreen");
+            if (matchMedia("(min-width: 901px)").matches) {
+                if (window.together && window.together.openQueue) window.together.openQueue();
+                else if (window.together && window.together.openPanel) window.together.openPanel();
+            }
+            const audioView = container.querySelector(".audio-mode-view");
+            const art = container.querySelector(".audio-mode-art");
+            const visual = container.querySelector(".audio-mode-visual");
+            const actionHost = visual?.querySelector(".audio-mode-actions");
+            let audioControls = visual?.querySelector(".audio-mode-controls");
+            if (visual && !audioControls) {
+                audioControls = document.createElement("div");
+                audioControls.className = "audio-mode-controls";
+                visual.append(audioControls);
+            }
+            if (timelineContainer && timelineSlot) moveAudioEl(timelineContainer, timelineSlot);
+            if (centerControls && audioControls) moveAudioEl(centerControls, audioControls);
+            if (volumeGroup && audioControls) moveAudioEl(volumeGroup, audioControls);
+            if (topSearch && audioCorner) moveAudioEl(topSearch, audioCorner);
+            if (topRoom && audioCorner) moveAudioEl(topRoom, audioCorner);
+            if (topQueue && actionHost) moveAudioEl(topQueue, actionHost);
+            if (shuffleButton && actionHost) {
+                shuffleButton.hidden = false;
+                moveAudioEl(shuffleButton, actionHost);
+            }
+            if (pipButton && actionHost) {
+                pipButton.hidden = false;
+                moveAudioEl(pipButton, actionHost);
+            }
+            if (saveWrap && actionHost) moveAudioEl(saveWrap, actionHost);
+            if (audioButton && actionHost) moveAudioEl(audioButton, actionHost);
+            if (moreContent && audioCorner) moveAudioEl(moreContent, audioCorner);
+            moreOptions.classList.add("audio-settings-menu");
             setupAnalyser(); update();
             audioContext?.resume().catch(() => {});
-            cancelAnimationFrame(raf); raf = requestAnimationFrame(draw);
+            cancelAnimationFrame(raf);
+            if (isLocalAudio()) raf = requestAnimationFrame(draw);
         } else {
+            playerPage.classList.remove("audio-player-collapsed");
+            if (timelineContainer) restoreAudioEl(timelineContainer, timelineParent);
+            if (centerControls) restoreAudioEl(centerControls, centerControlsParent);
+            if (volumeGroup) restoreAudioEl(volumeGroup, volumeParent);
+            if (topSearch) restoreAudioEl(topSearch, topSearchParent);
+            if (topRoom) restoreAudioEl(topRoom, topRoomParent);
+            if (topHome) restoreAudioEl(topHome, topHomeParent);
+            if (topQueue) restoreAudioEl(topQueue, topQueueParent);
+            if (shuffleButton) restoreAudioEl(shuffleButton, shuffleParent);
+            if (pipButton) restoreAudioEl(pipButton, pipParent);
+            if (saveWrap) restoreAudioEl(saveWrap, saveParent);
+            if (audioButton) restoreAudioEl(audioButton, audioButton.closest(".options.right"));
+            if (moreContent) restoreAudioEl(moreContent, moreParent);
+            moreOptions.classList.remove("audio-settings-menu");
+            moreOptions.style.removeProperty("position");
+            moreOptions.style.removeProperty("z-index");
+            moreOptions.style.removeProperty("width");
+            moreOptions.style.removeProperty("transform");
+            moreOptions.style.removeProperty("opacity");
+            moreOptions.style.removeProperty("visibility");
+            moreOptions.style.removeProperty("top");
+            moreOptions.style.removeProperty("right");
+            moreOptions.style.removeProperty("bottom");
+            moreOptions.style.removeProperty("left");
+            if (moreContent && moreOptions.parentElement !== moreContent) moreContent.append(moreOptions);
             cancelAnimationFrame(raf);
             audioContext?.suspend().catch(() => {});
         }
         update();
+    };
+    audioButton.addEventListener("click", () => {
+        if (isMusicTrack() || isLocalAudio()) return;
+        setAudioMode(!container.classList.contains("audio-mode-only"));
     });
+    window.CineAudioMode = {
+        enable: () => setAudioMode(true),
+        disable: () => {
+            if (!isMusicTrack()) setAudioMode(false);
+        },
+        toggle: () => {
+            if (isMusicTrack() || isLocalAudio()) return;
+            setAudioMode(!container.classList.contains("audio-mode-only"));
+        },
+        get canToggle() { return sourceExists() && !isMusicTrack() && !isLocalAudio(); },
+        get active() { return container.classList.contains("audio-mode-only"); }
+    };
     miniButton.addEventListener("click", () => {
         if (!sourceExists()) return;
         together.soloMini = !together.active();
         showHome();
+    });
+    window.addEventListener("resize", () => {
+        if (!container.classList.contains("audio-mode-only")) return;
+        if (matchMedia("(min-width: 901px)").matches) {
+            playerPage.classList.remove("audio-player-collapsed");
+            if (window.together && window.together.openQueue) window.together.openQueue();
+            else if (window.together && window.together.openPanel) window.together.openPanel();
+        }
     });
     new MutationObserver(update).observe(container, { attributes: true, attributeFilter: ["class"] });
     setInterval(update, 1000);
@@ -2497,10 +3265,6 @@ together.pip = toggleCustomPiP;
 
 // The whole player page goes fullscreen, so a room's chat can stay open beside the video.
 // Phones turn sideways for a wide video; the iPhone can only show the video itself fullscreen.
-const isTouch = matchMedia("(pointer: coarse)").matches;
-// iPhones and iPads start a YouTube video only from a tap on YouTube's own player (elsewhere the
-// player's ▶ starts it); also iPads that say they're a Mac
-const mustTapYouTube = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
 // YouTube's player shows its own title bar and buttons (top and bottom) while it catches up after
 // a jump, which no setting turns off. From the jump until a little after it plays again, its frame
@@ -2520,6 +3284,12 @@ pipBtn.hidden = !(isTouch || "documentPictureInPicture" in window || document.pi
     (mainVideo.webkitSupportsPresentationMode && mainVideo.webkitSupportsPresentationMode("picture-in-picture")));
 
 const toggleFullscreen = () => {
+    if (container.classList.contains("audio-mode-only")) {
+        if (fullscreenElement()) {
+            try { exitFullscreen(); } catch (e) {}
+        }
+        return;
+    }
     if (fullscreenElement()) return exitFullscreen();
     const enter = playerPage.requestFullscreen || playerPage.webkitRequestFullscreen;
     if (!enter) return mainVideo.webkitEnterFullscreen && mainVideo.webkitEnterFullscreen();
@@ -2531,6 +3301,13 @@ const toggleFullscreen = () => {
 
 // Keep the button & layout in sync even when leaving fullscreen with Esc
 const onFullscreenChange = () => {
+    if (container.classList.contains("audio-mode-only")) {
+        if (fullscreenElement()) {
+            try { exitFullscreen(); } catch (e) {}
+        }
+        container.classList.remove("fullscreen");
+        return;
+    }
     const isFullscreen = fullscreenElement() === playerPage;
     container.classList.toggle("fullscreen", isFullscreen);
     fullScreenBtn.className = isFullscreen ? "fa-solid fa-compress" : "fa-solid fa-expand";
@@ -3139,10 +3916,15 @@ const updateMobileBrightness = value => {
 };
 // The sound as one number for swipes: 0-1 is the volume, 1-2 the boost from 100% to 300%, so
 // swiping up past full volume turns the boost up, and the menus' Volume boost shows it
-const soundLevel = () => boost.level > 1 ? 1 + (boost.level - 1) / 2 : mainVideo.volume;
+const soundLevel = () => {
+    if (container.classList.contains("youtube")) return mainVideo.volume;
+    return boost.level > 1 ? 1 + (boost.level - 1) / 2 : mainVideo.volume;
+};
 const setSoundLevel = value => {
-    const level = Math.max(0, Math.min(2, value));
-    if (level <= 1 || container.classList.contains("youtube")) {
+    const isYouTube = container.classList.contains("youtube");
+    const maxLevel = isYouTube ? 1 : 2;
+    const level = Math.max(0, Math.min(maxLevel, value));
+    if (level <= 1 || isYouTube) {
         if (boost.level > 1) setBoost(1, false);
         setVolume(Math.round(Math.min(1, level) * 100) / 100);
     } else {
@@ -3157,11 +3939,22 @@ const showMobileAdjustment = (kind, value) => {
     const icon = adjustment.querySelector("i");
     const fill = adjustment.querySelector(".mobile-adjustment-fill");
     const label = adjustment.querySelector("span");
-    // Volume: the lower half of the bar is 0-100%, the upper half the boost up to 300%
-    const boosted = kind === "volume" && value > 1;
-    const percent = kind === "volume" ? Math.round(value <= 1 ? value * 100 : 100 + (value - 1) * 200) : Math.round(value * 100);
+    const isYouTube = container.classList.contains("youtube");
+    const boosted = !isYouTube && kind === "volume" && value > 1;
+    let percent = 0;
+    if (kind === "brightness") {
+        percent = Math.round(value * 100);
+        fill.style.height = `${percent}%`;
+    } else {
+        if (isYouTube) {
+            percent = Math.round(Math.min(1, Math.max(0, value)) * 100);
+            fill.style.height = `${percent}%`;
+        } else {
+            percent = Math.round(value <= 1 ? value * 100 : 100 + (value - 1) * 200);
+            fill.style.height = `${value * 50}%`;
+        }
+    }
     icon.className = `fa-solid ${kind === "brightness" ? "fa-sun" : !value ? "fa-volume-xmark" : value < 0.5 ? "fa-volume-low" : "fa-volume-high"}`;
-    fill.style.height = `${kind === "volume" ? value * 50 : percent}%`;
     label.textContent = String(percent);
     adjustment.classList.toggle("boosted", boosted);
     mobileBrightnessAdjustment.classList.toggle("show", kind === "brightness");
@@ -3576,7 +4369,7 @@ const cmdPalette = (() => {
         return [
             { label: paused ? "Play" : "Pause", icon: paused ? "fa-play" : "fa-pause", keys: ["Space"], words: "play pause resume stop", top: true, run: togglePlay },
             { label: "Open a video from this device", icon: "fa-folder-open", words: "open file browse movie local video choose", top: true, run: () => fileInput.click() },
-            { label: fullscreenElement() ? "Leave fullscreen" : "Fullscreen", icon: fullscreenElement() ? "fa-compress" : "fa-expand", keys: ["F"], words: "fullscreen full screen big", top: true, run: toggleFullscreen },
+            !container.classList.contains("audio-mode-only") && { label: fullscreenElement() ? "Leave fullscreen" : "Fullscreen", icon: fullscreenElement() ? "fa-compress" : "fa-expand", keys: ["F"], words: "fullscreen full screen big", top: true, run: toggleFullscreen },
             { label: "Picture in picture", icon: "fa-clone", keys: ["P"], words: "pip picture float mini window popup", top: !isTouch, run: toggleCustomPiP },
             { label: "Subtitles on / off", icon: "fa-closed-captioning", keys: ["C"], words: "subtitles captions cc", top: true, run: toggleSubtitles },
             { label: "Choose a subtitle file", icon: "fa-file-lines", words: "subtitles captions srt vtt file add", run: () => subtitleInput.click() },
@@ -3642,7 +4435,10 @@ const cmdPalette = (() => {
             const words = query.toLowerCase().split(/\s+/).filter(Boolean);
             // (not once its results are showing)
             const shown = results && results.open && searchedFor === query;
-            const search = youtube() && !shown ? [{ label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query }] : [];
+            const search = youtube() && !shown ? [
+                { label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query, searchKind: "video" },
+                { label: `Search YouTube Music for “${query}”`, icon: "fa-music", search: query, searchKind: "music" }
+            ] : [];
             const matching = cards => shown ? [] : cards.filter(item => words.every(word => `${item.label} ${item.searchMeta || item.meta}`.toLowerCase().includes(word)));
             items = [...search, ...matching(allRecent), ...matching(allSaved)];
         }
@@ -3876,7 +4672,7 @@ const cmdPalette = (() => {
     };
     const runItem = item => {
         if (!item) return;
-        if (item.search) return searchYouTube(item.search);
+        if (item.search) return searchYouTube(item.search, item.searchKind || "video");
         close();
         // (straight away, while the key press or tap still counts: fullscreen, file pickers)
         item.run();
@@ -3905,13 +4701,16 @@ const cmdPalette = (() => {
     setResultActions();
     // Play: here (on your own), or for everyone in a room; Add to queue: stays open for more
     const pick = (ref, where, meta = {}) => {
+        const isMusic = !!(ref.music || meta.music || (results && results.kind === "music"));
+        const playRef = { ...ref, ...(isMusic ? { music: true } : {}) };
+        const playMeta = { ...meta, ...(isMusic ? { music: true } : {}) };
         if (where === "end") {
-            const refused = together.queueYouTube(ref, meta);
+            const refused = together.queueYouTube(playRef, playMeta);
             if (refused) return showNote(refused, true);
             showNote(ref.list ? "Adding the videos to the queue…" : "Added to the queue. Add more, or close.");
             return;
         }
-        const refused = CineYouTube.play(ref, meta);
+        const refused = CineYouTube.play(playRef, playMeta);
         if (refused) return showNote(refused, true);
         close();
     };
@@ -3929,15 +4728,15 @@ const cmdPalette = (() => {
             actions: resultActions,
             onPick: (ref, where, item) => pick(ref, where, item.kind === "playlist"
                 ? { listTitle: item.title, channel: item.channel, count: item.count }
-                : { title: item.title, channel: item.channel, live: !!item.live })
+                : { title: item.title, channel: item.channel, live: !!item.live, music: !!(item.music || item.kind === "music") })
         });
         return results;
     };
-    const searchYouTube = query => {
+    const searchYouTube = (query, kind = "video") => {
         if (!results) return;
         showNote("");
         searchedFor = query;
-        results.run(query);
+        results.run(query, kind);
         renderList();
         // On a phone the keyboard steps aside for the results
         if (isTouch) input.blur();
@@ -4098,7 +4897,7 @@ const cmdPalette = (() => {
         closeAnimations = [];
         overlay.classList.remove("closing");
     };
-    const open = (text = "", message = "", search = false) => {
+    const open = (text = "", message = "", search = false, kind = "video") => {
         if (overlay.classList.contains("closing")) cancelCloseMotion();
         if (overlay.hidden) {
             ensureResults();
@@ -4106,7 +4905,8 @@ const cmdPalette = (() => {
             setResultActions();
             overlay.hidden = false;
             searchBtn.setAttribute("aria-expanded", "true");
-            input.placeholder = youtube() ? "Search YouTube, paste a link, or pick recent…" : "Paste a link or pick a recent video…";
+            input.placeholder = kind === "music" ? "Search YouTube Music, paste a link…"
+                : youtube() ? "Search YouTube, paste a link, or pick recent…" : "Paste a link or pick a recent video…";
             if (results) results.clear();
             linkState.key = "";
             // (both rows from their start again)
@@ -4118,7 +4918,7 @@ const cmdPalette = (() => {
         showNote(message);
         renderAll();
         input.focus();
-        if (search && text.trim() && results && !linkState.ref) searchYouTube(text.trim());
+        if (search && text.trim() && results && !linkState.ref) searchYouTube(text.trim(), kind);
         else if (!overlay.hidden && !isTouch) input.select();
     };
     // Esc: with something typed or results showing, back to the start (Recently played); then the
