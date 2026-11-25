@@ -493,38 +493,54 @@
     // and emptying it (or Esc in it) clears the results. `suggest`: while the box is empty or
     // being typed in, it suggests what was watched before (matching what's typed); Enter searches.
     // `save`: a heart on each result, to keep it in Saved (history.js) - a video, or a whole playlist
-    const createResults = ({ host, actions, onPick, input = null, compact = false, suggest = false, save = !!window.CineSaved }) => {
-        const head = el("div", "yt-results-head");
-        const label = el("span", "yt-results-label");
-        label.append(el("i", "fa-solid fa-clock-rotate-left"), el("span", null, "Watched before"));
-        label.hidden = true;
-        const kinds = el("div", "yt-kinds");
-        kinds.setAttribute("role", "radiogroup");
-        kinds.setAttribute("aria-label", "Show");
-        const kindButton = (kind, label, icon) => {
-            const button = el("button", "yt-kind");
-            button.type = "button";
-            button.dataset.kind = kind;
-            button.setAttribute("role", "radio");
-            button.append(el("i", `fa-solid ${icon}`), el("span", null, label));
-            return button;
-        };
-        kinds.append(kindButton("video", "Videos", "fa-play"), kindButton("music", "Music", "fa-music"), kindButton("playlist", "Playlists", "fa-list"));
-        const onYouTube = el("a", "yt-on-youtube");
-        onYouTube.target = "_blank";
-        onYouTube.rel = "noopener";
-        onYouTube.append(el("span", null, "YouTube"), el("i", "fa-solid fa-arrow-up-right-from-square"));
-        const close = el("button", "yt-results-close");
-        close.type = "button";
-        close.title = input ? "Clear the search and its results (Esc)" : "Clear the results";
-        close.append(el("i", "fa-solid fa-xmark"), el("span", null, "Clear"));
-        head.append(label, kinds, onYouTube, close);
+    const createResults = ({ host, head = null, actions, onPick, input = null, compact = false, suggest = false, save = !!window.CineSaved, onClear = null, onSettled = null }) => {
+        const hasExternalHead = !!head;
+        const filterHead = head || el("div", "yt-results-head");
+        let label = filterHead.querySelector(".yt-results-label");
+        if (!label && !hasExternalHead) {
+            label = el("span", "yt-results-label");
+            label.append(el("i", "fa-solid fa-clock-rotate-left"), el("span", null, "Watched before"));
+            label.hidden = true;
+        }
+        let kinds = filterHead.querySelector(".yt-kinds");
+        if (!kinds) {
+            kinds = el("div", "yt-kinds");
+            kinds.setAttribute("role", "radiogroup");
+            kinds.setAttribute("aria-label", "Show");
+            const kindButton = (kind, label, icon, iconBrand = false) => {
+                const button = el("button", "yt-kind");
+                button.type = "button";
+                button.dataset.kind = kind;
+                button.setAttribute("role", "radio");
+                button.append(el("i", `${iconBrand ? "fa-brands" : "fa-solid"} ${icon}`), el("span", null, label));
+                return button;
+            };
+            kinds.append(
+                kindButton("video", "YouTube", "fa-youtube", true),
+                kindButton("music", "Music", "fa-music"),
+                kindButton("playlist", "Playlist", "fa-youtube", true)
+            );
+        }
+        let close = filterHead.querySelector(".yt-results-close");
+        if (!close) {
+            close = el("button", "yt-results-close");
+            close.type = "button";
+            close.title = input ? "Clear the search and its results (Esc)" : "Clear the results";
+            close.append(el("i", "fa-solid fa-xmark"), el("span", null, "Clear"));
+        }
+        if (!hasExternalHead && label) {
+            filterHead.append(label, kinds, close);
+        }
         const status = el("p", "yt-status");
         status.setAttribute("aria-live", "polite");
         const list = el("ul", `yt-result-list${compact ? " compact" : ""}`);
         const more = el("button", "yt-more", "More results");
         more.type = "button";
-        host.replaceChildren(head, status, list, more);
+        if (hasExternalHead) {
+            host.replaceChildren(status, list, more);
+        } else {
+            host.replaceChildren(filterHead, status, list, more);
+        }
         host.hidden = true;
 
         // `mode`: "search" (YouTube's results) or "history" (watched before)
@@ -533,9 +549,10 @@
         const setMode = mode => {
             state.mode = mode;
             const history = mode === "history";
-            label.hidden = !history;
-            kinds.hidden = onYouTube.hidden = history;
-            close.lastChild.textContent = history ? "Hide" : "Clear";
+            if (label) label.hidden = !history;
+            if (!hasExternalHead) kinds.hidden = history;
+            const closeLabel = close.querySelector("span") || close.lastChild;
+            if (closeLabel) closeLabel.textContent = history ? "Hide" : "Clear";
             close.title = history ? "Hide what you watched before (Esc)" : input ? "Clear the search and its results (Esc)" : "Clear the results";
         };
 
@@ -634,44 +651,63 @@
             state.kind = kind;
             state.busy = true;
             renderKinds();
-            if (kind === "music") {
-                onYouTube.href = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
-                onYouTube.title = `See “${query}” on YouTube Music (opens a new tab)`;
-                const label = onYouTube.querySelector("span");
-                if (label) label.textContent = "YouTube Music";
-            } else {
-                onYouTube.href = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${kind === "playlist" ? "&sp=EgIQAw%253D%253D" : ""}`;
-                onYouTube.title = `See “${query}” on YouTube (opens a new tab)`;
-                const label = onYouTube.querySelector("span");
-                if (label) label.textContent = "YouTube";
-            }
             host.hidden = false;
             if (!page) {
                 state.items = [];
-                list.replaceChildren();
+                // Placeholder rows shimmer while YouTube answers (style.css: .yt-skeleton)
+                list.replaceChildren(...Array.from({ length: compact ? 6 : 4 }, () => {
+                    const li = el("li", "yt-skeleton");
+                    li.setAttribute("aria-hidden", "true");
+                    const lines = el("span", "yt-skel-lines");
+                    lines.append(el("i"), el("i"));
+                    li.append(el("span", "yt-skel-thumb"), lines);
+                    return li;
+                }));
             }
             more.hidden = true;
             showStatus(page ? "" : `Searching YouTube for “${query}”…`, "busy");
+            const dropSkeleton = () => list.querySelectorAll(".yt-skeleton").forEach(row => row.remove());
             try {
                 const result = await search(query, kind, page);
                 if (token !== state.token) return;
+                dropSkeleton();
                 const start = state.items.length;
                 state.items.push(...result.items);
                 state.next = result.next;
-                list.append(...result.items.map((item, i) => itemRow(item, start + i)));
+                // The results come in one after another (style.css: .yt-enter)
+                list.append(...result.items.map((item, i) => {
+                    const row = itemRow(item, start + i);
+                    row.classList.add("yt-enter");
+                    row.style.setProperty("--i", String(Math.min(i, 10)));
+                    row.addEventListener("animationend", () => row.classList.remove("yt-enter"), { once: true });
+                    return row;
+                }));
                 showStatus(state.items.length ? "" : `Nothing found for “${query}”.`);
                 more.hidden = !state.next || !result.items.length;
             } catch (e) {
                 if (token !== state.token) return;
+                dropSkeleton();
                 showStatus(page ? "Couldn't load more results." : "YouTube search isn't answering right now.", "error");
             } finally {
-                if (token === state.token) state.busy = false;
+                if (token === state.token) {
+                    state.busy = false;
+                    // (e.g. the search flyout's Clear, which shows once a search has its answer)
+                    if (onSettled) onSettled();
+                }
             }
         };
 
         kinds.addEventListener("click", e => {
             const button = e.target.closest(".yt-kind");
-            if (button && state.query && button.dataset.kind !== state.kind) run(state.query, button.dataset.kind);
+            if (!button) return;
+            const targetKind = button.dataset.kind;
+            const query = state.query || (input ? input.value.trim() : "");
+            if (query && (query !== state.query || targetKind !== state.kind)) {
+                run(query, targetKind);
+            } else {
+                state.kind = targetKind;
+                renderKinds();
+            }
         });
         more.addEventListener("click", () => !state.busy && state.next && run(state.query, state.kind, state.next));
         list.addEventListener("click", e => {
@@ -718,6 +754,7 @@
         close.addEventListener("click", () => {
             const history = state.mode === "history";
             clear(!history);
+            if (onClear) onClear();
             if (!input) return;
             quietFocus = true;
             input.focus();
@@ -748,7 +785,15 @@
             }, true);
         }
         renderKinds();
-        return { run, clear, showWatched, get open() { return !host.hidden; }, get kind() { return state.kind; } };
+        return {
+            run,
+            clear,
+            showWatched,
+            setKind: kind => { state.kind = kind; renderKinds(); },
+            get open() { return !host.hidden; },
+            get busy() { return state.busy; },
+            get kind() { return state.kind; }
+        };
     };
 
     // ---------- Playing on your own
@@ -1021,7 +1066,7 @@
                 time, duration
             }, false);
         } else {
-            CineHistory.put(`yt:${id}`, { type: "video", id, title, channel, time, duration, live: isLive }, false);
+            CineHistory.put(`yt:${id}`, { type: "video", id, title, channel, time, duration, live: isLive, ...(solo.ref.music || solo.meta.music ? { music: true } : {}) }, false);
         }
     };
 
@@ -1198,9 +1243,8 @@
         videoTitle.title = title;
         progressBar.style.width = "0%";
         currentVidTime.innerText = videoDuration.innerText = formatTime(0);
-        // Straight away, while the click still counts (fullscreen on phones needs one)
+        // (a phone opens it in the normal view; fullscreen is the player's button)
         showPlayer();
-        enterMobileImmersive();
         if (isMusicTrack) {
             window.CineAudioMode?.enable();
         }
@@ -1215,7 +1259,7 @@
             });
             if (!meta.listTitle) fetchListTitle(solo.ref.list);
         } else {
-            CineHistory.put(`yt:${solo.ref.id}`, { type: "video", id: solo.ref.id, ...(meta.title ? { title: meta.title } : {}), ...(meta.channel ? { channel: meta.channel } : {}) });
+            CineHistory.put(`yt:${solo.ref.id}`, { type: "video", id: solo.ref.id, ...(meta.title ? { title: meta.title } : {}), ...(meta.channel ? { channel: meta.channel } : {}), ...(solo.ref.music || meta.music ? { music: true } : {}) });
         }
         clearInterval(solo.timer);
         solo.timer = setInterval(tick, 250);

@@ -162,6 +162,8 @@ To publish a new version:
 
 ## Project files
 
+For a source map and implementation guide covering playback paths, responsive player states, CSS conventions, and generated files, see [`PROJECT_GUIDE.md`](PROJECT_GUIDE.md). It is written for people and AI coding agents modifying this project.
+
 | File | Purpose |
 | --- | --- |
 | `index.html`, `style.css` | Home page and player |

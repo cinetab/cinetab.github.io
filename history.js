@@ -105,7 +105,7 @@
 // CineTab saved: YouTube videos and whole playlists kept to watch later (the home page's Saved,
 // the hearts on search results, the dashboard's cards and the player). In localStorage only.
 // An entry: { k: "yt:<id>" | "pl:<list>", type: "video" | "playlist", id, list, title, channel,
-// count, duration, at }.
+// count, duration, music, at }.
 (() => {
     const KEY = "cinetab:favorites";
     const MAX = 300;
@@ -144,7 +144,8 @@
             channel: clean(item.channel, 100),
             count: Number.isFinite(item.count) ? item.count : null,
             duration: Number.isFinite(item.duration) ? item.duration : null,
-            live: !!item.live
+            live: !!item.live,
+            music: !playlist && (item.music || item.kind === "music") ? true : null
         };
     };
     const has = k => read().some(entry => entry.k === k);

@@ -4,6 +4,10 @@
 (() => {
     const home = document.querySelector(".home");
     if (!home) return; // The offline player has no home page
+    const homePage = home;
+    const CineHistory = window.CineHistory;
+    const CineSaved = window.CineSaved;
+    const CineYouTube = window.CineYouTube;
 
     // =================== INSTALLING AS AN APP ===================
 
@@ -72,22 +76,16 @@
     const views = [...home.querySelectorAll(".home-view")];
     const sideLinks = [...home.querySelectorAll(".side-link")];
     const homeView = views.find(item => item.dataset.view === "home");
-    const dashboardView = views.find(item => item.dataset.view === "dashboard");
-    const dashboardSection = home.querySelector("#dashboard");
-    const returningViewer = !!(window.CineHistory && CineHistory.list().length);
-    if (returningViewer && homeView && dashboardView && dashboardSection) {
+    const returningViewer = !!(window.CineHistory && window.CineHistory.list().length);
+    if (returningViewer && homeView) {
         home.classList.add("returning-viewer");
     }
     let currentView = null;
     const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
     const showView = (name, target = null) => {
         if (name === "dashboard") {
-            if (typeof window.CineLauncher?.open === "function") {
-                window.CineLauncher.open();
-                return;
-            }
-            // Keep the YouTube search usable if the player's command launcher failed
-            // to initialize; show its regular dashboard search as a working fallback.
+            openSearch();
+            return;
         }
         const view = views.find(item => item.dataset.view === name) || views[0];
         if (!view) return;
@@ -147,19 +145,37 @@
         if (toggleBtn) {
             toggleBtn.setAttribute("aria-expanded", String(!on));
             toggleBtn.setAttribute("aria-pressed", String(!on));
-            toggleBtn.title = on ? "Expand guide" : "Collapse guide";
-            toggleBtn.setAttribute("aria-label", on ? "Expand guide" : "Collapse guide");
+            toggleBtn.title = on ? "Expand guide (B)" : "Collapse guide (B)";
+            toggleBtn.setAttribute("aria-label", on ? "Expand guide (B)" : "Collapse guide (B)");
         }
     };
     // Default to collapsed (rail mode) like YouTube
     setCollapsed(storage.get(SIDE_KEY) !== "0");
+    document.documentElement.classList.remove("sidebar-preference-pending");
 
-    toggleBtn?.addEventListener("click", () => {
+    const toggleSidebar = () => {
         const isCollapsed = home.classList.contains("side-collapsed");
         const nextCollapsed = !isCollapsed;
         storage.set(SIDE_KEY, nextCollapsed ? "1" : "0");
         setCollapsed(nextCollapsed);
+    };
+    toggleBtn?.addEventListener("click", () => {
+        toggleSidebar();
         toggleBtn.blur();
+    });
+    toggleBtn?.setAttribute("aria-keyshortcuts", "B");
+    document.addEventListener("keydown", e => {
+        if (e.code !== "KeyB" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+        const active = document.activeElement;
+        // (typing somewhere: no shortcut. A focused button is fine - a clicked sidebar link keeps focus)
+        if (active && (/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable)) return;
+        // (a dialog that is actually showing - several stay in the page, hidden by their parents,
+        // and counting those had B never work)
+        const dialogOpen = [...document.querySelectorAll("[role=dialog]:not([hidden]), .install-dialog:not([hidden])")]
+            .some(dialog => dialog.getClientRects().length && getComputedStyle(dialog).visibility !== "hidden");
+        if (homePage.hidden || document.body.classList.contains("watching") || dialogOpen) return;
+        e.preventDefault();
+        toggleSidebar();
     });
     sideLinks.forEach(link => {
         if (link.dataset.view) {
@@ -170,12 +186,11 @@
     if (dashboardLink) dashboardLink.hidden = true;
     const openSearch = mode => {
         const kind = mode === "music" ? "music" : "video";
-        const launcher = window.CineLauncher?.open || together?.openSearch;
-        if (typeof launcher === "function") launcher("", "", false, kind);
-        else {
-            // The dashboard form is an independent fallback from the player launcher.
-            showView("dashboard");
-            home.querySelector("#dashboard .yt-search-input")?.focus({ preventScroll: true });
+        const launcher = window.CineLauncher?.open || (typeof together !== "undefined" && together?.openSearch) || window.together?.openSearch;
+        if (typeof launcher === "function") {
+            launcher("", "", false, kind);
+        } else {
+            console.warn("Search launcher is not available yet");
         }
         if (kind === "music") {
             const input = document.querySelector(".cmd-input, .yt-search-input, .cmd-palette input");
@@ -243,68 +258,24 @@
         const view = target && target.closest(".home-view");
         if (!view || homePage.hidden) return;
         showView(view.dataset.view, target);
-        if (id === "faq") {
-            const drawer = home.querySelector("#faq-drawer");
-            if (drawer && drawer.hidden) home.querySelector("#faq-toggle-btn")?.click();
-        }
     });
-
-    // =================== FAQ TOGGLE & NAVIGATION ===================
-
-    const faqDrawer = home.querySelector("#faq-drawer");
-    const faqToggleBtn = home.querySelector("#faq-toggle-btn");
-    if (faqDrawer && faqToggleBtn) {
-        const btnText = faqToggleBtn.querySelector(".faq-btn-text");
-        const openFaq = (scroll = false) => {
-            faqDrawer.hidden = false;
-            faqToggleBtn.setAttribute("aria-expanded", "true");
-            if (btnText) btnText.textContent = "Hide questions";
-            if (scroll) {
-                const faqSec = home.querySelector("#faq");
-                if (faqSec) faqSec.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-        };
-        const closeFaq = () => {
-            faqDrawer.hidden = true;
-            faqToggleBtn.setAttribute("aria-expanded", "false");
-            if (btnText) btnText.textContent = `Browse all questions (${faqDrawer.querySelectorAll(".faq-item").length})`;
-        };
-        const toggleFaq = () => {
-            if (faqDrawer.hidden) openFaq();
-            else closeFaq();
-        };
-
-        faqToggleBtn.addEventListener("click", toggleFaq);
-
-        // Auto-open FAQ when an anchor link targeting #faq is clicked (e.g. top nav)
-        document.addEventListener("click", e => {
-            const link = e.target.closest('a[href="#faq"]');
-            if (link) {
-                openFaq(true);
-            }
-        });
-
-        // Also check if page was loaded with #faq in the hash
-        if (location.hash === "#faq") {
-            openFaq(true);
-        }
-    }
 
     // =================== DASHBOARD ===================
 
     const dashboard = home.querySelector("#dashboard");
-    if (!dashboard || !window.CineHistory || !window.CineYouTube) return;
+    if (!window.CineHistory || !window.CineYouTube) return;
     const hero = home.querySelector(".hero");
-    const searchForm = dashboard.querySelector(".yt-search");
-    const searchInput = searchForm.querySelector(".yt-search-input");
-    const pasteBtn = searchForm.querySelector(".yt-search-paste");
-    const note = dashboard.querySelector(".dash-note");
-    const historyBox = dashboard.querySelector(".library-history");
-    const filterBtns = historyBox.querySelectorAll(".dash-filter");
-    const clearBtn = historyBox.querySelector(".dash-clear");
-    const grid = historyBox.querySelector(".dash-grid");
-    const empty = historyBox.querySelector(".dash-empty");
-    const moreBtn = historyBox.querySelector(".dash-more");
+    const searchForm = dashboard?.querySelector(".yt-search");
+    const searchInput = searchForm?.querySelector(".yt-search-input");
+    const pasteBtn = searchForm?.querySelector(".yt-search-paste");
+    const note = dashboard?.querySelector(".dash-note");
+    // (Recent history now sits in the Library view; the old dashboard section is gone)
+    const historyBox = home.querySelector(".library-history");
+    const filterBtns = historyBox?.querySelectorAll(".dash-filter") || [];
+    const clearBtn = historyBox?.querySelector(".dash-clear");
+    const grid = historyBox?.querySelector(".dash-grid");
+    const empty = historyBox?.querySelector(".dash-empty");
+    const moreBtn = historyBox?.querySelector(".dash-more");
     const continueGrid = home.querySelector(".home-continue");
     const recentMoreBtn = home.querySelector(".home-recent-more");
     let recentVisible = 10;
@@ -322,6 +293,8 @@
         const hasOverflow = maxScroll > 2;
         const atStart = recentRailList.scrollLeft <= 1;
         const atEnd = recentRailList.scrollLeft >= maxScroll - 1;
+        recentRail.classList.toggle("scroll-fade-prev", hasOverflow && !atStart);
+        recentRail.classList.toggle("scroll-fade-next", hasOverflow && !atEnd);
         recentRailArrows.forEach(button => {
             button.hidden = !hasOverflow || (button.classList.contains("prev") ? atStart : atEnd);
         });
@@ -344,8 +317,10 @@
     let showAll = false;
 
     const showNote = (text, error = false) => {
-        note.hidden = true;
-        note.textContent = "";
+        if (note) {
+            note.hidden = true;
+            note.textContent = "";
+        }
         if (text) window.CineToast(text, { key: "home-notice", tone: error ? "error" : "info" });
         else window.CineToast.dismiss("home-notice");
     };
@@ -353,12 +328,14 @@
     // ---------- Searching YouTube, or a pasted link
 
     const playRef = (ref, meta) => {
-        const refused = CineYouTube.play(ref, meta);
+        const refused = window.CineYouTube.play(ref, meta);
         if (refused) showNote(refused, true);
     };
 
-    const results = CineYouTube.createResults({
-        host: dashboard.querySelector(".dash-results"),
+    // The dashboard's own search box, where the page still has one (search is in the header now)
+    const resultsHost = dashboard?.querySelector(".dash-results");
+    const results = resultsHost && searchInput && window.CineYouTube.createResults({
+        host: resultsHost,
         input: searchInput,
         actions: [{ key: "play", label: "Play", icon: "fa-play" }],
         onPick: (ref, key, item) => playRef(ref, item.kind === "playlist"
@@ -367,10 +344,11 @@
     });
 
     const submit = () => {
+        if (!results) return;
         const value = searchInput.value.trim();
         if (!value) return searchInput.focus();
         showNote("");
-        const ref = CineYouTube.parse(value);
+        const ref = window.CineYouTube.parse(value);
         if (ref) {
             searchInput.value = "";
             results.clear();
@@ -380,16 +358,16 @@
         // On a phone the keyboard steps aside for the results
         if (touch) searchInput.blur();
     };
-    searchForm.addEventListener("submit", e => {
+    searchForm?.addEventListener("submit", e => {
         e.preventDefault();
         submit();
     });
-    pasteBtn.addEventListener("click", async () => {
+    pasteBtn?.addEventListener("click", async () => {
         try {
             const text = (await navigator.clipboard.readText()).trim();
             if (!text) return showNote("There's nothing copied to paste.", true);
             searchInput.value = text;
-            if (CineYouTube.parse(text)) submit();
+            if (window.CineYouTube.parse(text)) submit();
             else searchInput.focus();
         } catch (e) {
             showNote("This browser didn't allow reading what you copied. Paste with Ctrl+V (or a long press).", true);
@@ -398,7 +376,7 @@
     });
 
     // "Search YouTube" links (the hero, an installed app's shortcut) put the cursor in the box
-    const focusSearch = () => setTimeout(() => searchInput.focus({ preventScroll: true }), 350);
+    const focusSearch = () => setTimeout(() => searchInput?.focus({ preventScroll: true }), 350);
     home.querySelectorAll('a[href="#dashboard"]').forEach(link => link.addEventListener("click", focusSearch));
 
     // ---------- What was watched
@@ -431,6 +409,7 @@
 
     const matches = entry => filter === "all" ? true
         : filter === "youtube" ? entry.type === "video" || entry.type === "playlist"
+        : filter === "music" ? !!entry.music
         : entry.type === filter;
 
     const titleOf = entry => entry.type === "file"
@@ -454,7 +433,7 @@
         const youTubeId = entry.type === "video" ? entry.id : entry.type === "playlist" ? entry.id : null;
         if (youTubeId) {
             const img = el("img");
-            img.src = CineYouTube.thumbOf(youTubeId);
+            img.src = window.CineYouTube.thumbOf(youTubeId);
             img.alt = "";
             img.loading = "lazy";
             img.referrerPolicy = "no-referrer";
@@ -517,14 +496,14 @@
         ? { kind: "playlist", list: entry.list, id: entry.id, title: entry.title || entry.videoTitle, channel: entry.channel, count: entry.count }
         : entry.type === "video" ? { kind: "video", id: entry.id, title: entry.title, channel: entry.channel, duration: entry.duration || null, live: !!entry.live } : null;
     const heartFor = item => {
-        const key = item && window.CineSaved && CineSaved.keyOf(item);
+        const key = item && window.CineSaved && window.CineSaved.keyOf(item);
         if (!key) return null;
         const heart = el("button", "dash-fav");
         heart.type = "button";
         heart.dataset.act = "fav";
         heart.dataset.saveKey = key;
         heart.append(el("i"));
-        CineYouTube.paintHeart(heart);
+        window.CineYouTube.paintHeart(heart);
         return heart;
     };
     const favView = home.querySelector("#favorites");
@@ -570,7 +549,7 @@
         const thumb = el("span", "dash-thumb");
         if (entry.id) {
             const img = el("img");
-            img.src = CineYouTube.thumbOf(entry.id);
+            img.src = window.CineYouTube.thumbOf(entry.id);
             img.alt = "";
             img.loading = "lazy";
             img.referrerPolicy = "no-referrer";
@@ -595,18 +574,18 @@
         if (heart) {
             // (its own key: always the one it's saved under)
             heart.dataset.saveKey = entry.k;
-            CineYouTube.paintHeart(heart);
+            window.CineYouTube.paintHeart(heart);
             li.append(heart);
         }
         return li;
     };
     const renderSaved = () => {
         if (!window.CineSaved || !favGrid) return;
-        const list = CineSaved.list();
+        const list = window.CineSaved.list();
         const words = favWords();
         // (the counts follow the search: how many of each match it)
         const found = list.filter(entry => favMatches(entry, words));
-        const count = { all: found.length, video: found.filter(entry => entry.type === "video").length, playlist: found.filter(entry => entry.type === "playlist").length };
+        const count = { all: found.length, video: found.filter(entry => entry.type === "video").length, playlist: found.filter(entry => entry.type === "playlist").length, music: found.filter(entry => entry.music).length };
         favFilterBtns.forEach(button => {
             const on = button.dataset.filter === favFilter;
             button.setAttribute("aria-pressed", on);
@@ -619,14 +598,14 @@
         savedHead.hidden = false;
         favView.querySelector(".fav-filters").hidden = !list.length;
         favClear.hidden = !list.length;
-        const shown = found.filter(entry => favFilter === "all" || entry.type === favFilter);
+        const shown = found.filter(entry => favFilter === "all" || (favFilter === "music" ? entry.music : entry.type === favFilter));
         favGrid.replaceChildren(...shown.map(favCard));
         favEmpty.hidden = list.length > 0;
         if (favSearchClear) favSearchClear.hidden = !favSearch.value;
         if (favNoMatch) {
             favNoMatch.hidden = !list.length || shown.length > 0;
-            const what = favFilter === "video" ? "saved videos" : favFilter === "playlist" ? "saved playlists" : "Saved";
-            favNoMatch.querySelector("p").textContent = words.length ? `Nothing in ${what} matches “${favSearch.value.trim()}”` : `No ${favFilter === "video" ? "videos" : "playlists"} saved yet`;
+            const what = favFilter === "video" ? "saved videos" : favFilter === "playlist" ? "saved playlists" : favFilter === "music" ? "saved music" : "Saved";
+            favNoMatch.querySelector("p").textContent = words.length ? `Nothing in ${what} matches “${favSearch.value.trim()}”` : `No ${favFilter === "video" ? "videos" : favFilter === "music" ? "music" : "playlists"} saved yet`;
             favNoMatch.querySelector(".fav-nomatch-clear").hidden = !words.length;
         }
         if (homeFavs) {
@@ -656,25 +635,26 @@
     historyNoMatch?.querySelector(".history-nomatch-clear").addEventListener("click", clearFavSearch);
     favClear?.addEventListener("click", async () => {
         if (!await playerAsk({ icon: "fa-heart-crack", title: "Clear Saved?", text: "Every saved video and playlist", yes: "Clear", danger: true })) return;
-        CineSaved.clear();
+        window.CineSaved.clear();
     });
     const onFavCard = e => {
         const button = e.target.closest("[data-act]");
         const row = button && button.closest("[data-fk]");
-        const entry = row && CineSaved.get(row.dataset.fk);
+        const entry = row && window.CineSaved.get(row.dataset.fk);
         if (!entry) return;
-        if (button.dataset.act === "fav") return CineSaved.remove(entry.k);
+        if (button.dataset.act === "fav") return window.CineSaved.remove(entry.k);
         if (entry.type === "playlist") playRef({ id: entry.id || null, list: entry.list, start: 0 }, { listTitle: entry.title, channel: entry.channel, count: entry.count });
-        else playRef({ id: entry.id, list: null, start: 0 }, { title: entry.title, channel: entry.channel, live: !!entry.live });
+        else playRef({ id: entry.id, list: null, start: 0, ...(entry.music ? { music: true } : {}) }, { title: entry.title, channel: entry.channel, live: !!entry.live, ...(entry.music ? { music: true } : {}) });
     };
     favGrid?.addEventListener("click", onFavCard);
     homeFavs?.addEventListener("click", onFavCard);
-    if (window.CineSaved) CineSaved.onChange(renderSaved);
+    if (window.CineSaved) window.CineSaved.onChange(renderSaved);
 
     const counts = list => ({
         all: list.length,
         youtube: list.filter(entry => entry.type === "video" || entry.type === "playlist").length,
         playlist: list.filter(entry => entry.type === "playlist").length,
+        music: list.filter(entry => entry.music).length,
         file: list.filter(entry => entry.type === "file").length
     });
 
@@ -693,7 +673,7 @@
 
     const render = (placing = false) => {
         if (homePage.hidden) return;
-        const list = CineHistory.list();
+        const list = window.CineHistory.list();
         const words = favWords();
         const queryMatches = list.filter(entry => favMatches({
             title: titleOf(entry), videoTitle: entry.videoTitle, channel: entry.channel || entry.name
@@ -706,10 +686,10 @@
             button.classList.toggle("active", on);
             button.hidden = button.dataset.filter !== "all" && !count[button.dataset.filter];
         });
-        historyBox.querySelector(".dash-filters").hidden = list.length < 2;
-        clearBtn.hidden = !list.length;
+        if (historyBox) historyBox.querySelector(".dash-filters").hidden = list.length < 2;
+        if (clearBtn) clearBtn.hidden = !list.length;
         const shown = queryMatches.filter(matches);
-        grid.replaceChildren(...(showAll ? shown : shown.slice(0, SHOWN)).map(card));
+        if (grid) grid.replaceChildren(...(showAll ? shown : shown.slice(0, SHOWN)).map(card));
         // Home: recent videos, compact on desktop and ten at a time on mobile
         if (continueGrid) {
             const recentCount = isMobileRecent() ? recentVisible : 36;
@@ -722,16 +702,20 @@
             railContinueGrid.replaceChildren(...list.slice(0, 8).map(card));
             if (railContinueEmpty) railContinueEmpty.hidden = list.length > 0;
         }
-        empty.hidden = list.length > 0;
-        historyNoMatch.hidden = !list.length || shown.length > 0;
-        if (list.length && !shown.length) {
-            const filterName = filter === "youtube" ? "YouTube" : filter === "playlist" ? "playlists" : filter === "file" ? "videos from this device" : "recent history";
-            historyNoMatch.querySelector("p").textContent = words.length
-                ? `No ${filterName} matches “${favSearch.value.trim()}”.`
-                : `No ${filterName} to show.`;
+        if (empty) empty.hidden = list.length > 0;
+        if (historyNoMatch) {
+            historyNoMatch.hidden = !list.length || shown.length > 0;
+            if (list.length && !shown.length) {
+                const filterName = filter === "youtube" ? "YouTube" : filter === "playlist" ? "playlists" : filter === "music" ? "music" : filter === "file" ? "videos from this device" : "recent history";
+                historyNoMatch.querySelector("p").textContent = words.length
+                    ? `No ${filterName} matches “${favSearch.value.trim()}”.`
+                    : `No ${filterName} to show.`;
+            }
         }
-        moreBtn.hidden = shown.length <= SHOWN;
-        moreBtn.textContent = showAll ? "Show less" : `Show all ${shown.length}`;
+        if (moreBtn) {
+            moreBtn.hidden = shown.length <= SHOWN;
+            moreBtn.textContent = showAll ? "Show less" : `Show all ${shown.length}`;
+        }
         if (placing) place(list.length > 0);
         renderSaved();
     };
@@ -742,13 +726,13 @@
         showAll = false;
         render();
     }));
-    moreBtn.addEventListener("click", () => {
+    moreBtn?.addEventListener("click", () => {
         showAll = !showAll;
         render();
     });
-    clearBtn.addEventListener("click", async () => {
+    clearBtn?.addEventListener("click", async () => {
         if (!await playerAsk({ icon: "fa-clock-rotate-left", title: "Clear what you watched?", text: "Files, converted videos and rooms stay", yes: "Clear", danger: true })) return;
-        CineHistory.clear();
+        window.CineHistory.clear();
         showNote("History cleared.");
     });
     window.addEventListener("resize", () => render(), { passive: true });
@@ -759,7 +743,7 @@
     // permission), otherwise the file picker (the video continues where it was left)
     const openFile = async entry => {
         const title = savedTitle(entry.name, entry.size);
-        const handle = CineHistory.handles && await CineHistory.getHandle(entry.k);
+        const handle = window.CineHistory.handles && await window.CineHistory.getHandle(entry.k);
         if (handle) {
             try {
                 let permission = await handle.queryPermission({ mode: "read" });
@@ -789,17 +773,17 @@
                 index: Number.isInteger(entry.index) ? (finished(progress) && entry.count && entry.index >= entry.count - 1 ? 0 : entry.index) : undefined
             });
         }
-        playRef({ id: entry.id, list: null, start: entry.live ? 0 : start }, { title: entry.title, channel: entry.channel, live: !!entry.live });
+        playRef({ id: entry.id, list: null, start: entry.live ? 0 : start, ...(entry.music ? { music: true } : {}) }, { title: entry.title, channel: entry.channel, live: !!entry.live, ...(entry.music ? { music: true } : {}) });
     };
 
     const onCard = e => {
         const button = e.target.closest("[data-act]");
         const row = button && button.closest("[data-k]");
-        const entry = row && CineHistory.get(row.dataset.k);
+        const entry = row && window.CineHistory.get(row.dataset.k);
         if (!entry) return;
-        if (button.dataset.act === "remove") return CineHistory.remove(entry.k);
+        if (button.dataset.act === "remove") return window.CineHistory.remove(entry.k);
         if (button.dataset.act === "fav") {
-            CineSaved.toggle(savedItemOf(entry));
+            window.CineSaved.toggle(savedItemOf(entry));
             return;
         }
         openEntry(entry);
@@ -810,28 +794,25 @@
 
     // Up to date whenever the home page shows (positions change while watching) and when the
     // history changes (also in another tab)
-    CineHistory.onChange(() => render());
+    window.CineHistory.onChange(() => render());
     // A video's length is known once it loads (and whether it's music)
     mainVideo.addEventListener("loadedmetadata", () => {
         if (together.stream || !currentSource || !Number.isFinite(mainVideo.duration)) return;
-        CineHistory.file({ name: currentSource.name, size: currentSource.size, title: savedTitle(currentSource.name, currentSource.size), duration: mainVideo.duration, audio: !mainVideo.videoWidth }, false);
+        window.CineHistory.file({ name: currentSource.name, size: currentSource.size, title: savedTitle(currentSource.name, currentSource.size), duration: mainVideo.duration, audio: !mainVideo.videoWidth }, false);
     });
-    new MutationObserver(() => !homePage.hidden && render(true)).observe(homePage, { attributes: true, attributeFilter: ["hidden"] });
+    new MutationObserver(() => !home.hidden && render(true)).observe(home, { attributes: true, attributeFilter: ["hidden"] });
     render(true);
 
     // The player's "Select a movie" box can search YouTube too: the player's own search (script.js)
-    const uploadScroll = uploadOverlay.querySelector(".box-scroll");
+    const uploadOverlay = document.querySelector(".upload-overlay");
+    const uploadScroll = uploadOverlay?.querySelector(".box-scroll");
     const existingEmptyYt = uploadScroll?.querySelector("#empty-youtube-btn");
     const handleYtClick = () => {
-        if (together.openSearch) return together.openSearch();
-        if (together.active()) return together.openPanel && together.openPanel();
+        const launcher = window.CineLauncher?.open || (typeof together !== "undefined" && together?.openSearch) || window.together?.openSearch;
+        if (typeof launcher === "function") return launcher();
+        if (typeof together !== "undefined" && together.active && together.active()) return together.openPanel && together.openPanel();
         if (location.hash === "#watch") history.back();
-        else showHome();
-        setTimeout(() => {
-            if (window.CineHome) CineHome.show("dashboard");
-            else dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
-            searchInput.focus({ preventScroll: true });
-        }, 100);
+        else if (typeof showHome === "function") showHome();
     };
     if (existingEmptyYt) {
         existingEmptyYt.addEventListener("click", handleYtClick);
@@ -847,8 +828,6 @@
     // An installed app's "Search YouTube" shortcut opens /?search
     if (new URLSearchParams(location.search).has("search")) {
         history.replaceState(null, "", location.pathname + location.hash);
-        if (window.CineHome) CineHome.show("dashboard");
-        else dashboard.scrollIntoView();
-        searchInput.focus();
+        openSearch();
     }
 })();

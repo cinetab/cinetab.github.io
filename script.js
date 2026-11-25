@@ -314,9 +314,23 @@ window.addEventListener("popstate", () => {
 if (location.hash === "#watch") history.replaceState(null, "", location.pathname);
 
 // The back arrow and the logo go home; in a room, after asking what to do with it
+// (the home page, from the player: back through its history entry - or straight there when there is
+// none, or going back lands somewhere else; room.js uses it too)
+const leavePlayer = () => {
+    if (location.hash !== "#watch") return showHome();
+    history.back();
+    // (should going back not land on the home page - an entry from before, another site - it opens
+    // anyway)
+    setTimeout(() => {
+        if (!playerPage.hidden) {
+            history.replaceState(null, "", location.pathname + location.search);
+            showHome();
+        }
+    }, 350);
+};
 const goHome = () => {
     if (together.beforeHome) return together.beforeHome();
-    history.back();
+    leavePlayer();
 };
 if (homePage) {
     if (playerHomeBtn) playerHomeBtn.addEventListener("click", goHome);
@@ -649,7 +663,7 @@ const prepareFor = (name, size) => {
     // Remembered for the dashboard on the home page (history.js)
     if (window.CineHistory) CineHistory.file({ name, size, title: savedTitle(name, size) });
     showPlayer();
-    enterMobileImmersive();
+    // (a phone opens it in the normal view; fullscreen is the player's button or a double-tap)
     mainVideo.pause();
     cancelConversion();
     removeSubtitles();
@@ -663,17 +677,6 @@ const prepareFor = (name, size) => {
     uploadOverlay.classList.add("hidden");
     errorOverlay.classList.add("hidden");
     updatePlayerStop();
-};
-
-// On phones, opening a file is already a user gesture: use it to create an app-like
-// player and request the widest available layout.
-const enterMobileImmersive = () => {
-    if (!isTouch || fullscreenElement() || !playerPage.requestFullscreen) return;
-    Promise.resolve(playerPage.requestFullscreen()).then(() => {
-        if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock("landscape").catch(() => {});
-        }
-    }).catch(() => {});
 };
 
 // `handle`: where the file came from, when the browser says (see pickVideo); kept so the
@@ -1194,10 +1197,12 @@ window.unloadPlayer = unloadPlayer;
 
 const updatePlayerStop = () => {
     const isSoloActive = !!(together.solo && (typeof together.solo.active === "function" ? together.solo.active() : together.solo.active));
-    const hasMedia = !uploadOverlay.classList.contains("hidden") && (!!currentFile || isSoloActive);
+    // (something is on: the "pick a video" notice is away, and there's a file or YouTube)
+    const hasMedia = uploadOverlay.classList.contains("hidden") && (!!currentFile || !!currentSource || isSoloActive);
     if (together.updateStop) together.updateStop(hasMedia);
     else {
         if (playerStopBtn) playerStopBtn.hidden = !hasMedia;
+        document.querySelectorAll(".more-stop-video").forEach(row => row.hidden = !hasMedia);
     }
 };
 window.updatePlayerStop = updatePlayerStop;
@@ -1329,6 +1334,8 @@ if (!audioMenuBackdrop) {
     audioMenuBackdrop.setAttribute("aria-hidden", "true");
     playerPage.append(audioMenuBackdrop);
 }
+// (only shown behind the open settings menu in audio mode - see togglePopup)
+audioMenuBackdrop.hidden = true;
 // (speed is a section of More: speedOptions isn't a menu of its own any more)
 const popupMenus = [moreOptions];
 const togglePopup = menu => {
@@ -1378,14 +1385,58 @@ moreOptions.addEventListener("click", e => {
     moreOptions.classList.add("showing-subview");
 });
 const playerSheet = container.querySelector(".player-sheet");
+const sheetMenu = () => matchMedia("(max-width: 900px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 const closePopups = () => {
     const open = popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden;
-    popupMenus.forEach(menu => menu.classList.remove("show"));
+    popupMenus.forEach(menu => {
+        // (a phone: the menu is a sheet from below - it slides back down, then goes)
+        if (menu.classList.contains("show") && sheetMenu()) {
+            menu.classList.add("closing");
+            setTimeout(() => menu.classList.remove("show", "closing"), 220);
+        } else menu.classList.remove("show", "closing");
+    });
     if (audioMenuBackdrop) audioMenuBackdrop.hidden = true;
     closeSheet();
     return open;
 };
 audioMenuBackdrop?.addEventListener("click", closePopups);
+// (a phone's settings sheet, swiped down: it follows the finger and closes. Only a pull down from
+// the very top of its list: not while the list (the sheet itself, or a list in it) is scrolled
+// down, and not once the gesture has scrolled it - scrolling the list back up never closes it)
+{
+    let menuSwipe = null;
+    const cancelMenuSwipe = () => {
+        menuSwipe = null;
+        moreOptions.style.removeProperty("translate");
+    };
+    moreOptions.addEventListener("touchstart", e => {
+        if (!sheetMenu() || !moreOptions.classList.contains("show") || e.touches.length !== 1) return menuSwipe = null;
+        const scrollers = [];
+        for (let node = e.target; node && node !== moreOptions.parentElement; node = node.parentElement) {
+            if (node.scrollHeight > node.clientHeight + 1) scrollers.push([node, node.scrollTop]);
+        }
+        menuSwipe = scrollers.some(([, top]) => top > 0) ? null : { y: e.touches[0].clientY, dy: 0, scrollers, started: false };
+    }, { passive: true });
+    moreOptions.addEventListener("touchmove", e => {
+        if (!menuSwipe) return;
+        const dy = e.touches[0].clientY - menuSwipe.y;
+        // (a move up first is a scroll of the list; anything scrolled meanwhile, too)
+        if (!menuSwipe.started && dy < -4) return cancelMenuSwipe();
+        if (menuSwipe.scrollers.some(([node, top]) => node.scrollTop !== top)) return cancelMenuSwipe();
+        if (dy > 6) menuSwipe.started = true;
+        menuSwipe.dy = Math.max(0, dy);
+        if (menuSwipe.started) moreOptions.style.translate = `0 ${Math.round(menuSwipe.dy)}px`;
+    }, { passive: true });
+    const endMenuSwipe = () => {
+        if (!menuSwipe) return;
+        const far = menuSwipe.started && menuSwipe.dy > 70;
+        menuSwipe = null;
+        moreOptions.style.removeProperty("translate");
+        if (far) closePopups();
+    };
+    moreOptions.addEventListener("touchend", endMenuSwipe, { passive: true });
+    moreOptions.addEventListener("touchcancel", endMenuSwipe, { passive: true });
+}
 speedBtn.addEventListener("click", () => togglePopup(speedOptions));
 moreBtn.addEventListener("click", () => togglePopup(moreOptions));
 
@@ -1466,13 +1517,15 @@ const paintTime = (time = shownTime.time, duration = shownTime.duration) => {
 const paintTimeLabel = () => {
     const audioOnly = container.classList.contains("audio-mode-only");
     const label = audioOnly ? "Elapsed time" : showRemaining ? "Time left: show how far in" : "Show the time left";
-    currentVidTime.title = label;
     currentVidTime.setAttribute("aria-label", label);
     if (audioOnly) {
+        // (the audio player always shows how far in: a plain label, nothing to tap)
+        currentVidTime.removeAttribute("title");
         currentVidTime.removeAttribute("role");
         currentVidTime.removeAttribute("aria-pressed");
         currentVidTime.tabIndex = -1;
     } else {
+        currentVidTime.title = label;
         currentVidTime.setAttribute("role", "button");
         currentVidTime.setAttribute("aria-pressed", String(showRemaining));
         currentVidTime.tabIndex = 0;
@@ -1573,7 +1626,7 @@ const setVolume = (value) => {
     mainVideo.volume = value;
     volumeSlider.value = value;
     paintRange(volumeSlider);
-    volumeBtn.parentNode.title = value == 0 ? "Unmute (M)" : "Mute (M)";
+    volumeBtn.parentNode.title = value == 0 ? "Unmute (Shift + M)" : "Mute (Shift + M)";
     if(value == 0) {
         volumeBtn.className = "fa-solid fa-volume-xmark";
     } else if(value < 0.5) {
@@ -1595,6 +1648,19 @@ volumeBtn.parentNode.addEventListener("click", (e) => {
 });
 
 volumeSlider.addEventListener("input", e => setVolume(e.target.value));
+// One volume step (the arrow keys, a notch of the wheel): 5 points, shown as a message
+const stepVolume = dir => {
+    const value = Math.round(Math.min(1, Math.max(0, mainVideo.volume + dir * 0.05)) * 100) / 100;
+    setVolume(value);
+    showFeedback(value === 0 ? "fa-volume-xmark" : value < 0.5 ? "fa-volume-low" : "fa-volume-high", `${Math.round(value * 100)}%`);
+};
+// (a computer: the wheel over the volume - in the video's controls or the audio player's row -
+// turns it up and down instead of scrolling the page)
+volumeSlider.closest(".volume-group")?.addEventListener("wheel", e => {
+    if (!e.deltaY) return;
+    e.preventDefault();
+    stepVolume(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
 // Give focus back to the page so keyboard shortcuts keep working
 volumeSlider.addEventListener("change", () => volumeSlider.blur());
 
@@ -1793,10 +1859,11 @@ moreOptions.addEventListener("click", e => {
         fileInput.click();
         return;
     }
+    // Stop: the video (or the stream) off, back to "pick a video" - in a room, for everyone
     const stopRow = e.target.closest(".more-stop-video");
     if (stopRow) {
         closePopups();
-        if (playerStopBtn) playerStopBtn.click();
+        onStopClick();
         return;
     }
 });
@@ -1944,6 +2011,7 @@ sheetMain.addEventListener("click", e => {
     }
     // These open something else: the sheet steps aside
     closeSheet();
+    if (act === "stop") return onStopClick();
     if (act === "subtitle-file") subtitleInput.click();
     else if (act === "open") openFileBtn.click();
 });
@@ -2035,6 +2103,52 @@ const mediaTime = () => {
     return together.stream ? together.stream.currentTime() : mainVideo.currentTime;
 };
 
+// A thin seekbar along the edge of a small view - the miniplayer's video (room.js), the phone's
+// audio strip at the top of the open sheet. It follows whatever plays (your file, YouTube, a
+// room's stream) and seeks it: tap, or drag and let go. Its taps don't reach the view under it.
+const makeSeekLine = host => {
+    const line = document.createElement("div");
+    line.className = "seek-line";
+    line.setAttribute("role", "slider");
+    line.setAttribute("aria-label", "Seek");
+    line.innerHTML = '<span class="seek-line-track"><span class="seek-line-fill"></span></span>';
+    host.append(line);
+    const fill = line.querySelector(".seek-line-fill");
+    let dragging = false;
+    const ratioAt = e => {
+        const box = line.getBoundingClientRect();
+        return box.width ? Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)) : 0;
+    };
+    const paint = ratio => fill.style.width = `${(ratio * 100).toFixed(2)}%`;
+    const known = () => { const d = mediaDuration(); return Number.isFinite(d) && d > 0 ? d : 0; };
+    setInterval(() => {
+        if (dragging || !line.getClientRects().length) return;
+        const duration = known();
+        paint(duration ? Math.min(1, mediaTime() / duration) : 0);
+        line.setAttribute("aria-valuenow", String(Math.round(duration ? mediaTime() / duration * 100 : 0)));
+    }, 250);
+    line.addEventListener("pointerdown", e => {
+        e.stopPropagation();
+        if (e.button > 0 || !known()) return;
+        e.preventDefault();
+        dragging = true;
+        line.classList.add("dragging");
+        line.setPointerCapture?.(e.pointerId);
+        paint(ratioAt(e));
+    });
+    line.addEventListener("pointermove", e => dragging && paint(ratioAt(e)));
+    const end = e => {
+        if (!dragging) return;
+        dragging = false;
+        line.classList.remove("dragging");
+        if (e.type === "pointerup" && known()) seekTo(ratioAt(e) * known());
+    };
+    line.addEventListener("pointerup", end);
+    line.addEventListener("pointercancel", end);
+    line.addEventListener("click", e => e.stopPropagation());
+    return line;
+};
+
 // The YouTube video in the player (on your own, or the room's), for its picture
 const youTubeIdShown = () => (together.solo && together.solo.active && together.solo.videoId) ||
     (together.roomYouTubeId && together.roomYouTubeId()) || null;
@@ -2046,53 +2160,195 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
     const audioButton = container.querySelector(".audio-mode-toggle");
     const miniButton = container.querySelector(".solo-miniplayer-toggle");
     if (!audioButton || !miniButton) return;
+    // A YouTube video's picture for the artwork: the 16:9 one, without the black bars of the
+    // 4:3 hqdefault (falls back to mqdefault, also 16:9, when a video doesn't have it - see "load")
+    const youTubeArt = id => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hq720.jpg`;
+    // (the large 16:9 pictures, in turn; mqdefault - also 16:9, smaller - always exists)
+    const nextYouTubeArt = src => /\/hq720\.jpg$/.test(src) ? src.replace(/hq720\.jpg$/, "maxresdefault.jpg")
+        : /\/maxresdefault\.jpg$/.test(src) ? src.replace(/maxresdefault\.jpg$/, "mqdefault.jpg") : null;
     const micaBg = document.createElement("div");
     micaBg.className = "audio-mode-mica";
     micaBg.setAttribute("aria-hidden", "true");
     container.prepend(micaBg);
+    // (the same picture for the phones' details panel: its dynamic mica - style.css --mica-image)
+    new MutationObserver(() => playerPage.style.setProperty("--mica-image", micaBg.style.backgroundImage || "none"))
+        .observe(micaBg, { attributes: true, attributeFilter: ["style"] });
 
     const audioView = document.createElement("section");
+    // The audio player (2026 redesign). Its parts have their own "ap-" classes and the id
+    // #audio-stage, which style.css's "Audio player" block styles on its own - none of the older
+    // .audio-mode-* layout rules reach them. The seekbar, the play controls, the volume and the
+    // Save button are the video player's own, moved in while it shows (setAudioMode).
     audioView.className = "audio-mode-view";
-    audioView.setAttribute("aria-label", "Audio mode visualizer");
+    audioView.id = "audio-stage";
+    audioView.setAttribute("aria-label", "Audio player");
     audioView.innerHTML = `
-      <div class="audio-mode-art"><img alt="" /><span class="audio-mode-art-icon"><i class="fa-solid fa-music"></i></span></div>
-      <div class="audio-mode-visual">
-        <div class="audio-mode-header">
-          <div class="audio-mode-actions" aria-label="Audio player actions"></div>
+      <div class="ap">
+        <figure class="ap-art">
+          <img alt="" />
+          <span class="ap-art-icon" aria-hidden="true"><i class="fa-solid fa-music"></i></span>
+          <canvas class="ap-viz" aria-hidden="true"></canvas>
+        </figure>
+        <div class="ap-info">
+          <div class="ap-head">
+            <div class="ap-text">
+              <div class="ap-title-wrap"><h2 class="ap-title"><span class="ap-title-text"></span></h2></div>
+              <div class="ap-meta"><span class="ap-meta-line">
+                <span class="ap-artist"></span><span class="ap-dot" hidden>·</span><span class="ap-album" hidden></span><span class="ap-dot" hidden>·</span><span class="ap-year" hidden></span>
+              </span></div>
+            </div>
+            <div class="ap-actions"></div>
+          </div>
+          <div class="ap-timeline"></div>
+          <div class="ap-transport"></div>
+          <div class="ap-volume"></div>
         </div>
-        <div class="audio-mode-title-wrap"><b class="audio-mode-title"><span class="audio-title-text"></span></b></div>
-        <div class="audio-mode-meta">
-          <span class="audio-meta-artist"><span class="audio-artist-text"></span></span>
-          <span class="audio-meta-dot" hidden>•</span>
-          <span class="audio-meta-album" hidden></span>
-          <span class="audio-meta-dot" hidden>•</span>
-          <span class="audio-meta-year" hidden></span>
-        </div>
-        <div class="audio-mode-timeline-slot"></div>
-        <div class="audio-mode-controls"></div>
-        <canvas aria-hidden="true"></canvas>
       </div>`;
     container.append(audioView);
     const canvas = audioView.querySelector("canvas");
+    // The artwork, touched (a phone's audio player): a double tap saves (or unsaves) - a heart pops
+    // on it; a swipe from right to left goes on to the next track (like Next), left to right back
+    // to the previous one
+    {
+        const artBox = audioView.querySelector(".ap-art");
+        let lastTap = 0, artTouch = null;
+        const popHeart = () => {
+            const heart = document.createElement("i");
+            heart.className = "fa-solid fa-heart ap-heart-pop";
+            artBox.append(heart);
+            setTimeout(() => heart.remove(), 800);
+        };
+        artBox.addEventListener("pointerdown", e => {
+            artTouch = { x: e.clientX, y: e.clientY, touch: e.pointerType === "touch" };
+        });
+        artBox.addEventListener("pointercancel", () => artTouch = null);
+        artBox.addEventListener("pointerup", e => {
+            if (!artTouch) return;
+            const dx = e.clientX - artTouch.x, dy = e.clientY - artTouch.y;
+            const touch = artTouch.touch;
+            artTouch = null;
+            if (touch && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                const next = dx < 0;
+                const step = container.querySelector(next ? ".next-track" : ".prev-track");
+                if (step && !step.hidden && !step.disabled) {
+                    step.click();
+                    artBox.animate([{ translate: `${next ? 28 : -28}px 0`, opacity: 0.4 }, { translate: "0 0", opacity: 1 }], { duration: 260, easing: "ease-out" });
+                } else showFeedback(next ? "fa-forward-step" : "fa-backward-step", next ? "Nothing after this" : "Nothing before this");
+                return;
+            }
+            if (Math.hypot(dx, dy) > 10) return;
+            const now = Date.now();
+            if (now - lastTap < 320) {
+                lastTap = 0;
+                const save = container.querySelector(".player-save-wrap:not([hidden]) .player-save-btn");
+                if (!save) return;
+                const wasOn = save.classList.contains("on");
+                save.click();
+                if (!wasOn) popHeart();
+            } else lastTap = now;
+        });
+    }
     const context = canvas.getContext("2d");
     const art = audioView.querySelector("img");
+    // The shape of what a picture shows, black bars left out (a thumbnail with a square album cover
+    // in it: 1). Null when the page may not read the picture. Snapped: near-square is square.
+    const measureArtContent = (src, natural) => new Promise(resolve => {
+        if (!src || src.startsWith("data:")) return resolve(null);
+        const probe = new Image();
+        probe.crossOrigin = "anonymous";
+        probe.onerror = () => resolve(null);
+        probe.onload = () => {
+            try {
+                const W = 96, H = Math.max(1, Math.round(96 / natural));
+                const c = document.createElement("canvas");
+                c.width = W;
+                c.height = H;
+                const g = c.getContext("2d", { willReadFrequently: true });
+                g.drawImage(probe, 0, 0, W, H);
+                const d = g.getImageData(0, 0, W, H).data;
+                const dark = (x, y) => {
+                    const i = (y * W + x) * 4;
+                    return Math.max(d[i], d[i + 1], d[i + 2]) < 28;
+                };
+                // a row / column is a bar when nearly all of it is black
+                const colBar = x => { let n = 0; for (let y = 0; y < H; y++) n += dark(x, y); return n >= H * 0.96; };
+                const rowBar = y => { let n = 0; for (let x = 0; x < W; x++) n += dark(x, y); return n >= W * 0.96; };
+                let left = 0, right = W - 1, top = 0, bottom = H - 1;
+                while (left < right && colBar(left)) left++;
+                while (right > left && colBar(right)) right--;
+                while (top < bottom && rowBar(top)) top++;
+                while (bottom > top && rowBar(bottom)) bottom--;
+                const w = right - left + 1, h = bottom - top + 1;
+                // (an all-dark picture, or bars that leave almost nothing: trust its own shape)
+                if (w < W * 0.3 || h < H * 0.3) return resolve(natural);
+                const ratio = (w / W * natural) / (h / H);
+                resolve(ratio < 1.15 && ratio > 0.87 ? 1 : ratio);
+            } catch (e) {
+                resolve(null);
+            }
+        };
+        probe.src = src;
+    });
+    const artIcon = audioView.querySelector(".ap-art-icon i");
+    // A local audio file's mica (no picture): the placeholder artwork's violet and blue
+    const LOCAL_AUDIO_MICA = "radial-gradient(circle at 25% 30%, rgb(96, 64, 190), transparent 60%), radial-gradient(circle at 80% 75%, rgb(40, 90, 200), transparent 60%), linear-gradient(rgb(46, 30, 92), rgb(20, 24, 60))";
+    // A local video's (or a shared screen's) mica: a small picture of its current frame, taken once it
+    // shows one and again every few seconds while it plays, and after a jump
+    let micaShotAt = 0;
+    const captureMica = () => {
+        if (container.classList.contains("youtube") || !(currentFile || together.stream) || isLocalAudio()) return;
+        if (!mainVideo.videoWidth || mainVideo.readyState < 2) return;
+        try {
+            const shot = document.createElement("canvas");
+            shot.width = 160;
+            shot.height = Math.max(1, Math.round(160 * mainVideo.videoHeight / mainVideo.videoWidth));
+            shot.getContext("2d").drawImage(mainVideo, 0, 0, shot.width, shot.height);
+            micaBg.style.backgroundImage = `url("${shot.toDataURL("image/jpeg", 0.7)}")`;
+            micaShotAt = Date.now();
+        } catch (e) { /* a picture the page may not read */ }
+    };
+    mainVideo.addEventListener("loadeddata", captureMica);
+    mainVideo.addEventListener("seeked", captureMica);
+    mainVideo.addEventListener("timeupdate", () => { if (Date.now() - micaShotAt > 8000) captureMica(); });
 
     art.addEventListener("load", () => {
         if (!art.naturalWidth || !art.naturalHeight) return;
+        // (a video without that picture gets YouTube's 120x90 stand-in: the next one then)
+        if (nextYouTubeArt(art.src) && art.naturalWidth <= 120) {
+            art.src = nextYouTubeArt(art.src);
+            return;
+        }
         art.hidden = false;
+        tintFrom(art.src);
         if (art.src && micaBg) {
             micaBg.style.backgroundImage = `url("${art.src}")`;
         }
-        const ratio = art.naturalWidth / art.naturalHeight;
-        art.parentElement?.style.setProperty("--audio-art-ratio", ratio > 1.35 ? "16 / 9" : "1 / 1");
-        art.parentElement?.style.setProperty("aspect-ratio", ratio > 1.35 ? "16 / 9" : "1 / 1");
+        // (YouTube Music: the frame takes the shape of what the picture really shows - a square album
+        // cover stays 1:1, also when it comes inside a 4:3 / 16:9 thumbnail with black bars round it;
+        // a landscape picture gets its own ratio. See .audio-art-wide in update() and --ap-art-ratio)
+        const setShape = ratio => {
+            const wide = ratio > 1.2;
+            art.dataset.wide = wide ? "1" : "";
+            // (a YouTube video, not music: its picture is always 16:9)
+            if (!isMusicTrack()) return art.parentElement.style.removeProperty("--ap-art-ratio");
+            art.parentElement.style.setProperty("--ap-art-ratio", wide ? ratio.toFixed(4) : "1");
+            if (isMusicTrack()) art.parentElement.classList.toggle("audio-art-wide", wide);
+        };
+        setShape(art.naturalWidth / art.naturalHeight);
+        measureArtContent(art.src, art.naturalWidth / art.naturalHeight).then(ratio => {
+            if (ratio && art.complete && art.naturalWidth) setShape(ratio);
+        });
         const colThumb = audioCollapsedBar?.querySelector(".audio-collapsed-thumb");
         if (colThumb && art.src) colThumb.src = art.src;
     });
     art.addEventListener("error", () => {
+        if (nextYouTubeArt(art.src)) {
+            art.src = nextYouTubeArt(art.src);
+            return;
+        }
         art.hidden = true;
         art.removeAttribute("src");
-        art.parentElement.style.aspectRatio = "";
+        tintFrom("");
         micaBg.style.backgroundImage = "";
         const colThumb = audioCollapsedBar?.querySelector(".audio-collapsed-thumb");
         if (colThumb) colThumb.removeAttribute("src");
@@ -2100,14 +2356,86 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
     let raf = 0, audioContext = null, analyser = null, sourceNode = null, samples = null, analysisTracks = [];
     let currentMusicId = null;
     let resolvedTrackTitle = "";
-    const titleWrap = audioView.querySelector(".audio-mode-title-wrap");
-    const titleSpan = audioView.querySelector(".audio-title-text");
-    const artistSpan = audioView.querySelector(".audio-meta-artist");
-    const artistTextSpan = audioView.querySelector(".audio-artist-text");
-    const albumSpan = audioView.querySelector(".audio-meta-album");
-    const yearSpan = audioView.querySelector(".audio-meta-year");
-    const dots = audioView.querySelectorAll(".audio-meta-dot");
-    const timelineSlot = audioView.querySelector(".audio-mode-timeline-slot");
+    const titleWrap = audioView.querySelector(".ap-title-wrap");
+    const titleSpan = audioView.querySelector(".ap-title-text");
+    const artistSpan = audioView.querySelector(".ap-artist");
+    // (the artist · album · year line scrolls as one, like the title, when it's wider than its box)
+    const artistTextSpan = audioView.querySelector(".ap-meta-line");
+    const artistWrap = audioView.querySelector(".ap-meta");
+    const albumSpan = audioView.querySelector(".ap-album");
+    const yearSpan = audioView.querySelector(".ap-year");
+    const dots = audioView.querySelectorAll(".ap-dot");
+    const timelineSlot = audioView.querySelector(".ap-timeline");
+    const transportSlot = audioView.querySelector(".ap-transport");
+    const volumeSlot = audioView.querySelector(".ap-volume");
+    // Up next (a computer's audio player): the queue's next track, a click plays it
+    const nextCard = document.createElement("button");
+    nextCard.type = "button";
+    nextCard.className = "ap-next";
+    nextCard.hidden = true;
+    nextCard.innerHTML = '<span class="ap-next-cover"><img alt="" /></span><span class="ap-next-text"><small>Up next</small><b></b><span></span></span><i class="fa-solid fa-forward-step" aria-hidden="true"></i>';
+    audioView.querySelector(".ap-info").append(nextCard);
+    nextCard.addEventListener("click", () => {
+        const step = container.querySelector(".next-track");
+        if (step && !step.hidden && !step.disabled) step.click();
+    });
+    let nextKey = "";
+    const renderUpNext = () => {
+        const next = together.upNext?.() || null;
+        const key = next ? `${next.id}|${next.title}|${next.channel}` : "";
+        if (key === nextKey) return;
+        nextKey = key;
+        nextCard.hidden = !next;
+        if (nextCard.parentElement?.classList.contains("audio-top-center")) nextCard.parentElement.hidden = !next;
+        if (!next) return;
+        nextCard.querySelector("img").src = `https://i.ytimg.com/vi/${next.id}/mqdefault.jpg`;
+        nextCard.querySelector("b").textContent = next.title || (next.music ? "Next track" : "Next video");
+        const sub = nextCard.querySelector(".ap-next-text > span");
+        sub.textContent = next.channel || (next.by === "Autoplay" ? "Autoplay" : "");
+        sub.hidden = !sub.textContent;
+        nextCard.title = `Play next: ${next.title || "the next one"}`;
+    };
+    // The artwork's own colour: the play button and the seekbar take it (none for a picture the page
+    // may not read, or no picture - they stay white)
+    const tintFrom = src => {
+        if (!src) return audioView.style.removeProperty("--ap-tint");
+        const probe = new Image();
+        probe.crossOrigin = "anonymous";
+        probe.onload = () => {
+            try {
+                const c = document.createElement("canvas");
+                c.width = c.height = 24;
+                const g = c.getContext("2d", { willReadFrequently: true });
+                g.drawImage(probe, 0, 0, 24, 24);
+                const d = g.getImageData(0, 0, 24, 24).data;
+                // (the most colourful pixels count the most - not the greys of a background)
+                let r = 0, gr = 0, b = 0, w = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                    const max = Math.max(d[i], d[i + 1], d[i + 2]), min = Math.min(d[i], d[i + 1], d[i + 2]);
+                    const weight = (max - min) / 255 + 0.02;
+                    r += d[i] * weight; gr += d[i + 1] * weight; b += d[i + 2] * weight; w += weight;
+                }
+                r /= w; gr /= w; b /= w;
+                // as hue / saturation / lightness: kept bright and colourful enough to read as a button
+                const mx = Math.max(r, gr, b) / 255, mn = Math.min(r, gr, b) / 255, l = (mx + mn) / 2;
+                let h = 0, s = 0;
+                if (mx !== mn) {
+                    const dd = mx - mn;
+                    s = l > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+                    const rr = r / 255, gg = gr / 255, bb = b / 255;
+                    h = mx === rr ? (gg - bb) / dd + (gg < bb ? 6 : 0) : mx === gg ? (bb - rr) / dd + 2 : (rr - gg) / dd + 4;
+                    h *= 60;
+                }
+                if (s < 0.12) return audioView.style.removeProperty("--ap-tint");
+                audioView.style.setProperty("--ap-tint", `hsl(${Math.round(h)} ${Math.round(Math.max(55, Math.min(90, s * 100)))}% 72%)`);
+            } catch (e) {
+                audioView.style.removeProperty("--ap-tint");
+            }
+        };
+        probe.onerror = () => audioView.style.removeProperty("--ap-tint");
+        probe.src = src;
+    };
+    const actionsSlot = audioView.querySelector(".ap-actions");
     const timelineContainer = container.querySelector(".timeline-container");
     const timelineParent = timelineContainer?.parentElement;
     const centerControls = container.querySelector(".player-center-controls");
@@ -2120,8 +2448,6 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
     const moreParent = moreContent?.parentElement;
     const topSearch = container.querySelector(".player-search-btn");
     const topSearchParent = topSearch?.parentElement;
-    const topQueue = container.querySelector(".player-queue-btn");
-    const topQueueParent = topQueue?.parentElement;
     const topRoom = container.querySelector(".share-help-btn");
     const topRoomParent = topRoom?.parentElement;
     const topHome = container.querySelector(".player-home");
@@ -2133,7 +2459,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
 
     const placeAudioSave = () => {
         if (!saveWrap) return;
-        if (titleWrap) moveAudioEl(saveWrap, titleWrap);
+        if (actionsSlot) moveAudioEl(saveWrap, actionsSlot);
     };
 
     let repeatButton = container.querySelector(".repeat-btn");
@@ -2161,6 +2487,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         audioCollapsedBar.innerHTML = `
           <div class="audio-collapsed-info">
             <img class="audio-collapsed-thumb" alt="" />
+            <span class="audio-collapsed-icon" aria-hidden="true" hidden><i class="fa-solid fa-music"></i></span>
             <div class="audio-collapsed-text">
               <span class="audio-collapsed-title"></span>
               <span class="audio-collapsed-artist"></span>
@@ -2168,10 +2495,13 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
           </div>
           <div class="audio-collapsed-controls">
             <button type="button" class="audio-collapsed-play" aria-label="Play or Pause"><i class="fas fa-play"></i></button>
+            <button type="button" class="audio-collapsed-next" aria-label="Next track" title="Next track"><i class="fa-solid fa-forward-step"></i></button>
             <button type="button" class="audio-collapsed-expand" aria-label="Return to music player"><i class="fa-solid fa-chevron-down"></i></button>
           </div>
         `;
         container.append(audioCollapsedBar);
+        // (the seekbar along its bottom border)
+        makeSeekLine(audioCollapsedBar);
 
         audioCollapsedBar.addEventListener("click", e => {
             if (e.target.closest(".audio-collapsed-play")) {
@@ -2179,34 +2509,62 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                 togglePlay();
                 return;
             }
-            playerPage.classList.remove("mobile-audio-extended");
+            // (the player's own Next: the queue's or the playlist's next track)
+            if (e.target.closest(".audio-collapsed-next")) {
+                e.stopPropagation();
+                const next = container.querySelector(".next-track");
+                if (next && !next.hidden && !next.disabled) next.click();
+                return;
+            }
+            // (the panel slides back down into its tab bar: room.js)
+            if (together.setAudioExtended) together.setAudioExtended(false);
+            else playerPage.classList.remove("mobile-audio-extended");
         });
     }
 
+    // One line that scrolls sideways when it doesn't fit (the title; the artist · album · year line).
+    // update() calls this every second: it starts over only when the text or the room for it changed,
+    // so a long title keeps scrolling instead of jumping back to its start.
     const fitAudioMarquee = (wrapEl, textEl) => {
         if (!wrapEl || !textEl) return;
+        const key = `${textEl.textContent}|${wrapEl.clientWidth}`;
+        if (textEl._marqueeKey === key) return;
+        textEl._marqueeKey = key;
         if (textEl._marqueeAnim) {
             textEl._marqueeAnim.cancel();
             textEl._marqueeAnim = null;
         }
         textEl.style.transform = "none";
         const overflow = textEl.scrollWidth - wrapEl.clientWidth;
-        if (overflow > 4) {
-            wrapEl.style.justifyContent = "flex-start";
-            const duration = Math.max(5000, overflow * 55);
+        // (style.css fades the line's ends while it scrolls; with reduced motion it's cut off with "…")
+        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        wrapEl.classList.toggle("is-scrolling", overflow > 4 && !still);
+        if (overflow > 4 && wrapEl.clientWidth > 0 && !still) {
+            const shift = overflow + 24;
             textEl._marqueeAnim = textEl.animate([
                 { transform: "translateX(0px)", offset: 0 },
-                { transform: "translateX(0px)", offset: 0.15 },
-                { transform: `translateX(-${overflow + 12}px)`, offset: 0.8 },
-                { transform: `translateX(-${overflow + 12}px)`, offset: 0.9 },
+                { transform: "translateX(0px)", offset: 0.18 },
+                { transform: `translateX(-${shift}px)`, offset: 0.78 },
+                { transform: `translateX(-${shift}px)`, offset: 0.9 },
                 { transform: "translateX(0px)", offset: 1 }
             ], {
-                duration: duration,
+                duration: Math.max(7000, shift * 70),
                 iterations: Infinity,
                 easing: "ease-in-out"
             });
-        } else {
-            wrapEl.style.justifyContent = "center";
+        } else if (!wrapEl.clientWidth) {
+            // (measured while hidden: try again next time)
+            textEl._marqueeKey = "";
+        }
+    };
+    const showMeta = on => {
+        if (!artistWrap) return;
+        artistWrap.hidden = !on;
+        if (on) requestAnimationFrame(() => fitAudioMarquee(artistWrap, artistTextSpan));
+        else if (artistTextSpan?._marqueeAnim) {
+            artistTextSpan._marqueeAnim.cancel();
+            artistTextSpan._marqueeAnim = null;
+            artistTextSpan._marqueeKey = "";
         }
     };
 
@@ -2227,6 +2585,60 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             container.querySelector(".player-home")?.click();
         });
     }
+    // A-PC, the top row: Up next in its middle, between the brand and the buttons at the top right
+    // (back at the bottom of the details column when that row is too narrow for it). The volume is
+    // a button among those at the top right - its slider shows while it's pointed at.
+    // The Queue button there brings the side panel back once it's been hidden.
+    const topVolume = document.createElement("div");
+    topVolume.className = "audio-top-center";
+    topVolume.hidden = true;
+    playerPage.append(topVolume);
+    const queueOpen = document.createElement("button");
+    queueOpen.type = "button";
+    queueOpen.className = "audio-queue-btn";
+    queueOpen.title = "Show the queue";
+    queueOpen.setAttribute("aria-label", "Show the queue");
+    queueOpen.innerHTML = '<i class="fa-solid fa-list-ul"></i>';
+    queueOpen.addEventListener("click", () => {
+        // (a narrow window: the details are the sheet from below - its Queue tab opens it)
+        if (matchMedia("(max-width: 900px)").matches) return playerPage.querySelector('.room-tab-btn[data-tab="queue"]')?.click();
+        together.openQueue?.();
+    });
+    // (with a mouse, at any width: the narrow window's player has the same top row)
+    const pcAudio = matchMedia("(hover: hover) and (pointer: fine)");
+    const placeTopVolume = () => {
+        const on = container.classList.contains("audio-mode-only") && !playerPage.hidden;
+        if (!on) {
+            topVolume.hidden = true;
+            return;
+        }
+        // the volume and Queue: at the top right on a computer, under the controls elsewhere
+        if (volumeGroup) {
+            if (pcAudio.matches) {
+                if (volumeGroup.parentElement !== audioCorner) audioCorner.prepend(volumeGroup);
+            } else if (volumeGroup.parentElement !== volumeSlot) volumeSlot.append(volumeGroup);
+        }
+        if (queueOpen.parentElement !== audioCorner) audioCorner.prepend(queueOpen);
+        const page = playerPage.getBoundingClientRect();
+        const corner = audioCorner.getBoundingClientRect();
+        const brand = audioBrand.getBoundingClientRect();
+        const left = brand.width ? brand.right : page.left;
+        const fits = pcAudio.matches && corner.width > 0 && corner.left - left >= 340;
+        const info = audioView.querySelector(".ap-info");
+        if (!fits) {
+            topVolume.hidden = true;
+            if (nextCard.parentElement !== info) info.append(nextCard);
+            return;
+        }
+        if (nextCard.parentElement !== topVolume) topVolume.append(nextCard);
+        topVolume.hidden = nextCard.hidden;
+        topVolume.style.left = `${Math.round((left + corner.left) / 2 - page.left)}px`;
+        topVolume.style.top = `${Math.round(corner.top + corner.height / 2 - page.top)}px`;
+        topVolume.style.maxWidth = `${Math.round(corner.left - left - 32)}px`;
+    };
+    new ResizeObserver(() => placeTopVolume()).observe(playerPage);
+    new ResizeObserver(() => placeTopVolume()).observe(audioCorner);
+    new ResizeObserver(() => placeTopVolume()).observe(audioView);
 
     const cleanTrackTitle = raw => {
         if (!raw) return "";
@@ -2239,10 +2651,28 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             .trim();
     };
 
+    // "Artist - Title" (or – or —): YouTube Music shows the artist on its own line, so the title
+    // drops it when it starts with it
+    const TITLE_SEP = /\s[-–—]\s/;
+    let musicArtist = "";
+    const withoutArtist = text => {
+        if (!text || !musicArtist) return text;
+        const name = musicArtist.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rest = text.replace(new RegExp(`^${name}\\s*[-–—:|]\\s*`, "i"), "").trim();
+        return rest || text;
+    };
     const renderMetaUI = (artist = "", album = "", year = "") => {
         const cleanArtist = (artist || "YouTube Music").replace(/\s*-\s*Topic$/i, "").trim();
-        if (artistTextSpan) artistTextSpan.textContent = cleanArtist;
-        else if (artistSpan) artistSpan.textContent = cleanArtist;
+        musicArtist = /^YouTube( Music)?$/i.test(cleanArtist) ? "" : cleanArtist;
+        // (the title shown so far may still start with the artist, now known)
+        if (isMusicTrack() && resolvedTrackTitle && withoutArtist(resolvedTrackTitle) !== resolvedTrackTitle) {
+            resolvedTrackTitle = withoutArtist(resolvedTrackTitle);
+            if (titleSpan) titleSpan.textContent = resolvedTrackTitle;
+            const colTitle = audioCollapsedBar?.querySelector(".audio-collapsed-title");
+            if (colTitle) colTitle.textContent = resolvedTrackTitle;
+            requestAnimationFrame(() => fitAudioMarquee(titleWrap, titleSpan));
+        }
+        if (artistSpan) artistSpan.textContent = cleanArtist;
         if (albumSpan) {
             albumSpan.textContent = album;
             albumSpan.hidden = !album;
@@ -2258,41 +2688,49 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         if (colArtist) colArtist.textContent = cleanArtist;
 
         const isYTMusic = isMusicTrack();
-        const metaEl = audioView.querySelector(".audio-mode-meta");
-        if (metaEl) {
-            if (isYTMusic) {
-                metaEl.hidden = false;
-                metaEl.style.removeProperty("display");
-                requestAnimationFrame(() => fitAudioMarquee(artistWrap, artistTextSpan));
-            } else {
-                metaEl.hidden = true;
-                metaEl.style.setProperty("display", "none", "important");
-                if (artistTextSpan?._marqueeAnim) {
-                    artistTextSpan._marqueeAnim.cancel();
-                    artistTextSpan._marqueeAnim = null;
-                }
-            }
-        }
+        showMeta(isYTMusic);
     };
 
+    // The best iTunes result for a track: the same song name (not a live / karaoke / remix / cover
+    // version unless the title says so), by the same artist. None good enough: null - the
+    // YouTube picture stays rather than another album's cover.
+    const bestITunesMatch = (results, title, artist) => {
+        const norm = t => (t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/\s*[([].*?[)\]]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+        const want = norm(title), who = norm(artist);
+        const variant = /\b(live|karaoke|tribute|remix|instrumental|cover|acoustic|sped up|slowed|8d|version)\b/i;
+        const titleIsVariant = variant.test(title || "");
+        let best = null, bestScore = 0;
+        for (const item of results || []) {
+            const name = norm(item.trackName), by = norm(item.artistName);
+            let score = 0;
+            if (name && want && name === want) score += 4;
+            else if (name && want && (want.includes(name) || name.includes(want))) score += 2;
+            else continue;
+            if (who && by && (by === who || by.includes(who) || who.includes(by))) score += 3;
+            if (!titleIsVariant && variant.test(`${item.trackName} ${item.collectionName}`)) score -= 3;
+            if (/compilation|greatest hits|best of|hits/i.test(item.collectionName || "")) score -= 1;
+            if (score > bestScore) { best = item; bestScore = score; }
+        }
+        return bestScore >= 4 ? best : null;
+    };
+    // A channel name that isn't really the artist: none, YouTube's own, or a label's "…VEVO" channel
+    // (the "Artist - Title" title, or the album lookup, then says who it is)
+    const weakArtist = name => !name || /^YouTube( Music)?$/i.test(name) || /vevo$/i.test(name);
     const fetchYouTubeMusicMeta = async (id, initialMeta = {}) => {
         if (!id) return;
         const setResolvedTitle = value => {
             if (!value || id !== currentMusicId) return;
-            const t = cleanTrackTitle(value);
+            const t = withoutArtist(cleanTrackTitle(value));
             resolvedTrackTitle = t;
             if (titleSpan) titleSpan.textContent = t;
-            else {
-                const titleNode = audioView.querySelector(".audio-mode-title");
-                if (titleNode) titleNode.textContent = t;
-            }
-            requestAnimationFrame(() => fitAudioMarquee(titleWrap, titleSpan || audioView.querySelector(".audio-mode-title")));
+            requestAnimationFrame(() => fitAudioMarquee(titleWrap, titleSpan));
             const colTitle = audioCollapsedBar?.querySelector(".audio-collapsed-title");
             if (colTitle) colTitle.textContent = t;
         };
 
         if (id === currentMusicId) {
-            const incomingTitle = cleanTrackTitle(initialMeta.title || videoTitle?.textContent || "");
+            const incomingTitle = cleanTrackTitle(initialMeta.title || "");
             if (incomingTitle && (!resolvedTrackTitle || resolvedTrackTitle !== incomingTitle)) {
                 setResolvedTitle(incomingTitle);
             }
@@ -2309,10 +2747,13 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         let artist = (initialMeta.artist || initialMeta.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
         let album = initialMeta.album || "";
         let year = initialMeta.year || "";
-        let title = cleanTrackTitle(initialMeta.title || videoTitle?.textContent || "");
+        // (only this track's own title - not the player's title line, which still shows the
+        // previous track for a moment: its "Artist - Title" became this track's artist and song,
+        // and the album lookup found the previous song's cover. YouTube's own data fills it in.)
+        let title = cleanTrackTitle(initialMeta.title || "");
 
-        if ((!artist || artist === "YouTube" || artist === "YouTube Music") && title.includes(" - ")) {
-            const parts = title.split(" - ");
+        if (weakArtist(artist) && TITLE_SEP.test(title)) {
+            const parts = title.split(TITLE_SEP);
             artist = parts[0].trim();
             title = cleanTrackTitle(parts.slice(1).join(" - ").trim());
         }
@@ -2324,11 +2765,13 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         if (title) setResolvedTitle(title);
         renderMetaUI(artist || "YouTube Music", album, year);
 
-        const immediateArt = initialMeta.artwork || initialMeta.thumb || initialMeta.thumbnail || `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
+        // (search results' thumbnails are 4:3 with black bars: YouTube's 16:9 picture instead)
+        const immediateArt = initialMeta.artwork || youTubeArt(id);
         if (immediateArt) {
             art.hidden = false;
             art.src = immediateArt;
-            art.dataset.src = immediateArt;
+            // (the key update() compares with, so it doesn't load the picture again)
+            art.dataset.src = youTubeArt(id);
             if (micaBg) micaBg.style.backgroundImage = `url("${immediateArt}")`;
         }
 
@@ -2338,10 +2781,22 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                 if (res.ok) {
                     const data = await res.json();
                     if (data && id === currentMusicId) {
-                        if (data.author_name && (!artist || artist === "YouTube" || artist === "YouTube Music")) {
+                        if (data.author_name && weakArtist(artist)) {
                             artist = data.author_name.replace(/\s*-\s*Topic$/i, "").trim();
                         }
-                        if (data.title) setResolvedTitle(data.title);
+                        if (data.title) {
+                            setResolvedTitle(data.title);
+                            // (a pasted link starts without its title: the album search below needs it)
+                            const known = cleanTrackTitle(data.title);
+                            if (!title || title === "YouTube video" || title === "YouTube") {
+                                title = known;
+                                if (TITLE_SEP.test(known) && weakArtist(artist)) {
+                                    const parts = known.split(TITLE_SEP);
+                                    artist = parts[0].trim();
+                                    title = cleanTrackTitle(parts.slice(1).join(" - ").trim());
+                                }
+                            }
+                        }
                         renderMetaUI(artist || "YouTube Music", album, year);
                     }
                 }
@@ -2349,23 +2804,19 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
 
             // Fast commercial-music lookup: iTunes supplies reliable artist, album,
             // release year, and high-resolution cover art for most YouTube Music tracks.
-            if (id === currentMusicId && (!album || !year || artist === "YouTube" || artist === "YouTube Music")) {
+            if (id === currentMusicId && title && (!album || !year || weakArtist(artist))) {
                 try {
                     const cleanTitle = title
                         .replace(/\s*\((?:official|lyric|audio|video|music|4k|hd)[^)]*\)/gi, "")
                         .replace(/\s*[\[(](?:official|lyric|audio|video|music)[\])]$/gi, "")
                         .replace(/\s+-\s+topic$/i, "")
                         .trim();
-                    const term = `${artist && artist !== "YouTube" && artist !== "YouTube Music" ? `${artist} ` : ""}${cleanTitle}`;
-                    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=5&term=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3500) });
+                    const term = `${!weakArtist(artist) ? `${artist} ` : ""}${cleanTitle}`;
+                    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=15&term=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3500) });
                     if (res.ok) {
                         const data = await res.json();
                         const results = data.results || [];
-                        const match = results.find(item =>
-                            (!artist || artist === "YouTube" || artist === "YouTube Music" ||
-                                (item.artistName || "").toLowerCase().includes(artist.toLowerCase()) ||
-                                artist.toLowerCase().includes((item.artistName || "").toLowerCase()))
-                        ) || results[0];
+                        const match = bestITunesMatch(results, cleanTitle, artist && !/^YouTube( Music)?$/.test(artist) ? artist : "");
                         if (match && id === currentMusicId) {
                             artist = match.artistName || artist;
                             album = album || match.collectionName || "";
@@ -2374,7 +2825,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                                 const artwork = match.artworkUrl100.replace(/\/\d+x\d+bb\.jpg/, "/600x600bb.jpg");
                                 art.hidden = false;
                                 art.src = artwork;
-                                art.dataset.src = `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
+                                art.dataset.src = youTubeArt(id);
                                 micaBg.style.backgroundImage = `url("${artwork}")`;
                             }
                             renderMetaUI(artist || "YouTube Music", album, year);
@@ -2394,7 +2845,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                     if (!res.ok) continue;
                     const data = await res.json();
                     if (data && id === currentMusicId) {
-                        if (data.uploader && (!artist || artist === "YouTube" || artist === "YouTube Music")) {
+                        if (data.uploader && weakArtist(artist)) {
                             artist = data.uploader.replace(/\s*-\s*Topic$/i, "").trim();
                         }
                         if (data.title) setResolvedTitle(data.title);
@@ -2423,7 +2874,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                 try {
                     const details = await together.solo.details(id);
                     if (details && id === currentMusicId) {
-                        if (!artist || artist === "YouTube" || artist === "YouTube Music") {
+                        if (weakArtist(artist)) {
                             artist = (details.channel || "").replace(/\s*-\s*Topic$/i, "").trim();
                         }
                         if (details.title) setResolvedTitle(details.title);
@@ -2440,7 +2891,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                         if (!year && released) year = released[1].match(/(?:19|20)\d{2}/)?.[0] || "";
 
                         const byLine = description.match(/(?:provided to youtube by|released on)\s+([^\n]+)/i);
-                        if (!artist || artist === "YouTube" || artist === "YouTube Music") {
+                        if (weakArtist(artist)) {
                             const provider = byLine?.[1]?.match(/(?:by\s+)?(.+?)(?:\n|$)/i)?.[1];
                             if (provider) artist = provider.replace(/\s*,\s*(?:under exclusive license|distributed by).*$/i, "").trim();
                         }
@@ -2460,16 +2911,14 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                         .replace(/\s*[\[(](?:official|lyric|audio|video|music)[\])]$/gi, "")
                         .replace(/\s+-\s+topic$/i, "")
                         .trim();
-                    const term = `${artist && artist !== "YouTube Music" ? `${artist} ` : ""}${cleanTitle}`;
-                    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=5&term=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3500) });
+                    const term = `${!weakArtist(artist) ? `${artist} ` : ""}${cleanTitle}`;
+                    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=15&term=${encodeURIComponent(term)}`, { signal: AbortSignal.timeout(3500) });
                     if (res.ok) {
                         const data = await res.json();
                         const results = data.results || [];
-                        const match = results.find(item =>
-                            (!artist || artist === "YouTube Music" || (item.artistName || "").toLowerCase().includes(artist.toLowerCase()) || artist.toLowerCase().includes((item.artistName || "").toLowerCase()))
-                        ) || results[0];
+                        const match = bestITunesMatch(results, cleanTitle, artist && !/^YouTube( Music)?$/.test(artist) ? artist : "");
                         if (match && id === currentMusicId) {
-                            if (!artist || artist === "YouTube Music") artist = match.artistName || artist;
+                            if (weakArtist(artist)) artist = match.artistName || artist;
                             if (!album) album = match.collectionName || "";
                             if (!year && match.releaseDate) year = match.releaseDate.slice(0, 4);
                             renderMetaUI(artist || "YouTube Music", album, year);
@@ -2485,7 +2934,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                         .replace(/\s+-\s+topic$/i, "")
                         .trim();
                     const query = new URLSearchParams({
-                        query: `recording:"${cleanTitle}"${artist && artist !== "YouTube Music" ? ` AND artist:"${artist}"` : ""}`,
+                        query: `recording:"${cleanTitle}"${!weakArtist(artist) ? ` AND artist:"${artist}"` : ""}`,
                         fmt: "json",
                         limit: "5"
                     });
@@ -2500,7 +2949,7 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                             return !artist || artist === "YouTube Music" || name.includes(artist.toLowerCase()) || artist.toLowerCase().includes(name);
                         }) || (data.recordings || [])[0];
                         if (recording && id === currentMusicId) {
-                            if (!artist || artist === "YouTube Music") {
+                            if (weakArtist(artist)) {
                                 artist = (recording["artist-credit"] || []).map(credit => credit.name || "").filter(Boolean).join(" & ");
                             }
                             if (!year) {
@@ -2517,7 +2966,23 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         } catch (e) {}
     };
 
-    const isLocalAudio = () => !!(currentFile && (currentFile.type?.startsWith("audio/") || (!mainVideo.videoWidth && !container.classList.contains("youtube"))));
+    // A local file is audio when its type says so, or - for files without a useful type - once
+    // the browser has read *this* file's metadata and found no picture. Before that, videoWidth
+    // is 0 for every file, so it can't be used to decide.
+    let metadataFile = null;
+    const isLocalAudio = () => !!(currentFile && !container.classList.contains("youtube") && (
+        currentFile.type?.startsWith("audio/") ||
+        (metadataFile === currentFile && mainVideo.readyState >= 1 && !mainVideo.videoWidth)
+    ));
+    // Audio mode the player switched on by itself (music, or a local audio file), as opposed to the
+    // listener choosing it; only the automatic kind is switched off again when a video comes next.
+    let autoAudio = false;
+    // The mode the listener picked with the switch: it holds for every next video too, until they
+    // pick the other one (music and audio files are audio regardless)
+    let preferAudio = false;
+    let queueOpenedForAudio = false;
+    let lastAudioExit = null;
+    let hiddenBeforeAudio = {};
     const isMusicTrack = () => !!(
         container.classList.contains("youtube") &&
         (together.solo?.ref?.music ||
@@ -2534,62 +2999,55 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         const localAudio = isLocalAudio();
         const visible = sourceExists();
         if (!visible && container.classList.contains("audio-mode-only")) {
+            autoAudio = false;
             setAudioMode(false);
         }
         if ((musicLocked || localAudio) && !container.classList.contains("audio-mode-only")) {
             setAudioMode(true);
+            autoAudio = true;
+        } else if (preferAudio && visible && !container.classList.contains("audio-mode-only")) {
+            // (a new video, while the listener chose audio: it plays in audio too)
+            setAudioMode(true);
+            autoAudio = false;
+        } else if (autoAudio && !preferAudio && !musicLocked && !localAudio && container.classList.contains("audio-mode-only")) {
+            // The music or audio file was replaced by a video: back to the video view
+            autoAudio = false;
+            setAudioMode(false);
         }
-        if (container.classList.contains("audio-mode-only")) {
-            if (!playerPage.classList.contains("room-open")) {
-                if (window.together && window.together.openQueue) window.together.openQueue();
-                else if (window.together && window.together.openPanel) window.together.openPanel();
-            }
-        }
-        // YouTube Music keeps an audio-only mode, but the switch itself stays visible:
-        // Video is clearly inactive while Audio remains active.
-        const canSwitch = visible && !localAudio && !musicLocked;
-        audioButton.hidden = !canSwitch;
+        // Music and local audio files play in audio mode only, but the switch itself stays
+        // visible: Video is greyed out while Audio stays active.
+        const audioOnly = musicLocked || localAudio;
+        audioButton.hidden = !visible;
         miniButton.hidden = !visible || !homePage || container.classList.contains("audio-mode-only");
         const audioActive = container.classList.contains("audio-mode-only");
         audioButton.setAttribute("aria-pressed", String(audioActive));
-        audioButton.setAttribute("aria-label", audioActive ? "Switch to video mode" : "Switch to audio mode");
+        audioButton.setAttribute("aria-disabled", String(audioOnly));
+        audioButton.setAttribute("aria-label", audioOnly ? "Audio mode (this track has no video)" : audioActive ? "Switch to video mode" : "Switch to audio mode");
+        audioButton.title = audioOnly ? "This track plays in audio mode only" : audioActive ? "Switch to video mode (A)" : "Switch to audio mode (A)";
         const videoChoice = audioButton.querySelector(".video-choice");
         const audioChoice = audioButton.querySelector(".audio-choice");
-        videoChoice?.classList.toggle("active", !audioActive && !musicLocked);
-        videoChoice?.classList.toggle("inactive", musicLocked);
-        videoChoice?.setAttribute("aria-disabled", String(musicLocked));
-        audioChoice?.classList.toggle("active", audioActive || musicLocked);
+        videoChoice?.classList.toggle("active", !audioActive && !audioOnly);
+        videoChoice?.classList.toggle("inactive", audioOnly);
+        audioChoice?.classList.toggle("active", audioActive || audioOnly);
         const curTitle = titleText();
-        const bElem = audioView.querySelector(".audio-mode-title");
-        const tSpan = audioView.querySelector(".audio-title-text");
-        if (tSpan) tSpan.textContent = curTitle;
-        else if (bElem) bElem.textContent = curTitle;
-        requestAnimationFrame(() => fitAudioMarquee(titleWrap, tSpan || bElem));
+        if (titleSpan && titleSpan.textContent !== curTitle) titleSpan.textContent = curTitle;
+        requestAnimationFrame(() => fitAudioMarquee(titleWrap, titleSpan));
 
         const isYTMusic = isMusicTrack();
         container.classList.toggle("is-yt-music", isYTMusic);
+        renderUpNext();
         playerPage.classList.toggle("is-yt-music", isYTMusic);
 
-        const metaEl = audioView.querySelector(".audio-mode-meta");
-        if (metaEl) {
-            if (isYTMusic) {
-                metaEl.hidden = false;
-                metaEl.style.removeProperty("display");
-                requestAnimationFrame(() => fitAudioMarquee(artistWrap, artistTextSpan));
-            } else {
-                metaEl.hidden = true;
-                metaEl.style.setProperty("display", "none", "important");
-                if (artistTextSpan?._marqueeAnim) {
-                    artistTextSpan._marqueeAnim.cancel();
-                    artistTextSpan._marqueeAnim = null;
-                }
-            }
-        }
+        showMeta(isYTMusic);
 
         const colTitle = audioCollapsedBar?.querySelector(".audio-collapsed-title");
         if (colTitle) colTitle.textContent = curTitle;
         const colThumb = audioCollapsedBar?.querySelector(".audio-collapsed-thumb");
         if (colThumb && art.src) colThumb.src = art.src;
+        // (Next as the player's: dimmed when there's nothing after this track)
+        const colNext = audioCollapsedBar?.querySelector(".audio-collapsed-next");
+        const playerNext = container.querySelector(".next-track");
+        if (colNext) colNext.disabled = !playerNext || playerNext.hidden || playerNext.disabled;
         const colPlayIcon = audioCollapsedBar?.querySelector(".audio-collapsed-play i");
         if (colPlayIcon) {
             const playing = !mediaPaused();
@@ -2600,37 +3058,58 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         canvas.hidden = !localAudio;
 
         const id = youTubeIdShown();
-        const image = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg` : "";
+        // The artwork's frame: 16:9 for a YouTube video's picture, square for music and files.
+        // (The image fills it - YouTube's 4:3 thumbnails have black bars that this crops off.)
         const hasVisualVideo = !!(currentFile || together.stream);
+        // (a video file's or a shared screen's own frame is a picture too: 16:9 as well)
+        art.parentElement.classList.toggle("audio-art-wide", id ? !musicLocked || art.dataset.wide === "1" : hasVisualVideo && !localAudio);
+        const image = id ? youTubeArt(id) : "";
         const sourceKey = image || (currentFile ? `local:${currentFile.name}:${currentFile.size}` : together.stream ? "room-stream" : "");
-        if (art.dataset.src !== sourceKey || hasVisualVideo && art.hidden && mainVideo.videoWidth > 0) {
+        // (no picture of its own - a local file, a shared screen: an icon in the frame instead, a
+        // video camera for a video, a note for audio)
+        artIcon.className = `fa-solid ${!id && hasVisualVideo && !localAudio ? "fa-video" : "fa-music"}`;
+        if (art.dataset.src !== sourceKey) {
             art.dataset.src = sourceKey;
             if (image) {
                 art.src = image;
                 micaBg.style.backgroundImage = `url("${image}")`;
-            } else if (hasVisualVideo && mainVideo.videoWidth && mainVideo.videoHeight) {
-                try {
-                    const poster = document.createElement("canvas");
-                    poster.width = mainVideo.videoWidth;
-                    poster.height = mainVideo.videoHeight;
-                    poster.getContext("2d").drawImage(mainVideo, 0, 0, poster.width, poster.height);
-                    const posterUrl = poster.toDataURL("image/jpeg", .82);
-                    art.src = posterUrl;
-                    micaBg.style.backgroundImage = `url("${posterUrl}")`;
-                } catch (e) {
-                    art.removeAttribute("src");
-                    micaBg.style.backgroundImage = "";
-                }
             } else {
                 art.removeAttribute("src");
-                micaBg.style.backgroundImage = "";
+                // the panels' mica: the video's own picture (taken again as it plays), or for audio
+                // the artwork placeholder's colours
+                micaBg.style.backgroundImage = localAudio ? LOCAL_AUDIO_MICA : "";
+                if (hasVisualVideo && !localAudio) captureMica();
             }
-            art.hidden = !sourceKey || !art.getAttribute("src");
+            art.hidden = !art.getAttribute("src");
+            if (art.hidden) tintFrom("");
+        } else if (!image && localAudio && micaBg.style.backgroundImage !== LOCAL_AUDIO_MICA) {
+            micaBg.style.backgroundImage = LOCAL_AUDIO_MICA;
+        }
+        {
+            const thumb = audioCollapsedBar?.querySelector(".audio-collapsed-thumb");
+            const icon = audioCollapsedBar?.querySelector(".audio-collapsed-icon");
+            const hasArt = !art.hidden && !!art.getAttribute("src");
+            if (thumb) thumb.hidden = !hasArt;
+            if (icon) {
+                icon.hidden = hasArt;
+                icon.firstElementChild.className = artIcon.className;
+            }
         }
 
-        if (id && container.classList.contains("audio-mode-only")) {
-            const roomNow = together.roomYouTube?.();
-            const soloNow = together.solo?.current?.video;
+        // Album artwork and details are looked up for YouTube Music only: a YouTube video keeps its
+        // own (16:9) picture and title, also in audio mode
+        if (!musicLocked && currentMusicId) {
+            currentMusicId = null;
+            resolvedTrackTitle = "";
+        }
+        if (id && musicLocked && container.classList.contains("audio-mode-only")) {
+            // (only what's known about *this* track: while the next one loads, YouTube's player still
+            // reports the one before - its title and channel had the album lookup find the
+            // previous song's cover and details)
+            const roomRaw = together.roomYouTube?.();
+            const roomNow = roomRaw?.video && (!roomRaw.video.id || roomRaw.video.id === id) ? roomRaw : null;
+            const soloRaw = together.solo?.current?.video;
+            const soloNow = soloRaw && soloRaw.id === id ? soloRaw : null;
             fetchYouTubeMusicMeta(id, {
                 ...(together.solo?.meta || {}),
                 ...(soloNow ? { title: soloNow.title, channel: soloNow.channel } : {}),
@@ -2652,7 +3131,10 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
             const captured = mainVideo.captureStream();
             analysisTracks = captured.getAudioTracks().map(track => track.clone());
-            if (!analysisTracks.length) return;
+            if (!analysisTracks.length) {
+                captured.addEventListener("addtrack", () => { if (!analyser) setupAnalyser(); }, { once: true });
+                return;
+            }
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 128;
             sourceNode = audioContext.createMediaStreamSource(new MediaStream(analysisTracks));
@@ -2662,12 +3144,20 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         } catch (e) { analyser = null; }
     };
     mainVideo.addEventListener("loadedmetadata", () => {
+        metadataFile = currentFile;
+        update();
         if (!analyser) return;
         sourceNode?.disconnect();
         analysisTracks.forEach(track => track.stop());
         analysisTracks = [];
         analyser = sourceNode = samples = null;
         if (container.classList.contains("audio-mode-only") && isLocalAudio()) setupAnalyser();
+    });
+    mainVideo.addEventListener("playing", () => {
+        if (!container.classList.contains("audio-mode-only") || !isLocalAudio()) return;
+        if (!analyser) setupAnalyser();
+        audioContext?.resume().catch(() => {});
+        if (!raf) raf = requestAnimationFrame(draw);
     });
     const draw = now => {
         if (!container.classList.contains("audio-mode-only") || !isLocalAudio()) {
@@ -2687,7 +3177,8 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         const gap = Math.max(3 * scale, w * .012), barW = (w - gap * (bars - 1)) / bars;
         const paused = together.solo?.active ? together.solo.paused : mediaPaused();
         for (let i = 0; i < bars; i++) {
-            const sample = analyser && samples ? samples[Math.floor(i / bars * samples.length)] / 255 : .2 + .45 * Math.abs(Math.sin(now / 430 + i * .62)) * (paused ? .35 : 1);
+            // (the lower two thirds of the spectrum - the top of it is nearly always silent)
+            const sample = analyser && samples && !paused ? samples[Math.floor(i / bars * samples.length * 0.68)] / 255 : 0;
             const height = Math.max(3 * scale, sample * h * .78);
             const x = i * (barW + gap), y = (h - height) / 2;
             const gradient = context.createLinearGradient(0, y, 0, y + height);
@@ -2734,30 +3225,31 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
                 try { exitFullscreen(); } catch (e) {}
             }
             container.classList.remove("fullscreen");
-            if (matchMedia("(min-width: 901px)").matches) {
-                if (window.together && window.together.openQueue) window.together.openQueue();
-                else if (window.together && window.together.openPanel) window.together.openPanel();
-            }
-            const audioView = container.querySelector(".audio-mode-view");
-            const art = container.querySelector(".audio-mode-art");
-            const visual = container.querySelector(".audio-mode-visual");
-            const actionHost = visual?.querySelector(".audio-mode-actions");
-            let audioControls = visual?.querySelector(".audio-mode-controls");
-            if (visual && !audioControls) {
-                audioControls = document.createElement("div");
-                audioControls.className = "audio-mode-controls";
-                visual.append(audioControls);
+            // On a desktop, the queue opens beside the audio player (closed again on the way back
+            // to video, if it was opened only for this)
+            // (not when you hid it yourself; and back in audio a moment after leaving it - one track
+            // changing to the next - the panel is left as it was)
+            const quickReturn = lastAudioExit && Date.now() - lastAudioExit.at < 8000;
+            const wantPanel = quickReturn ? lastAudioExit.panelOpen : !together.audioPanelUserHidden;
+            if (wantPanel && matchMedia("(min-width: 901px)").matches && !playerPage.classList.contains("room-open") && together.openQueue && (!together.audioPanelFits || together.audioPanelFits())) {
+                together.openQueue();
+                queueOpenedForAudio = true;
             }
             if (timelineContainer && timelineSlot) moveAudioEl(timelineContainer, timelineSlot);
-            if (centerControls && audioControls) moveAudioEl(centerControls, audioControls);
-            if (volumeGroup && audioControls) moveAudioEl(volumeGroup, audioControls);
+            if (centerControls && transportSlot) moveAudioEl(centerControls, transportSlot);
+            if (volumeGroup && volumeSlot) moveAudioEl(volumeGroup, volumeSlot);
+            requestAnimationFrame(placeTopVolume);
             if (topSearch && audioCorner) moveAudioEl(topSearch, audioCorner);
             if (audioButton && audioCorner) moveAudioEl(audioButton, audioCorner);
             if (moreContent && audioCorner) moveAudioEl(moreContent, audioCorner);
-            if (topRoom && audioCorner) moveAudioEl(topRoom, audioCorner);
-            if (topQueue && actionHost) moveAudioEl(topQueue, actionHost);
+            // (top right: no queue or room button - on a computer the panel beside is always open,
+            // and phones have both as tabs of their bottom bar)
+            // (how they were in the video view, to put back exactly so - PiP is hidden where unsupported)
+            const pipRow = moreOptions.querySelector('[data-more-action="pip"]');
+            hiddenBeforeAudio = { pip: pipButton?.hidden, pipRow: pipRow?.hidden };
+            // (shown or hidden by room.js, when there's a queue to shuffle)
             if (shuffleButton && centerControls) {
-                shuffleButton.hidden = false;
+                moveAudioEl(shuffleButton, centerControls);
                 centerControls.prepend(shuffleButton);
             }
             if (repeatButton && centerControls) {
@@ -2767,36 +3259,38 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             if (pipButton) {
                 pipButton.hidden = true;
             }
-            const pipRow = moreOptions.querySelector('[data-more-action="pip"]');
             if (pipRow) {
                 pipRow.hidden = true;
                 pipRow.style.setProperty("display", "none", "important");
             }
             placeAudioSave();
             moreOptions.classList.add("audio-settings-menu");
-            if (typeof together !== "undefined" && together.showPanel) together.showPanel();
             setupAnalyser(); update();
             audioContext?.resume().catch(() => {});
             cancelAnimationFrame(raf);
             if (isLocalAudio()) raf = requestAnimationFrame(draw);
         } else {
             playerPage.classList.remove("mobile-audio-extended");
+            if (audioMenuBackdrop) audioMenuBackdrop.hidden = true;
+            lastAudioExit = { at: Date.now(), panelOpen: playerPage.classList.contains("room-open") };
+            if (queueOpenedForAudio && !together.active() && together.hidePanel) together.hidePanel();
+            queueOpenedForAudio = false;
             if (timelineContainer) restoreAudioEl(timelineContainer, timelineParent);
             if (centerControls) restoreAudioEl(centerControls, centerControlsParent);
             if (volumeGroup) restoreAudioEl(volumeGroup, volumeParent);
+            placeTopVolume();
             if (topSearch) restoreAudioEl(topSearch, topSearchParent);
             if (topRoom) restoreAudioEl(topRoom, topRoomParent);
             if (topHome) restoreAudioEl(topHome, topHomeParent);
-            if (topQueue) restoreAudioEl(topQueue, topQueueParent);
             if (shuffleButton) restoreAudioEl(shuffleButton, shuffleParent);
             if (repeatButton) repeatButton.remove();
             if (pipButton) {
                 restoreAudioEl(pipButton, pipParent);
-                pipButton.hidden = false;
+                pipButton.hidden = hiddenBeforeAudio.pip ?? false;
             }
             const pipRow = moreOptions.querySelector('[data-more-action="pip"]');
             if (pipRow) {
-                pipRow.hidden = false;
+                pipRow.hidden = hiddenBeforeAudio.pipRow ?? false;
                 pipRow.style.removeProperty("display");
             }
             if (saveWrap) restoreAudioEl(saveWrap, saveParent);
@@ -2819,35 +3313,129 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         }
         update();
     };
-    audioButton.addEventListener("click", () => {
+    const toggleAudioMode = () => {
         if (isMusicTrack() || isLocalAudio()) return;
-        setAudioMode(!container.classList.contains("audio-mode-only"));
+        autoAudio = false;
+        preferAudio = !container.classList.contains("audio-mode-only");
+        setAudioMode(preferAudio);
+    };
+    // Each half of the pill picks its own mode; clicking the active half does nothing
+    audioButton.addEventListener("click", e => {
+        const active = container.classList.contains("audio-mode-only");
+        if (e.target.closest(".video-choice") && !active) return;
+        if (e.target.closest(".audio-choice") && active) return;
+        toggleAudioMode();
     });
     window.CineAudioMode = {
-        enable: () => setAudioMode(true),
+        // (YouTube Music switches to audio through this: automatic, so a video after it plays as
+        // video again - unless the listener picked Audio, see preferAudio)
+        enable: () => { if (!container.classList.contains("audio-mode-only")) autoAudio = true; setAudioMode(true); },
+        // (the listener's own choice, as with the switch)
+        choose: audio => { autoAudio = false; preferAudio = !!audio; setAudioMode(!!audio); },
         disable: () => {
-            if (!isMusicTrack()) setAudioMode(false);
+            if (isMusicTrack()) return;
+            autoAudio = false;
+            setAudioMode(false);
         },
-        toggle: () => {
-            if (isMusicTrack() || isLocalAudio()) return;
-            setAudioMode(!container.classList.contains("audio-mode-only"));
-        },
+        toggle: toggleAudioMode,
         get canToggle() { return sourceExists() && !isMusicTrack() && !isLocalAudio(); },
         get active() { return container.classList.contains("audio-mode-only"); }
     };
     miniButton.addEventListener("click", () => {
-        if (!sourceExists()) return;
+        // (no miniplayer for audio)
+        if (!sourceExists() || container.classList.contains("audio-mode-only")) return;
         together.soloMini = !together.active();
         showHome();
     });
     window.addEventListener("resize", () => {
         if (!container.classList.contains("audio-mode-only")) return;
         placeAudioSave();
+        // (the title is one line: whether it needs to scroll depends on the width)
+        fitAudioMarquee(titleWrap, titleSpan);
     });
     new MutationObserver(update).observe(container, { attributes: true, attributeFilter: ["class"] });
     setInterval(update, 1000);
     update();
 })();
+
+// Phones, the audio sheet open: it fits the part of the screen that actually shows - above the
+// keyboard while typing in the chat, inside the browser's bars - so the strip on top (the player,
+// collapsed) never slides out of view. The page itself never scrolls (a focused box or a new chat
+// message could scroll it, taking the strip off the top).
+if (window.visualViewport) {
+    const vv = window.visualViewport;
+    const fitSheet = () => {
+        playerPage.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
+        playerPage.style.setProperty("--vv-top", `${Math.round(vv.offsetTop)}px`);
+    };
+    vv.addEventListener("resize", fitSheet);
+    vv.addEventListener("scroll", fitSheet);
+    fitSheet();
+}
+playerPage.addEventListener("scroll", () => {
+    if (playerPage.classList.contains("mobile-audio-extended") && playerPage.scrollTop) playerPage.scrollTop = 0;
+});
+
+// Phones: pull down from the top of the player to refresh, the standard way - a round arrow comes
+// down with the finger, turning; let go past the line, the page reloads (it lands on home). The
+// player is fixed to the screen, so the browser's own pull-to-refresh never had a page to pull.
+// Only from the top band (the title bar), not from the seekbar, the call, a menu or a typing box,
+// and not while what's under the finger is scrolled down.
+{
+    const pullTouch = matchMedia("(pointer: coarse)");
+    const pullMark = document.createElement("div");
+    pullMark.className = "pull-refresh";
+    pullMark.setAttribute("aria-hidden", "true");
+    pullMark.innerHTML = '<i class="fa-solid fa-rotate-right"></i>';
+    document.body.appendChild(pullMark);
+    const PULL_START_BAND = 110, PULL_LINE = 72, PULL_MAX = 110;
+    let pull = null;
+    const scrolledAbove = target => {
+        for (let node = target; node && node !== document.body; node = node.parentElement) {
+            if (node.scrollTop > 0) return true;
+        }
+        return false;
+    };
+    const resetPull = () => {
+        pull = null;
+        pullMark.classList.remove("shown", "ready");
+        pullMark.style.removeProperty("transform");
+    };
+    playerPage.addEventListener("touchstart", e => {
+        if (!pullTouch.matches || playerPage.hidden || e.touches.length !== 1) return resetPull();
+        const touch = e.touches[0];
+        const target = e.target;
+        if (touch.clientY > PULL_START_BAND || scrolledAbove(target)
+            || target.closest("input, textarea, select, [contenteditable], .timeline-container, .room-call, .room-call-float-menu, .more-options, .player-sheet, .cmd-palette, .room-sheet")) return resetPull();
+        pull = { x: touch.clientX, y: touch.clientY, dy: 0, live: false };
+    }, { passive: true });
+    playerPage.addEventListener("touchmove", e => {
+        if (!pull) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - pull.x, dy = touch.clientY - pull.y;
+        if (!pull.live) {
+            if (Math.abs(dy) < 10) return;
+            // (a pull down, not sideways or up)
+            if (dy < 0 || Math.abs(dx) > Math.abs(dy)) return resetPull();
+            pull.live = true;
+        }
+        pull.dy = Math.max(0, dy);
+        const travel = Math.min(PULL_MAX, pull.dy * 0.5);
+        pullMark.classList.add("shown");
+        pullMark.classList.toggle("ready", travel >= PULL_LINE);
+        pullMark.style.transform = `translate(-50%, ${Math.round(travel)}px) rotate(${Math.round(travel * 4)}deg)`;
+    }, { passive: true });
+    const endPull = () => {
+        if (!pull) return;
+        const ready = pull.live && Math.min(PULL_MAX, pull.dy * 0.5) >= PULL_LINE;
+        if (!ready) return resetPull();
+        pull = null;
+        pullMark.classList.add("refreshing");
+        setTimeout(() => location.reload(), 150);
+    };
+    playerPage.addEventListener("touchend", endPull, { passive: true });
+    playerPage.addEventListener("touchcancel", resetPull, { passive: true });
+}
 
 // Previous / next on the lock screen: a YouTube playlist, Mix or Autoplay watched on your own
 const trackActions = { previoustrack: null, nexttrack: null };
@@ -3053,8 +3641,44 @@ const followYouTubeIn = (pipWindow, holder) => {
     };
 };
 
+// The audio player, in a room: picture in picture shows only everyone's video, stacked, like a
+// meeting's window (there's no picture of the music to show)
+const openPeoplePiP = async () => {
+    if (!together.active() || !together.callPip || !("documentPictureInPicture" in window)) return;
+    if (window.documentPictureInPicture.window) {
+        window.documentPictureInPicture.window.close();
+        return;
+    }
+    try {
+        const pipWindow = await window.documentPictureInPicture.requestWindow({ width: 300, height: 420 });
+        const pipDoc = pipWindow.document;
+        [...document.styleSheets].forEach(styleSheet => {
+            try {
+                const style = pipDoc.createElement("style");
+                style.textContent = [...styleSheet.cssRules].map(rule => rule.cssText).join("");
+                pipDoc.head.appendChild(style);
+            } catch (e) {
+                const link = pipDoc.createElement("link");
+                link.rel = "stylesheet";
+                link.href = styleSheet.href;
+                pipDoc.head.appendChild(link);
+            }
+        });
+        pipDoc.title = "Everyone - CineTab";
+        Object.assign(pipDoc.body.style, { margin: "0", padding: "0", overflow: "hidden", background: "#0b0e15" });
+        const wrap = pipDoc.createElement("div");
+        wrap.className = "pip-player-container pip-people-only";
+        const people = together.callPip();
+        if (!people) return pipWindow.close();
+        wrap.append(people.el);
+        pipDoc.body.appendChild(wrap);
+        pipWindow.addEventListener("pagehide", () => people.close());
+        showFeedback("fa-clone", "Everyone, in picture in picture");
+    } catch (e) {}
+};
+
 const toggleCustomPiP = async () => {
-    if (container.classList.contains("audio-mode-only")) return;
+    if (container.classList.contains("audio-mode-only")) return openPeoplePiP();
     if ("documentPictureInPicture" in window) {
         if (window.documentPictureInPicture.window) {
             window.documentPictureInPicture.window.close();
@@ -3156,8 +3780,8 @@ const toggleCustomPiP = async () => {
                 const keys = {
                     ' ': togglePlay, k: togglePlay,
                     ArrowLeft: () => seek(-5), ArrowRight: () => seek(5), j: () => seek(-10), l: () => seek(10),
-                    ArrowUp: () => setVolume(Math.min(1, mainVideo.volume + 0.1)),
-                    ArrowDown: () => setVolume(Math.max(0, mainVideo.volume - 0.1)),
+                    ArrowUp: () => setVolume(Math.round(Math.min(1, mainVideo.volume + 0.05) * 100) / 100),
+                    ArrowDown: () => setVolume(Math.round(Math.max(0, mainVideo.volume - 0.05) * 100) / 100),
                     m: () => setVolume(mainVideo.volume > 0 ? 0 : 1)
                 };
                 if (!keys[key]) return;
@@ -4103,6 +4727,16 @@ onSurface("click", () => {
     }
 });
 
+// I on the home page while the miniplayer plays: back to the player
+document.addEventListener("keydown", e => {
+    if (e.code !== "KeyI" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (!playerPage.hidden || !playerPage.classList.contains("miniplayer")) return;
+    if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+    const expand = document.querySelector(".room-home-bar.mini .room-home-expand");
+    // (and the player's own shortcuts below don't take this same I as "into the miniplayer" again)
+    if (expand) { e.preventDefault(); e.stopImmediatePropagation(); expand.click(); }
+});
+
 // Keyboard Shortcuts
 document.addEventListener("keydown", e => {
     if (playerPage.hidden) return;
@@ -4138,23 +4772,24 @@ document.addEventListener("keydown", e => {
 
         case "ArrowUp":
             e.preventDefault();
-            let volUp = Math.min(1, mainVideo.volume + 0.1);
-            setVolume(volUp);
-            showFeedback("fa-volume-high", `${Math.round(volUp * 100)}%`);
+            stepVolume(1);
             break;
 
         case "ArrowDown":
             e.preventDefault();
-            let volDown = Math.max(0, mainVideo.volume - 0.1);
-            setVolume(volDown);
-            showFeedback(volDown === 0 ? "fa-volume-xmark" : "fa-volume-low", `${Math.round(volDown * 100)}%`);
+            stepVolume(-1);
             break;
 
         case "KeyF":
             toggleFullscreen();
             break;
 
+        // M: your microphone on/off (in a room); Shift + M: the player's sound on/off, always
         case "KeyM":
+            if (!e.shiftKey) {
+                if (!together.active() || !together.toggleMic || !together.toggleMic()) showFeedback("fa-microphone-slash", "Not in a room");
+                break;
+            }
             if (mainVideo.volume > 0) {
                 setVolume(0);
                 showFeedback("fa-volume-xmark", "Muted");
@@ -4175,6 +4810,58 @@ document.addEventListener("keydown", e => {
         case "KeyN":
             if (e.shiftKey && together.step) together.step(1);
             break;
+
+        // S: save this video (or its playlist) - the heart's own choices where it has them
+        case "KeyS": {
+            if (e.shiftKey) break;
+            const save = container.querySelector(".player-save-wrap:not([hidden]) .player-save-btn");
+            if (save) save.click();
+            else showFeedback("fa-heart", "Nothing to save here");
+            break;
+        }
+
+        // H: everyone's video shown / hidden (only while someone's video is on; otherwise nothing)
+        case "KeyH":
+            if (e.shiftKey) break;
+            if (together.toggleCallVideos) together.toggleCallVideos();
+            break;
+
+        // U: the call's video pinned / floating
+        case "KeyU": {
+            if (e.shiftKey || !together.toggleCallFloat) break;
+            const refused = together.toggleCallFloat();
+            if (refused) showFeedback("fa-video", refused);
+            break;
+        }
+
+        // Shift + V: your camera on/off (in a room)
+        case "KeyV":
+            if (!e.shiftKey) break;
+            if (!together.active() || !together.toggleCam || !together.toggleCam()) showFeedback("fa-video-slash", "Not in a room");
+            break;
+
+        // A: video / audio mode (the listener's choice: it holds for the next videos too)
+        case "KeyA": {
+            if (e.shiftKey || !window.CineAudioMode) break;
+            const mode = window.CineAudioMode;
+            if (!mode.canToggle) {
+                if (mode.active) showFeedback("fa-headphones", "This plays in audio only");
+                break;
+            }
+            mode.toggle();
+            showFeedback(mode.active ? "fa-headphones" : "fa-video", mode.active ? "Audio mode" : "Video mode");
+            break;
+        }
+
+        // I: into the miniplayer (the video goes on in a corner of the home page); not in audio mode.
+        // (I again, from the home page, opens the player back: the listener below)
+        case "KeyI": {
+            if (e.shiftKey) break;
+            const mini = container.querySelector(".solo-miniplayer-toggle");
+            if (container.classList.contains("audio-mode-only")) showFeedback("fa-headphones", "No miniplayer in audio mode");
+            else if (mini && !mini.hidden) mini.click();
+            break;
+        }
 
         case "KeyC":
             toggleSubtitles();
@@ -4221,8 +4908,10 @@ document.addEventListener("keydown", e => {
     if (e.code.startsWith("Digit") && !e.shiftKey && mediaDuration()) {
         const digit = parseInt(e.key);
         if (!isNaN(digit)) {
-            seekTo((digit / 10) * mediaDuration());
-            showFeedback("fa-forward", `${digit * 10}%`);
+            const target = (digit / 10) * mediaDuration();
+            const back = target < mediaTime();
+            seekTo(target);
+            showFeedback(back ? "fa-backward" : "fa-forward", `${digit * 10}%`);
         }
     }
 });
@@ -4338,7 +5027,77 @@ const cmdPalette = (() => {
     body.append(note, link, list, recentBox, savedBox, resultsHost);
     const foot = make("div", "cmd-foot");
     foot.innerHTML = "<span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> play or search</span><span><kbd>Esc</kbd> back · close</span>";
-    box.append(form, body, foot);
+    // One row of pills - where to search: YouTube, Music, Playlist - and Clear (only once results show)
+    const filterHead = make("div", "yt-results-head");
+    const kinds = make("div", "yt-kinds");
+    kinds.setAttribute("role", "radiogroup");
+    kinds.setAttribute("aria-label", "Show");
+
+    const kindButton = (kind, label, icon, iconBrand = false) => {
+        const button = make("button", `yt-kind${kind === "video" ? " active" : ""}`);
+        button.type = "button";
+        button.dataset.kind = kind;
+        button.setAttribute("role", "radio");
+        button.setAttribute("aria-checked", kind === "video" ? "true" : "false");
+        button.innerHTML = `<i class="${iconBrand ? "fa-brands" : "fa-solid"} ${icon}"></i><span>${label}</span>`;
+        return button;
+    };
+
+    const ytBtn = kindButton("video", "YouTube", "fa-youtube", true);
+    const musicBtn = kindButton("music", "Music", "fa-music", false);
+    const playlistBtn = kindButton("playlist", "Playlist", "fa-youtube", true);
+    kinds.append(ytBtn, musicBtn, playlistBtn);
+
+    const clearFilterBtn = make("button", "yt-results-close");
+    clearFilterBtn.type = "button";
+    clearFilterBtn.title = "Clear the search and its results (Esc)";
+    clearFilterBtn.setAttribute("aria-label", "Clear the search");
+    clearFilterBtn.innerHTML = '<i class="fa-solid fa-xmark"></i><span>Clear</span>';
+    // (only once a search has its answer - not while it loads; the pills stay, to search again
+    // somewhere else)
+    clearFilterBtn.hidden = true;
+    const syncClear = () => {
+        clearFilterBtn.hidden = !(results && results.open && !results.busy);
+    };
+
+    filterHead.append(kinds, clearFilterBtn);
+
+    let activeSearchMode = "video";
+    const setSearchPillMode = mode => {
+        activeSearchMode = mode;
+        [ytBtn, musicBtn, playlistBtn].forEach(btn => {
+            const on = btn.dataset.kind === mode;
+            btn.classList.toggle("active", on);
+            btn.setAttribute("aria-checked", on ? "true" : "false");
+        });
+        if (results && results.setKind) results.setKind(mode);
+        if (mode === "music") {
+            input.placeholder = "Search YouTube Music or paste song link…";
+        } else if (mode === "playlist") {
+            input.placeholder = "Search YouTube playlists…";
+        } else {
+            input.placeholder = youtube() ? "Search YouTube, paste a link, or pick recent…" : "Paste a link or pick a recent video…";
+        }
+    };
+
+    kinds.addEventListener("click", e => {
+        const btn = e.target.closest(".yt-kind");
+        if (!btn) return;
+        const mode = btn.dataset.kind;
+        setSearchPillMode(mode);
+        const val = input.value.trim();
+        if (val) {
+            searchYouTube(val, mode);
+        } else {
+            input.focus();
+        }
+    });
+
+    clearFilterBtn.addEventListener("click", () => {
+        backToStart();
+    });
+
+    box.append(form, filterHead, body, foot);
     overlay.append(box);
     document.body.append(overlay);
 
@@ -4436,10 +5195,11 @@ const cmdPalette = (() => {
             { label: paused ? "Play" : "Pause", icon: paused ? "fa-play" : "fa-pause", keys: ["Space"], words: "play pause resume stop", top: true, run: togglePlay },
             { label: "Open a video from this device", icon: "fa-folder-open", words: "open file browse movie local video choose", top: true, run: () => fileInput.click() },
             !container.classList.contains("audio-mode-only") && { label: fullscreenElement() ? "Leave fullscreen" : "Fullscreen", icon: fullscreenElement() ? "fa-compress" : "fa-expand", keys: ["F"], words: "fullscreen full screen big", top: true, run: toggleFullscreen },
+            window.CineAudioMode && window.CineAudioMode.canToggle && { label: window.CineAudioMode.active ? "Switch to video mode" : "Switch to audio mode", icon: window.CineAudioMode.active ? "fa-video" : "fa-headphones", keys: ["A"], words: "audio video mode music listen sound only switch", top: true, run: () => window.CineAudioMode.toggle() },
             { label: "Picture in picture", icon: "fa-clone", keys: ["P"], words: "pip picture float mini window popup", top: !isTouch, run: toggleCustomPiP },
             { label: "Subtitles on / off", icon: "fa-closed-captioning", keys: ["C"], words: "subtitles captions cc", top: true, run: toggleSubtitles },
             { label: "Choose a subtitle file", icon: "fa-file-lines", words: "subtitles captions srt vtt file add", run: () => subtitleInput.click() },
-            { label: mainVideo.volume > 0 ? "Mute" : "Unmute", icon: mainVideo.volume > 0 ? "fa-volume-xmark" : "fa-volume-high", keys: ["M"], words: "mute unmute sound volume silent", run: () => setVolume(mainVideo.volume > 0 ? 0 : 1) },
+            { label: mainVideo.volume > 0 ? "Mute" : "Unmute", icon: mainVideo.volume > 0 ? "fa-volume-xmark" : "fa-volume-high", keys: ["Shift", "M"], words: "mute unmute sound volume silent", run: () => setVolume(mainVideo.volume > 0 ? 0 : 1) },
             { label: "Back 10 seconds", icon: "fa-rotate-left", keys: ["J"], words: "back rewind backward 10 seconds", run: () => seek(-10) },
             { label: "Forward 10 seconds", icon: "fa-rotate-right", keys: ["L"], words: "forward skip ahead 10 seconds", run: () => seek(10) },
             canStep(1) && { label: "Next video", icon: "fa-forward-step", keys: ["Shift", "N"], words: "next video skip queue playlist", top: true, run: () => step(1).click() },
@@ -4501,12 +5261,10 @@ const cmdPalette = (() => {
             const words = query.toLowerCase().split(/\s+/).filter(Boolean);
             // (not once its results are showing)
             const shown = results && results.open && searchedFor === query;
-            const search = youtube() && !shown ? [
-                { label: `Search YouTube for “${query}”`, icon: "fa-brands fa-youtube", search: query, searchKind: "video" },
-                { label: `Search YouTube Music for “${query}”`, icon: "fa-music", search: query, searchKind: "music" }
-            ] : [];
+            // (where to search - YouTube, Music or Playlists - is the pill bar's choice, and Enter
+            // searches there: no "Search YouTube for …" rows. Without the website, nothing to search.)
             const matching = cards => shown ? [] : cards.filter(item => words.every(word => `${item.label} ${item.searchMeta || item.meta}`.toLowerCase().includes(word)));
-            items = [...search, ...matching(allRecent), ...matching(allSaved)];
+            items = [...matching(allRecent), ...matching(allSaved)];
         }
         if (freshChoice) chosen = preferred;
         freshChoice = false;
@@ -4787,22 +5545,28 @@ const cmdPalette = (() => {
         if (results || !youtube()) return results;
         results = CineYouTube.createResults({
             host: resultsHost,
+            head: filterHead,
             input,
             // (what was watched before: the Recently played row, not a long list)
             suggest: false,
             compact: true,
             actions: resultActions,
+            onClear: () => backToStart(),
+            onSettled: () => syncClear(),
             onPick: (ref, where, item) => pick(ref, where, item.kind === "playlist"
                 ? { listTitle: item.title, channel: item.channel, count: item.count }
                 : { title: item.title, channel: item.channel, live: !!item.live, music: !!(item.music || item.kind === "music") })
         });
         return results;
     };
-    const searchYouTube = (query, kind = "video") => {
+    const searchYouTube = (query, kind = activeSearchMode) => {
+        ensureResults();
         if (!results) return;
+        setSearchPillMode(kind);
         showNote("");
         searchedFor = query;
         results.run(query, kind);
+        syncClear();
         renderList();
         // On a phone the keyboard steps aside for the results
         if (isTouch) input.blur();
@@ -4884,6 +5648,8 @@ const cmdPalette = (() => {
 
     // ---------- Typing, choosing, Enter
     const renderAll = () => {
+        // (after the results' own changes too: renderAll runs on every edit and on Clear)
+        queueMicrotask(syncClear);
         renderLink();
         // A link: its card is the choice (no commands, no earlier results)
         if (linkState.ref) {
@@ -4897,15 +5663,20 @@ const cmdPalette = (() => {
         }
         renderList();
     };
+    // Enter runs the highlighted video only when it was picked with the arrow keys; otherwise
+    // it searches where the pill bar says
+    let pickedWithKeys = false;
     input.addEventListener("input", () => {
         chosen = 0;
         freshChoice = true;
+        pickedWithKeys = false;
         if (note.classList.contains("error")) showNote("");
         renderAll();
     });
     input.addEventListener("keydown", e => {
         if ((e.key === "ArrowDown" || e.key === "ArrowUp") && items.length) {
             e.preventDefault();
+            pickedWithKeys = true;
             chosen = (chosen + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
             markChosen();
             body.querySelector(`#cmd-item-${chosen}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -4917,7 +5688,7 @@ const cmdPalette = (() => {
         if (ref) return pick(ref, "play");
         const value = input.value.trim();
         if (!value) return;
-        if (items[chosen]) return runItem(items[chosen]);
+        if (items[chosen] && (pickedWithKeys || !youtube())) return runItem(items[chosen]);
 
         // "remove all commands, it would work, but will not show":
         // 1. Typed commands (time: 1:23, speed: 1.5x, percent: 50%)
@@ -4937,7 +5708,7 @@ const cmdPalette = (() => {
         }
 
         // 3. Otherwise search YouTube
-        if (youtube()) return searchYouTube(value);
+        if (youtube()) return searchYouTube(value, activeSearchMode);
         showNote("No video or command matched. Searching YouTube needs the website (with an internet connection).", true);
     });
     pasteBtn.addEventListener("click", async () => {
@@ -4969,10 +5740,12 @@ const cmdPalette = (() => {
             ensureResults();
             followSaved();
             setResultActions();
+            // Over a fullscreen player too: only what's inside the fullscreen element shows
+            const host = fullscreenElement() || document.body;
+            if (overlay.parentElement !== host) host.append(overlay);
             overlay.hidden = false;
             searchBtn.setAttribute("aria-expanded", "true");
-            input.placeholder = kind === "music" ? "Search YouTube Music, paste a link…"
-                : youtube() ? "Search YouTube, paste a link, or pick recent…" : "Paste a link or pick a recent video…";
+            setSearchPillMode(kind === "music" ? "music" : kind === "playlist" ? "playlist" : "video");
             if (results) results.clear();
             linkState.key = "";
             // (both rows from their start again)
@@ -5115,10 +5888,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const on = isSaved(now.video) || isSaved(now.list);
         button.classList.toggle("on", on);
         button.firstChild.className = `${on ? "fa-solid" : "fa-regular"} fa-heart`;
-        button.title = now.list ? "Save this video or the playlist" : on ? "Saved - take it out of Saved" : "Save this video";
+        button.title = (now.list ? "Save this video or the playlist" : on ? "Saved - take it out of Saved" : "Save this video") + " (S)";
         button.setAttribute("aria-label", button.title);
     };
     const toggle = item => {
+        if (item && item.kind !== "playlist" && !item.list && container.classList.contains("is-yt-music")) item = { ...item, music: true };
         const saved = CineSaved.toggle(item);
         if (saved === null) return;
         const what = item.kind === "playlist" ? "Playlist" : "Video";

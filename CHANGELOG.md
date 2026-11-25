@@ -6,6 +6,32 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-25
+
+### Audio player
+- New computer audio player: artwork and details as two columns of the same height, a larger title, the seekbar with its times at its ends, larger buttons, and the play button and seekbar in the artwork's own colour
+- Up next: the queue's next track as a pill in the middle of the top row (click to play it)
+- Volume as a round button at the top right - its slider drops down on pointing; the mouse wheel and the arrow keys change it 5 points at a time
+- The side panel can be hidden (a Queue button brings it back); it hides by itself when the window gets too narrow for it and comes back when there is room again, and stays hidden as tracks change once you hide it
+- YouTube Music artwork takes the shape of what the picture really shows (album covers stay square, also inside letterboxed thumbnails)
+- Narrow windows and tablets: a smooth change to the phone layout, with the computer's top row (Up next, Queue, volume) where there is a mouse, and acrylic panels throughout
+- Local files: a music note (audio) or a video camera (video) centred in the artwork, a real-time equalizer for audio files, and the panels' acrylic from the video's own picture
+- Phones: the collapsed player strip is taller, its seekbar clear of the artwork; double-tap the artwork to save, swipe it to change tracks; the settings sheet slides up and closes when pulled down from its top
+
+### Video player and rooms
+- Centre controls with a light blur; the seekbar preview is never covered by them
+- Keys 1-0 show the jump on the side it goes (forward right, back left)
+- Hiding and showing camera video is one short, smooth change in every layout
+- The floating camera window's buttons show on pointing at it; the side panel's width is capped
+- Phones going fullscreen start with the panels out of the way; a sideways phone's panel ignores the camera cutout
+- In the audio player, the mic and camera buttons stay in the call dock
+
+### Home and library
+- A Music filter in Saved and Recent history
+- Rooms on the home page show the faces of everyone who has joined
+- A softer hover on Search YouTube
+- Going home from any player always opens the home page; there is no miniplayer for audio
+
 ## [1.9.20] - 2026-11-22
 
 ### Player and rooms
