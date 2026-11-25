@@ -2704,7 +2704,32 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
         // (the seekbar along its bottom border)
         makeSeekLine(audioCollapsedBar);
 
+        // A swipe along it (a finger): right to left, the next track; left to right, the previous one -
+        // as on the open player's artwork. The tap that ends a swipe doesn't close the sheet.
+        let stripTouch = null, stripSwiped = 0;
+        audioCollapsedBar.addEventListener("pointerdown", e => {
+            stripTouch = e.pointerType === "touch" && !e.target.closest(".seek-line") ? { x: e.clientX, y: e.clientY } : null;
+        });
+        audioCollapsedBar.addEventListener("pointercancel", () => stripTouch = null);
+        audioCollapsedBar.addEventListener("pointerup", e => {
+            if (!stripTouch) return;
+            const dx = e.clientX - stripTouch.x, dy = e.clientY - stripTouch.y;
+            stripTouch = null;
+            if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            stripSwiped = Date.now();
+            const next = dx < 0;
+            const step = container.querySelector(next ? ".next-track" : ".prev-track");
+            if (step && !step.hidden && !step.disabled) {
+                step.click();
+                audioCollapsedBar.querySelector(".audio-collapsed-info")?.animate(
+                    [{ translate: `${next ? -28 : 28}px 0`, opacity: 0.35 }, { translate: "0 0", opacity: 1 }], { duration: 260, easing: "ease-out" });
+            } else showFeedback(next ? "fa-forward-step" : "fa-backward-step", next ? "Nothing after this" : "Nothing before this");
+        });
         audioCollapsedBar.addEventListener("click", e => {
+            if (Date.now() - stripSwiped < 500) {
+                e.stopPropagation();
+                return;
+            }
             if (e.target.closest(".audio-collapsed-play")) {
                 e.stopPropagation();
                 togglePlay();
@@ -3742,7 +3767,7 @@ const sessionKeeper = (() => {
     return audio;
 })();
 const syncSessionKeeper = () => {
-    if (!sessionKeeper) return;
+    if (!sessionKeeper || ytSound.on) return;
     const youtube = container.classList.contains("youtube") && !playerPage.hidden || !!(together.soloMini && together.solo && together.solo.active);
     const want = youtube && !mediaPaused();
     if (want && sessionKeeper.paused) {
@@ -3752,6 +3777,100 @@ const syncSessionKeeper = () => {
         updateMediaSession();
     }
 };
+// ---------- Background play for a YouTube video (phones and tablets): YouTube's own player falls
+// silent once the browser is left or the phone is locked, even where it still seems to play. So
+// as the page leaves the screen its sound goes on from the page's own audio player (the one above,
+// which phones let play in the background): the video's sound from a Piped server
+// (CineYouTube.backgroundSound), from the same moment, while YouTube's player waits. The lock
+// screen's buttons work on it; at its end, the next video in the queue or playlist carries on
+// the same way. Back on the page, YouTube's player takes over from where the sound got to. Where
+// no server can give the sound, YouTube's own player is left to it as before.
+const ytSound = { on: false, id: null, silence: sessionKeeper ? sessionKeeper.src : "", token: 0 };
+const ytSoundWanted = () => isTouch && document.hidden && background.mode !== "off" && soloMedia() === "youtube" && !floating();
+const ytSoundSwitch = async id => {
+    const token = ++ytSound.token;
+    const src = id && window.CineYouTube && CineYouTube.backgroundSound ? await CineYouTube.backgroundSound(id) : null;
+    if (token !== ytSound.token || !ytSoundWanted()) return false;
+    if (!src) return false;
+    const player = sessionKeeper;
+    const from = ytSound.on && ytSound.id !== id ? 0 : (together.solo.currentTime || 0);
+    ytSound.on = true;
+    ytSound.id = id;
+    player.loop = false;
+    player.src = src;
+    player.muted = false;
+    try {
+        player.currentTime = from;
+    } catch (e) {}
+    try {
+        await player.play();
+    } catch (e) {
+        if (token === ytSound.token) ytSoundBack(false);
+        return false;
+    }
+    if (token !== ytSound.token) return true;
+    // (YouTube's player waits meanwhile: it would only play silently, or twice)
+    if (!together.solo.paused) together.solo.pause();
+    updateMediaSession();
+    return true;
+};
+// Back to YouTube's player (`resume`: from where the sound got to, playing if it was)
+function ytSoundBack(resume = true) {
+    if (!ytSound.on) return;
+    const player = sessionKeeper;
+    const time = player.currentTime;
+    const playing = !player.paused && !player.ended;
+    const id = ytSound.id;
+    ytSound.on = false;
+    ytSound.id = null;
+    ytSound.token++;
+    player.pause();
+    player.src = ytSound.silence;
+    player.loop = true;
+    if (resume && together.solo && together.solo.active && together.solo.videoId === id) {
+        if (Number.isFinite(time) && time > 0) together.solo.seek(time);
+        if (playing) together.solo.play();
+    }
+    updateMediaSession();
+}
+if (sessionKeeper) {
+    // (some phones - iPhones - only let a page's audio player play later, unprompted, if it played
+    // once on a tap: on the first tap, it plays silently for a moment)
+    let unlocked = false;
+    document.addEventListener("touchend", () => {
+        if (unlocked || !sessionKeeper.paused) return;
+        unlocked = true;
+        sessionKeeper.muted = true;
+        sessionKeeper.play().then(() => {
+            if (!ytSound.on && sessionKeeper.src === ytSound.silence) sessionKeeper.pause();
+        }, () => unlocked = false).finally(() => sessionKeeper.muted = false);
+    }, { passive: true });
+    // (the next video - Next on the lock screen, or the queue going on: its sound too)
+    sessionKeeper.addEventListener("timeupdate", () => {
+        if (!ytSound.on || !together.solo || !together.solo.active) return;
+        const id = together.solo.videoId;
+        if (id && id !== ytSound.id) ytSoundSwitch(id);
+        else if (!together.solo.paused) together.solo.pause();
+    });
+    sessionKeeper.addEventListener("ended", () => {
+        if (!ytSound.on) return;
+        const next = container.querySelector(".next-track");
+        if (next && !next.hidden && !next.disabled) next.click();
+    });
+    ["play", "pause"].forEach(type => sessionKeeper.addEventListener(type, () => ytSound.on && updateMediaSession()));
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) return ytSoundBack(true);
+        // (playing as the page leaves)
+        if (soloMedia() === "youtube" && !together.solo.paused && ytSoundWanted()) ytSoundSwitch(together.solo.videoId);
+    });
+    // (ready before it's needed: the sound's link is looked up as a YouTube video starts, on a phone)
+    setInterval(() => {
+        if (isTouch && !document.hidden && soloMedia() === "youtube" && !together.solo.paused && window.CineYouTube && CineYouTube.backgroundSound) {
+            CineYouTube.backgroundSound(together.solo.videoId);
+        }
+    }, 4000);
+}
+
 if (sessionKeeper) {
     setInterval(() => {
         syncSessionKeeper();
@@ -4712,7 +4831,8 @@ const backFromAudio = () => {
 // Where you are, for opening the file again later (as the video does)
 bgAudio.addEventListener("pause", () => handoff.on && currentFileKey && storage.set(currentFileKey, bgAudio.currentTime));
 // The lock screen's buttons, while the sound plays on its own (see togglePlay, seek, seekTo)
-handoffMedia = () => handoff.on ? bgAudio : null;
+// (and a YouTube video's sound, carried on by the page's own audio player: ytSound)
+handoffMedia = () => handoff.on ? bgAudio : ytSound.on ? sessionKeeper : null;
 
 mainVideo.addEventListener("pause", () => {
     if (mainVideo.ended || handoff.on) return;
@@ -4753,9 +4873,11 @@ document.addEventListener("visibilitychange", () => {
         if (mainVideo.paused && together.keepPlaying("file")) mainVideo.play().catch(() => {});
         return;
     }
-    if (background.mode === "pip") {
+    if (background.mode === "pip" && document.pictureInPictureEnabled && !/iP(hone|ad|od)/.test(navigator.userAgent)) {
+        // (floating where the phone allows it; refused - or not floating soon - the sound goes on)
         autoPip();
         background.handoffTimer = setTimeout(() => document.hidden && !floating() && handToAudio(), 900);
+        mainVideo.addEventListener("pause", () => document.hidden && !floating() && handToAudio(), { once: true });
     } else handToAudio();
 });
 

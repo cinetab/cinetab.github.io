@@ -1499,6 +1499,7 @@
         canStep,
         stop: () => stop(true),
         pause: () => solo.active && soloControls.request({ paused: true }),
+        play: () => solo.active && soloControls.request({ paused: false }),
         seek: time => solo.active && Number.isFinite(time) && soloControls.request({ time }),
         // Shift + N / P (room.js passes them on outside a room)
         step: n => {
@@ -1560,5 +1561,40 @@
         return storyboards.get(id);
     };
 
-    window.CineYouTube = { parse, search, api, play, stop: () => stop(true), createResults, thumbOf, suggestedAfter, details, fullDescription, views, paintHeart, storyboard };
+    // Background play's sound for a YouTube video (script.js): YouTube's own player can't sound on a
+    // phone once the browser is left, so its sound plays from the page's own audio player meanwhile.
+    // A link to it from a Piped server: an audio-only stream (AAC first - every phone plays it), or
+    // else the small video with sound in it (360p). Played through that server's proxy (YouTube's
+    // links only work from the address that asked for them). null where no server can give one -
+    // YouTube often refuses them.
+    const soundLinks = new Map();
+    const backgroundSound = id => {
+        if (!YT_ID.test(id || "")) return Promise.resolve(null);
+        const cached = soundLinks.get(id);
+        if (cached && (!cached.at || Date.now() - cached.at < 3 * 3600e3)) return cached.promise;
+        const entry = { at: 0, promise: null };
+        entry.promise = (async () => {
+            for (const base of pipedBases()) {
+                try {
+                    const data = await getJSON(`${base}/streams/${id}`, 7000);
+                    const ok = stream => stream && typeof stream.url === "string" && /^https:\/\//.test(stream.url);
+                    const audio = (data && data.audioStreams || []).filter(ok)
+                        .filter(stream => !stream.audioTrackType || stream.audioTrackType === "ORIGINAL")
+                        .sort((a, b) => (/mp4|m4a/.test(b.mimeType || "") - /mp4|m4a/.test(a.mimeType || "")) || (b.bitrate || 0) - (a.bitrate || 0));
+                    const aac = audio.find(stream => /mp4|m4a/.test(stream.mimeType || "") && (stream.bitrate || 0) <= 200000) || audio[0];
+                    const muxed = (data && data.videoStreams || []).filter(ok).find(stream => stream.videoOnly === false && /mp4/.test(stream.mimeType || ""));
+                    const pick = aac || muxed;
+                    if (!pick) continue;
+                    entry.at = Date.now();
+                    return pick.url;
+                } catch (e) {}
+            }
+            soundLinks.delete(id);
+            return null;
+        })();
+        soundLinks.set(id, entry);
+        return entry.promise;
+    };
+
+    window.CineYouTube = { parse, search, api, play, stop: () => stop(true), createResults, thumbOf, suggestedAfter, details, fullDescription, views, paintHeart, storyboard, backgroundSound };
 })();

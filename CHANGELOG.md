@@ -6,6 +6,16 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-25
+
+### Audio player
+- Phones: swipe the collapsed player strip left or right for the next or previous track, as on the open player's artwork
+
+### Playback
+- Phones: a YouTube video or song keeps its sound when the browser is minimised or the phone is locked - the page's own player carries the sound meanwhile (where a public Piped server can provide it) and YouTube's player takes over again from the same moment on return; the lock screen's play, pause and next work on it, and the queue carries on
+- Your own videos keep their sound in the background straight away on iPhones (no waiting for a picture-in-picture window that can't open there)
+- Next and Previous in your own YouTube queue skipped two videos at a time; they step one again
+
 ## [2.1.0] - 2026-11-25
 
 ### Video player

@@ -7776,12 +7776,14 @@
     };
     nowPrevBtn.addEventListener("click", () => stepPlaylist(-1));
     nowNextBtn.addEventListener("click", () => stepPlaylist(1));
+    // (outside a room, a YouTube video on your own steps itself - youtube.js has its own listener on
+    // these buttons; stepping here too skipped two videos at a time)
     prevTrackBtn.addEventListener("click", () => {
-        if (!room) return together.step(-1);
+        if (!room) return together.solo && together.solo.active ? undefined : together.step(-1);
         stepPlaylist(-1);
     });
     nextTrackBtn.addEventListener("click", () => {
-        if (!room) return together.step(1);
+        if (!room) return together.solo && together.solo.active ? undefined : together.step(1);
         stepPlaylist(1);
     });
     // Shift + N / P (see script.js)

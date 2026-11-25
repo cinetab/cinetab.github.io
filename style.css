@@ -29746,3 +29746,7 @@ body .player-page.miniplayer[hidden]:not(#_) > :not(.container) {
 @media (hover: none) {
   .container.remote.youtube.yt-has-preview .video-timeline:hover:not(.scrubbing) .thumbnail-preview:not(#_) { display: none !important; }
 }
+
+/* A-PH: the collapsed player strip takes sideways swipes (script.js: next / previous track); the
+   page still scrolls up and down under a finger on it */
+.audio-collapsed-bar { touch-action: pan-y; }
