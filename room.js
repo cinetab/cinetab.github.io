@@ -131,6 +131,7 @@
     queueMoreBtn = queueTab.querySelector(".room-queue-more"),
     queueEmpty = queueTab.querySelector(".room-queue-empty"),
     queueCount = queueTab.querySelector(".room-queue-count"),
+    queueClearBtn = queueTab.querySelector(".room-queue-clear"),
     queueList = queueTab.querySelector(".room-queue"),
     playerStopBtns = document.querySelectorAll(".player-stop-btn, .more-stop-video"),
     prevTrackBtn = document.querySelector(".container .prev-track"),
@@ -2569,6 +2570,16 @@
         } else {
             playerPage.style.setProperty("--mobile-audio-call-dock-height", "0px");
         }
+        // (a phone held sideways, audio, the call docked below as a strip: the player and the tab
+        // bar keep above it - style.css reads its height)
+        const belowAudio = container.classList.contains("audio-mode-only")
+            && !playerPage.classList.contains("mobile-audio-extended")
+            && playerPage.classList.contains("call-dock-below")
+            && matchMedia("(max-width: 900px) and (orientation: landscape)").matches;
+        if (belowAudio && dockVisible) {
+            const page = playerPage.getBoundingClientRect();
+            playerPage.style.setProperty("--audio-call-below", `${Math.max(0, Math.ceil(page.bottom - dockRect.top))}px`);
+        } else playerPage.style.setProperty("--audio-call-below", "0px");
         // (the bar placed here: the docked call itself, or - its videos pinned - the desk bar)
         const split = !deskBar.hidden;
         if (callWin.hidden || (call.dock !== "bottom" && !split)) {
@@ -2586,8 +2597,12 @@
         const height = barWin.offsetHeight;
         const gap = 10, margin = 8;
         // The room beside the side panel (the room's panel, the queue - when one is open)
-        const panelOpen = !panel.hidden && playerPage.classList.contains("room-open");
-        const areaRight = panelOpen ? Math.min(page.right, panel.getBoundingClientRect().left) : page.right;
+        // (only a panel beside the player counts - in a narrow window it's the tab bar above the
+        // dock, which mustn't push the dock off to the left)
+        const panelBox = panel.getBoundingClientRect();
+        const panelOpen = !panel.hidden && playerPage.classList.contains("room-open")
+            && panelBox.top <= page.top + page.height * 0.25 && panelBox.left > page.left + page.width * 0.4;
+        const areaRight = panelOpen ? Math.min(page.right, panelBox.left) : page.right;
         if (audio) {
             // Audio: a bottom row, centred in that room; the player above it shrinks to leave it free
             const cx = (page.left + areaRight) / 2 - page.left;
@@ -2652,11 +2667,18 @@
             const fsStrip = split && call.dock === "side" && isFull && !panelOpen;
             callWin.classList.toggle("fs-strip", fsStrip);
             if (fsStrip) {
-                const seekBox = container.querySelector(".wrapper > .timeline-container");
-                const seekTop = seekBox ? seekBox.getBoundingClientRect().top : picture.bottom - 90;
-                callWin.style.setProperty("--strip-b", `${Math.round(page.bottom - seekTop + 8)}px`);
+                // (just above the seekbar's own line - its times sit at its two ends, clear of the
+                // centred card; the controls and the call bar hidden: down to the bottom row, and
+                // back up with them. The seekbar slides as the controls come and go, so while it's
+                // coming back the place it rests at is used - the highest seen since the last resize.)
+                if (awake) {
+                    const seekEl = container.querySelector(".wrapper > .timeline-container .video-timeline") || container.querySelector(".wrapper > .timeline-container");
+                    const seekTop = seekEl ? seekEl.getBoundingClientRect().top : picture.bottom - 70;
+                    call.fsStripB = Math.max(call.fsStripB || 0, Math.round(page.bottom - seekTop + 10));
+                }
+                callWin.style.setProperty("--strip-b", `${awake ? call.fsStripB : 16}px`);
                 callWin.style.setProperty("--strip-cx", `${Math.round(cx)}px`);
-            }
+            } else call.fsStripB = 0;
             // (no side panel open - the room's panel, or the pinned column of videos: fullscreen or
             // not, the bar steps away with the player's controls after a while, and back with them)
             const noSidePanel = !panelOpen && call.dock !== "rail" && (call.dock !== "side" || fsStrip);
@@ -2667,6 +2689,9 @@
     // (and again once the player's controls have finished sliding in or out: the dock lines up with
     // their row where they come to rest)
     let dockSettle = 0;
+    // (a new window size or fullscreen: the pinned card's place over the seekbar is measured afresh)
+    window.addEventListener("resize", () => { call.fsStripB = 0; });
+    document.addEventListener("fullscreenchange", () => { call.fsStripB = 0; });
     new MutationObserver(() => {
         placeBottomDock();
         clearTimeout(dockSettle);
@@ -2742,6 +2767,12 @@
         call.y = y;
         layoutCall();
         callWin.style.transform = `translate(${Math.round(call.x)}px, ${Math.round(call.y)}px)`; callWin.style.setProperty("--float-x", `${Math.round(call.x)}px`); callWin.style.setProperty("--float-y", `${Math.round(call.y)}px`);
+        // (the flyout - pin, hide - follows the window's new top edge, and stays while it's resized)
+        if (!floatMenu.hidden) {
+            placeFloatMenu({ left: call.x, top: call.y, width: callWin.offsetWidth, height: callWin.offsetHeight });
+            clearTimeout(floatMenuTimer);
+            clearTimeout(floatLeaveTimer);
+        }
     };
 
     // An edge or corner, dragged with a mouse: that side moves, the opposite one stays put
@@ -2796,6 +2827,11 @@
         callWin.classList.remove("resizing");
         keepCallPlace();
         placeDeskPill();
+        if (!floatMenu.hidden) {
+            placeFloatMenu();
+            clearTimeout(floatMenuTimer);
+            floatMenuTimer = setTimeout(hideFloatMenu, 4000);
+        }
     };
     [...callEdges, callResize].forEach(handle => {
         handle.addEventListener("pointerdown", e => startCallResize(e, handle));
@@ -2945,18 +2981,26 @@
         floatCam.firstChild.className = `fa-solid ${camEnabled ? "fa-video" : "fa-video-slash"}`;
         floatCam.classList.toggle("active", camEnabled);
         floatMenu.hidden = false;
-        // (above the window, or below it where there's no room above; on screen)
-        const box = callWin.getBoundingClientRect();
-        const page = playerPage.getBoundingClientRect();
-        const w = floatMenu.offsetWidth, h = floatMenu.offsetHeight;
-        let top = box.top - page.top - h - 8;
-        if (top < 8) top = box.bottom - page.top + 8;
-        const left = within(box.left - page.left + box.width / 2 - w / 2, 8, Math.max(8, page.width - w - 8));
-        floatMenu.style.left = `${Math.round(left)}px`;
-        floatMenu.style.top = `${Math.round(Math.min(top, page.height - h - 8))}px`;
+        placeFloatMenu();
         clearTimeout(floatMenuTimer);
         floatMenuTimer = setTimeout(hideFloatMenu, 4000);
     };
+    // (above the window, or below it where there's no room above; on screen - placed again as the
+    // window is resized, so the flyout follows its top edge)
+    function placeFloatMenu(rect) {
+        if (floatMenu.hidden) return;
+        const page = playerPage.getBoundingClientRect();
+        const box = rect || (() => {
+            const r = callWin.getBoundingClientRect();
+            return { left: r.left - page.left, top: r.top - page.top, width: r.width, height: r.height };
+        })();
+        const w = floatMenu.offsetWidth, h = floatMenu.offsetHeight;
+        let top = box.top - h - 8;
+        if (top < 8) top = box.top + box.height + 8;
+        const left = within(box.left + box.width / 2 - w / 2, 8, Math.max(8, page.width - w - 8));
+        floatMenu.style.left = `${Math.round(left)}px`;
+        floatMenu.style.top = `${Math.round(Math.min(top, page.height - h - 8))}px`;
+    }
     document.addEventListener("pointerdown", e => {
         if (!floatMenu.hidden && !floatMenu.contains(e.target) && !callWin.contains(e.target)) hideFloatMenu();
     }, true);
@@ -2966,7 +3010,7 @@
     const floatHoverOut = () => {
         clearTimeout(floatLeaveTimer);
         floatLeaveTimer = setTimeout(() => {
-            if (!callWin.matches(":hover") && !floatMenu.matches(":hover")) hideFloatMenu();
+            if (!call.sizing && !callWin.matches(":hover") && !floatMenu.matches(":hover")) hideFloatMenu();
         }, 1500);
     };
     callWin.addEventListener("pointerenter", e => {
@@ -5975,6 +6019,26 @@
             if (autoplayOn() && y.index === y.queue.length - 1) autoplayNext();
             return;
         }
+        // Clear all: everything leaves the queue but the video that's playing
+        if (message.op === "clear") {
+            const playing = y.queue[y.index];
+            const gone = y.queue.length - (playing ? 1 : 0);
+            if (gone < 1) return;
+            y.queue = playing ? [playing] : [];
+            y.index = 0;
+            y.shuffled = false;
+            y.unshuffled = null;
+            openPlaylists.clear();
+            if (!y.queue.length) {
+                clearYouTube();
+                return notice(`${by.name} cleared the queue`);
+            }
+            shareFile();
+            shareQueue();
+            notice(`${by.name} cleared the queue (${gone} video${gone === 1 ? "" : "s"})`);
+            if (autoplayOn()) autoplayNext();
+            return;
+        }
         if (typeof message.k !== "string") return;
         const at = y.queue.findIndex(item => item.k === message.k);
         if (at < 0) return;
@@ -6875,6 +6939,8 @@
         queueCount.textContent = items.length ? `${Math.min(queue.index + 1, items.length)} of ${items.length}` : "";
         const scrolledTo = queueList.dataset.current;
         const isPlaying = room ? !!(room.file && room.file.yt) : !!(together.solo && together.solo.active);
+        // Clear all: for whoever may change the queue, while there's more than the playing video
+        if (queueClearBtn) queueClearBtn.hidden = !edit || items.length - (isPlaying && items[queue.index] ? 1 : 0) < 1;
         queueList.replaceChildren(...items.map((item, i) => {
             const current = isPlaying && i === queue.index;
             const played = isPlaying ? i < queue.index : false;
@@ -6969,6 +7035,33 @@
         else send(room.peer, { t: "queue-op", ...op });
     };
 
+    // The queue's Clear all: every video out but the one playing (asked first)
+    if (queueClearBtn) queueClearBtn.addEventListener("click", () => {
+        const queue = room ? (room.file && room.file.yt && room.queue || { index: 0, items: [] }) : soloQueue;
+        const isPlaying = room ? !!(room.file && room.file.yt) : !!(together.solo && together.solo.active);
+        const keep = isPlaying ? queue.items[queue.index] : null;
+        const gone = queue.items.length - (keep ? 1 : 0);
+        if (gone < 1) return;
+        playerAsk({
+            icon: "fa-trash-can",
+            title: "Clear the queue?",
+            text: `${gone} video${gone === 1 ? "" : "s"} leave${gone === 1 ? "s" : ""} the queue${keep ? "; the one playing keeps playing" : ""}`,
+            yes: "Clear all",
+            danger: true
+        }).then(yes => {
+            if (!yes) return;
+            if (room) return sendQueueOp({ op: "clear" });
+            soloQueue.items = keep ? [keep] : [];
+            soloQueue.index = 0;
+            soloQueue.shuffled = false;
+            soloQueue.unshuffled = null;
+            openPlaylists.clear();
+            saveSoloQueue();
+            renderQueue();
+            renderShuffle();
+        });
+    });
+
     const shufflePlaylistGroup = pl => {
         const indices = [];
         soloQueue.items.forEach((item, i) => {
@@ -7027,7 +7120,7 @@
             soloQueue.index = Math.min(firstIndex, soloQueue.items.length - 1);
             const target = soloQueue.items[soloQueue.index];
             if (target && target.id && window.CineYouTube) {
-                CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+                CineYouTube.play({ id: target.id, music: !!target.music }, { title: target.title, music: !!target.music }, { fromQueue: true });
             }
         } else {
             soloQueue.index = soloQueue.items.indexOf(currentItem);
@@ -7092,7 +7185,7 @@
                 const target = soloQueue.items[at];
                 if (target && target.id && window.CineYouTube) {
                     soloQueue.index = at;
-                    CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+                    CineYouTube.play({ id: target.id, music: !!target.music }, { title: target.title, music: !!target.music }, { fromQueue: true });
                     saveSoloQueue();
                     renderQueue();
                 }
@@ -7124,7 +7217,7 @@
                     soloQueue.index = Math.min(at, soloQueue.items.length - 1);
                     const target = soloQueue.items[soloQueue.index];
                     if (target && target.id && window.CineYouTube) {
-                        CineYouTube.play({ id: target.id }, { title: target.title }, { fromQueue: true });
+                        CineYouTube.play({ id: target.id, music: !!target.music }, { title: target.title, music: !!target.music }, { fromQueue: true });
                     }
                 }
                 saveSoloQueue();
@@ -7276,7 +7369,7 @@
         } : null);
         soloTitles();
         if (wasEmpty && (!together.solo || !together.solo.active) && window.CineYouTube) {
-            CineYouTube.play({ id: items[0].id }, { title: items[0].title }, { fromQueue: true });
+            CineYouTube.play({ id: items[0].id, music: !!items[0].music }, { title: items[0].title, music: !!items[0].music }, { fromQueue: true });
         }
     };
     // (their titles, a few at a time)
@@ -7741,7 +7834,9 @@
     together.roomYouTube = () => {
         const file = room && room.file;
         if (!file || !file.yt || !file.yt.id) return null;
-        const current = room.yt && room.yt.queue ? room.yt.queue[room.yt.index] : null;
+        // (the host's own queue; a guest's copy of it - its items carry the music mark too)
+        const current = room.yt && room.yt.queue ? room.yt.queue[room.yt.index]
+            : room.queue && room.queue.items ? room.queue.items.find(item => item.id === file.yt.id && item === room.queue.items[room.queue.index]) || room.queue.items.find(item => item.id === file.yt.id) : null;
         return { video: { kind: "video", id: file.yt.id, title: file.title && file.title !== "YouTube video" ? file.title : "", channel: file.channel || "", music: !!(current && current.music) }, list: together.queuePlaylist(file.yt.id) };
     };
 
@@ -7928,6 +8023,7 @@
                 const items = message.items.slice(0, 500)
                     .filter(item => item && typeof item.k === "string" && YT_ID.test(item.id))
                     .map(item => ({ k: item.k.slice(0, 16), id: item.id, title: clean(item.title, 200), by: clean(item.by, 30) || "someone",
+                        ...(item.music === true ? { music: true } : {}),
                         ...(typeof item.pl === "string" && item.pl ? { pl: item.pl.slice(0, 12), plt: clean(item.plt, 120),
                             ...(typeof item.pll === "string" && /^[\w-]{10,64}$/.test(item.pll) ? { pll: item.pll } : {}) } : {}) }));
                 const index = Number.isInteger(message.index) ? Math.max(0, Math.min(items.length - 1, message.index)) : 0;

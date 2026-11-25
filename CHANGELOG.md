@@ -6,6 +6,42 @@ All notable changes to CineTab are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-25
+
+### Video player
+- Up next for videos: in the last 10% of a video with something after it in the queue, a pill with the next video (click to play it) - in the empty space above the video when there is some, otherwise just under the title bar, centred on the video; on a phone held sideways, at the top centre while the controls are hidden. Its width follows the title
+- YouTube videos: YouTube's own title bar, "More videos" and logo never show (also while paused), the picture no longer jumps up and down, and Fit shows the whole video - nothing cropped, whatever its shape
+- Seekbar previews for YouTube videos, from YouTube's own storyboard pictures
+- On a computer, both times sit together at the top left of the seekbar (00:41 / 03:20; click for the time left)
+- T switches the picture between Fit and Fill
+- S (save) lights up the heart and brings the controls back when they were hidden
+- The play controls have a light rim, like the other round buttons
+- A new player tour for first-time users: a spotlight on each part of the player that's on screen, with Back / Next and the arrow keys; take it again from search ("tour")
+
+### Search
+- Up / Down go through the YouTube results and Enter plays the one picked (in a room too); Left / Right go through Recently played and Saved
+- A sweeping loading bar instead of "Searching YouTube for ..."
+
+### Queue
+- Clear all: everything but the video that's playing leaves the queue (asks first; in a room, for everyone)
+
+### Calls and rooms
+- Fullscreen with the cameras pinned: the camera card sits just above the seekbar, and glides to the bottom when the controls and call bar hide
+- Resizing the floating camera window: its pin / hide flyout follows it
+- Guests get the audio player for a YouTube Music track, like the host
+- A narrow computer window's audio player in a call: the player keeps its full height, and the call is a bar pinned to the bottom edge, as on a phone; a phone held sideways keeps the player above the call strip
+
+### Audio player
+- Narrow computer windows: no tab bar at the bottom - the Queue button at the top opens the panel as a sheet, as on a phone; no swipe handle where there's no touch
+- Playing a song from the queue keeps the player collapsed (the sheet stays open)
+
+### Playback
+- The keyboard's media keys (play / pause, next, previous) and the phone's lock screen control YouTube videos too, and Next / Previous follow the queue
+- Background play on phones keeps the page going while a YouTube video plays
+
+### Dialogs
+- Confirmations have one button and a close (×) - no Cancel
+
 ## [2.0.0] - 2026-11-25
 
 ### Audio player

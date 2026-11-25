@@ -6109,14 +6109,23 @@ body > .room-toasts {
   container-type: size;
 }
 
-/* After a jump, until a moment after it plays again (script.js): YouTube's frame runs past the
-   picture's box above and below, so the title bar and buttons YouTube shows meanwhile (at its top
-   and bottom) are cut off. A widescreen video sits centred in the taller frame, exactly where it
-   was; a square or upright one is a little larger for that moment. */
-.container.youtube.yt-crop .yt-mount iframe {
-  --yt-bleed: clamp(44px, 22cqh, 76px);
+/* Always (it was only after a jump - switching it on and off moved the picture up and down):
+   YouTube's frame runs past the picture's box above and below, so the title bar, "More videos" and
+   logo YouTube shows at its top and bottom (loading, after a jump, paused) are cut off. */
+.container.youtube .yt-mount iframe {
+  --yt-bleed: clamp(40px, calc(9cqh + 20px), 68px);
   height: calc(100% + 2 * var(--yt-bleed));
   margin-top: calc(-1 * var(--yt-bleed));
+}
+
+/* Fit: the frame only as wide as the video itself (its shape: --yt-ar, script.js), centred - YouTube
+   fits the video to the frame's width, so the taller frame doesn't make it bigger: all of it shows,
+   nothing cut off at the top or bottom (an upright or 4:3 video included) */
+.container.youtube:not(.aspect-fill) .yt-mount iframe {
+  display: block;
+  width: min(100%, 100cqh * var(--yt-ar, 1.7778));
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .container.youtube.aspect-fill .yt-mount {
@@ -20027,16 +20036,6 @@ body > .notice-layer {
 .home-room-list .room-card-live { font-size:9px; }
 
 /* First visit player guide */
-.player-tour { position:fixed; inset:0; z-index:10000; pointer-events:none; background:radial-gradient(circle 42px at var(--tour-x,50vw) var(--tour-y,50vh),transparent 0 39px,rgba(3,6,12,.72) 44px); }
-.player-tour-card { position:absolute; width:min(360px,calc(100vw - 36px)); padding:22px; border:1px solid rgba(255,255,255,.13); border-radius:20px; color:#f4f6fb; background:rgba(28,33,47,.92); -webkit-backdrop-filter:blur(24px) saturate(145%); backdrop-filter:blur(24px) saturate(145%); box-shadow:0 18px 60px rgba(0,0,0,.45),inset 0 1px rgba(255,255,255,.06); pointer-events:auto; }
-.player-tour-count { display:block; margin-bottom:12px; color:#8fbfff; font-size:10px; font-weight:700; letter-spacing:.12em; }
-.player-tour-card h2 { margin:0 0 8px; font:600 19px/1.25 var(--font-display); }
-.player-tour-card p { margin:0; color:#b9c2d1; font-size:13px; line-height:1.55; }
-.player-tour-skip { position:absolute; top:14px; right:14px; padding:5px 7px; border:0; color:#aeb8c7; background:transparent; font-size:11px; cursor:pointer; }
-.player-tour-actions { display:flex; justify-content:flex-end; margin-top:18px; }
-.player-tour-next { min-width:86px; min-height:36px; padding:0 14px; border:1px solid rgba(110,175,255,.36); border-radius:10px; color:#fff; font-size:12px; font-weight:650; background:linear-gradient(120deg,#3488ed,#515dea); cursor:pointer; }
-.player-tour :is(button):focus-visible { outline:2px solid #9bc9ff; outline-offset:2px; }
-@media (prefers-reduced-motion:no-preference) { .player-tour-card { animation:tourPop .22s ease-out both; } @keyframes tourPop { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } } }
 
 /* Lobby spacing refinements */
 .app-shell .room-launcher { padding:clamp(18px,2.4vw,26px); gap:14px 24px; }
@@ -27999,6 +27998,7 @@ body .player-page.miniplayer[hidden]:not(#_) > :not(.container) {
     top: auto !important;
     bottom: var(--strip-b, 120px) !important;
     transform: translateX(-50%) !important;
+    transition: bottom 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
     width: auto !important;
     max-width: calc(100vw - 48px) !important;
     height: min(18vh, 150px) !important;
@@ -28246,24 +28246,28 @@ body .player-page.miniplayer[hidden]:not(#_) > :not(.container) {
     display: none !important;
   }
 
-  /* A-PH, collapsed: a pull handle on top of the details bar - swiped up, the sheet opens (room.js) */
-  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .room-panel:not(#_)::before {
-    content: "" !important;
-    display: block !important;
-    position: absolute !important;
-    top: 5px !important;
-    left: 50% !important;
-    z-index: 3 !important;
-    width: 36px !important;
-    height: 4px !important;
-    margin-left: -18px !important;
-    border-radius: 2px !important;
-    background: rgba(255, 255, 255, 0.38) !important;
-    pointer-events: none !important;
-  }
+  /* (touch screens only: with a mouse there is no swipe, so no handle - the tab bar sits clean
+     above the call dock in an upright window too) */
+  @media (pointer: coarse) {
+    /* A-PH, collapsed: a pull handle on top of the details bar - swiped up, the sheet opens (room.js) */
+    .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .room-panel:not(#_)::before {
+      content: "" !important;
+      display: block !important;
+      position: absolute !important;
+      top: 5px !important;
+      left: 50% !important;
+      z-index: 3 !important;
+      width: 36px !important;
+      height: 4px !important;
+      margin-left: -18px !important;
+      border-radius: 2px !important;
+      background: rgba(255, 255, 255, 0.38) !important;
+      pointer-events: none !important;
+    }
 
-  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .room-panel:not(#_) .room-tabbar {
-    padding-top: 12px !important;
+    .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .room-panel:not(#_) .room-tabbar {
+      padding-top: 12px !important;
+    }
   }
 }
 
@@ -29203,9 +29207,31 @@ body .player-page.miniplayer[hidden]:not(#_) > :not(.container) {
     top: auto !important;
   }
 
-  /* ... and the player above both */
+  /* (in a room too, the player is the whole height - an earlier room rule sized it to its content,
+     so the artwork had no height left and disappeared) */
+  .player-page.room-open:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .container.audio-mode-only:not(#_):not(#__) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+  }
+
+  /* (a phone held sideways: the call docked below as a strip - the tab bar on it, the player above
+     both; room.js --audio-call-below is the strip's height) */
+  .player-page.call-dock-below:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .room-panel:not(#_):not(#__):not(#___) {
+    bottom: calc(6px + var(--audio-call-below, 0px)) !important;
+    top: auto !important;
+  }
+  .player-page.call-dock-below:not(.mobile-audio-extended) > .container.audio-mode-only > #audio-stage:not(#_x):not(#_y) {
+    margin-bottom: calc(var(--audio-call-below, 0px) + 56px) !important;
+  }
+  /* (little height left: the player starts at the top, between the logo and the corner buttons) */
+  .player-page.call-dock-below:not(.mobile-audio-extended) > .container.audio-mode-only:not(#_):not(#__):not(#___) {
+    padding-top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* ... and the player above both (the dock, then the tab bar on it: 10px + 48px + a 12px gap) */
   .player-page:has(> .room-call.bottom:not(.unit):not([hidden])) > .container.audio-mode-only > #audio-stage:not(#_x):not(#_y) {
-    margin-bottom: var(--audio-dock-space, 0px) !important;
+    margin-bottom: calc(var(--audio-dock-space, 0px) + 70px) !important;
   }
 
   /* the sheet (a tab opened): the same dynamic acrylic as on a phone held upright - the artwork
@@ -29254,4 +29280,469 @@ body .player-page.miniplayer[hidden]:not(#_) > :not(.container) {
     min-width: 40px !important;
     height: 40px !important;
   }
+}
+
+/* The queue's Clear all (room.js): a small text button at the end of the "Queue" heading */
+.room-tab-queue .room-queue-title:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.room-tab-queue .room-queue-clear {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #c8c8d4;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.room-tab-queue .room-queue-clear i { font-size: 10px; }
+.room-tab-queue .room-queue-clear:hover,
+.room-tab-queue .room-queue-clear:focus-visible {
+  background: rgba(255, 77, 77, 0.14);
+  border-color: rgba(255, 77, 77, 0.4);
+  color: #ff8a8a;
+}
+.room-tab-queue .room-queue-clear[hidden] { display: none !important; }
+
+/* S pressed (script.js .save-flash): the heart lights up for a moment - a pink glow and a beat -
+   so it's clear what was saved even when the controls had been hidden */
+.player-save-btn.save-flash {
+  animation: saveFlash 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+.player-save-btn.save-flash i {
+  animation: saveFlashBeat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 2 !important;
+}
+@keyframes saveFlash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 77, 141, 0.75); background-color: rgba(255, 77, 141, 0.38); }
+  45% { box-shadow: 0 0 0 10px rgba(255, 77, 141, 0); background-color: rgba(255, 77, 141, 0.28); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 77, 141, 0); }
+}
+@keyframes saveFlashBeat {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.32); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-save-btn.save-flash i { animation: none !important; }
+}
+
+/* V-PC / V-PL: Up next in a video's last 10% (script.js .video-up-next places it: above the video,
+   or in the title bar's row clear of the title and the buttons; on a phone sideways, the top centre). The audio player's pill, in a
+   darker acrylic to read over any picture. */
+.player-page > .video-up-next {
+  position: absolute;
+  z-index: 46;
+  height: 44px;
+  width: max-content;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.player-page > .video-up-next[hidden],
+.player-page.audio-mode-active > .video-up-next { display: none !important; }
+.player-page > .video-up-next > .vp-next {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 4px 16px 4px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(18, 20, 28, 0.62);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+.player-page > .video-up-next > .vp-next:hover { background: rgba(30, 33, 44, 0.78); border-color: rgba(255, 255, 255, 0.2); }
+.player-page > .video-up-next > .vp-next:active { transform: scale(0.98); }
+.player-page > .video-up-next > .vp-next:focus-visible { outline: 2px solid #4d9fff; outline-offset: 2px; }
+.player-page > .video-up-next .vp-next-cover {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+.player-page > .video-up-next .vp-next-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.player-page > .video-up-next .vp-next-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.player-page > .video-up-next .vp-next-text small {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+.player-page > .video-up-next .vp-next-text b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+}
+.player-page > .video-up-next .vp-next > i {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.player-page > .video-up-next .vp-next:hover > i { color: #fff; }
+
+/* A-PC, a narrow window with a mouse (900px and less): no tab bar at the bottom - the Queue button at
+   the top right opens the panel as the sheet from below, as on a phone (its tabs are in the sheet).
+   The room the bar took goes back to the player. */
+@media (max-width: 900px) and (hover: hover) and (pointer: fine) {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .room-panel:not(#_):not(#__):not(#___):not(#____) {
+    display: none !important;
+  }
+
+  /* (upright window: the player sits on the bottom edge, or on the call dock in a room) */
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) .container.audio-mode-only:not(#_):not(#__) {
+    --audio-bottom-space: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended):has(> .room-call:not([hidden])) .container.audio-mode-only:not(#_):not(#__) {
+    /* (the dock's own room is the stage's margin above it - --audio-dock-space, room.js) */
+    --audio-bottom-space: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (hover: hover) and (pointer: fine) {
+  .player-page:is(.audio-mode-active, :has(.container.audio-mode-only)):not(.mobile-audio-extended) > .container.audio-mode-only:not(#_):not(#__):not(#___) {
+    padding-bottom: 24px !important;
+  }
+
+  /* (in a room: only the call dock below the player now) */
+  .player-page:has(> .room-call.bottom:not(.unit):not([hidden])) > .container.audio-mode-only > #audio-stage:not(#_x):not(#_y):not(#_z) {
+    margin-bottom: max(0px, calc(var(--audio-dock-space, 0px) - 14px)) !important;
+  }
+  .player-page.call-dock-below:not(.mobile-audio-extended) > .container.audio-mode-only > #audio-stage:not(#_x):not(#_y):not(#_z) {
+    margin-bottom: calc(var(--audio-call-below, 0px) - 12px) !important;
+  }
+}
+
+/* The player tour (script.js startPlayerTour): the page dims, a rounded spotlight sits on the part
+   being shown (it glides from one to the next), and a card beside it points at it */
+.player-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: auto;
+  animation: tourFade 0.25s ease-out both;
+}
+.player-tour.leaving { animation: tourFadeOut 0.2s ease-in both; }
+@keyframes tourFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tourFadeOut { to { opacity: 0; } }
+
+.player-tour-spot {
+  position: fixed;
+  border-radius: 16px;
+  box-shadow: 0 0 0 200vmax rgba(4, 7, 14, 0.72), 0 0 0 2px rgba(120, 180, 255, 0.85), 0 0 26px 4px rgba(77, 159, 255, 0.45);
+  pointer-events: none;
+  transition: left 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 0.38s ease;
+}
+.player-tour-spot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid rgba(120, 180, 255, 0.7);
+  animation: tourPulse 1.8s ease-out infinite;
+}
+.player-tour-spot.centre { box-shadow: 0 0 0 200vmax rgba(4, 7, 14, 0.78); }
+.player-tour-spot.centre::after { display: none; }
+@keyframes tourPulse {
+  0% { opacity: 0.9; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(1.12); }
+}
+
+.player-tour-card {
+  position: fixed;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 24px));
+  padding: 18px 18px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  color: #f4f6fb;
+  background: rgba(24, 28, 40, 0.94);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), inset 0 1px rgba(255, 255, 255, 0.06);
+  transition: left 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.player-tour-card.intro { width: min(380px, calc(100vw - 24px)); padding: 24px 22px 18px; text-align: center; }
+
+/* (the arrow: a small rotated square on the side facing the part) */
+.player-tour-arrow {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  border: inherit;
+  border-width: 1px 0 0 1px;
+  display: none;
+}
+.player-tour-card[data-side="below"] .player-tour-arrow { display: block; top: -8px; left: calc(var(--arrow, 50%) - 7px); transform: rotate(45deg); }
+.player-tour-card[data-side="above"] .player-tour-arrow { display: block; bottom: -8px; left: calc(var(--arrow, 50%) - 7px); transform: rotate(225deg); }
+.player-tour-card[data-side="left"] .player-tour-arrow { display: block; right: -8px; top: calc(var(--arrow, 50%) - 7px); transform: rotate(135deg); }
+.player-tour-card[data-side="right"] .player-tour-arrow { display: block; left: -8px; top: calc(var(--arrow, 50%) - 7px); transform: rotate(-45deg); }
+
+.player-tour-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.player-tour-card.intro .player-tour-head { flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.player-tour-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: #fff;
+  font-size: 14px;
+  background: linear-gradient(135deg, #3d8bfd, #6a5cf6);
+  box-shadow: 0 6px 16px rgba(61, 139, 253, 0.35);
+}
+.player-tour-card.intro .player-tour-icon { width: 52px; height: 52px; border-radius: 16px; font-size: 22px; }
+.player-tour-count {
+  flex: 1;
+  color: #8fbfff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.player-tour-skip {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #aeb8c7;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  cursor: pointer;
+}
+.player-tour-skip:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+.player-tour-skip[hidden] { display: none; }
+.player-tour-card h2 { margin: 0 0 6px; font: 600 18px/1.25 var(--font-display, inherit); }
+.player-tour-card.intro h2 { font-size: 21px; }
+.player-tour-card p { margin: 0; color: #b9c2d1; font-size: 13px; line-height: 1.55; }
+
+.player-tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+.player-tour-card.intro .player-tour-foot { flex-direction: column-reverse; gap: 14px; margin-top: 20px; }
+.player-tour-dots { display: flex; gap: 5px; }
+.player-tour-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+.player-tour-dots i.on { width: 18px; background: #6aaeff; }
+.player-tour-actions { display: flex; gap: 8px; }
+.player-tour-card.intro .player-tour-actions { width: 100%; }
+.player-tour-card.intro .player-tour-actions > button { flex: 1; }
+.player-tour-actions > button {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.player-tour-actions > button:active { transform: scale(0.97); }
+.player-tour-back {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #d7deea;
+  background: rgba(255, 255, 255, 0.05);
+}
+.player-tour-back:hover { background: rgba(255, 255, 255, 0.1); }
+.player-tour-next {
+  min-width: 86px;
+  border: 1px solid rgba(110, 175, 255, 0.4);
+  color: #fff;
+  background: linear-gradient(120deg, #3488ed, #5a5ff0);
+}
+.player-tour-next:hover { filter: brightness(1.08); }
+.player-tour :is(button):focus-visible { outline: 2px solid #9bc9ff; outline-offset: 2px; }
+
+@media (max-width: 600px) {
+  .player-tour-card { padding: 16px 16px 14px; }
+  .player-tour-card p { font-size: 12.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-tour, .player-tour.leaving, .player-tour-spot::after { animation: none; }
+  .player-tour-spot, .player-tour-card { transition: none; }
+}
+
+/* The search flyout: the YouTube result picked with the Up / Down keys (script.js) - Enter plays it */
+.yt-result.chosen {
+  border-radius: 12px;
+  background: rgba(77, 159, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(120, 180, 255, 0.45);
+}
+
+/* A-PC, a narrow window with a mouse (900px and less), in a room: the call is the phone's pinned bar
+   at the bottom - edge to edge, on the window's bottom edge, everyone's video in a row above the
+   buttons (the same look as the phone's docked strip) - not a card floating over the player */
+@media (max-width: 900px) and (hover: hover) and (pointer: fine) {
+  .player-page:has(> .container.audio-mode-only):not(.mobile-audio-extended) > .room-call.bottom:not(.unit):not([hidden]):not(#_):not(#__) {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+    margin: 0 !important;
+    padding: 6px 12px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    box-sizing: border-box !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0 !important;
+    background: rgba(14, 18, 28, 0.98) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    backdrop-filter: blur(20px) !important;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35) !important;
+    transition: none !important;
+  }
+}
+
+/* YouTube search, while it answers (youtube.js showStatus "busy"): no "Searching YouTube for ..."
+   line - a thin track with a bright light sweeping along it, over the shimmering placeholder rows */
+.yt-status.busy {
+  position: relative;
+  margin: 2px 0 10px;
+  height: 3px;
+}
+.yt-loading-bar {
+  position: relative;
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.yt-loading-bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, #4d9fff 35%, #a77bff 65%, transparent);
+  box-shadow: 0 0 12px rgba(77, 159, 255, 0.6);
+  animation: ytLoadingSweep 1.15s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+@keyframes ytLoadingSweep {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(260%); }
+}
+.yt-sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .yt-loading-bar > i { animation-duration: 2.4s; }
+}
+
+/* The video's acrylic play controls (previous, back, play, forward, next): a slight rim, like the
+   player's other round buttons */
+.container:not(.audio-mode-only) .player-center-controls > button:not(#_) {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-sizing: border-box !important;
+}
+
+/* The audio player's Up next pill: never in the video player (only script.js hid it) */
+.player-page:not(.audio-mode-active) > .audio-top-center:not(#_) { display: none !important; }
+
+/* V-PC: both times together at the top left of the seekbar - how far in (or, clicked, how long is
+   left) / how long it is - one pill; the left part switches between the two */
+@media (min-width: 901px), (hover: hover) and (pointer: fine) {
+  .player-page:not(.audio-mode-active) > .container:not(.audio-mode-only) .wrapper > .timeline-container > .timeline-times:not(#_) {
+    justify-content: flex-start;
+    gap: 0;
+  }
+  .player-page:not(.audio-mode-active) > .container:not(.audio-mode-only) .timeline-times > .current-time:not(#_) {
+    border-radius: 6px 0 0 6px;
+    padding-right: 4px;
+  }
+  .player-page:not(.audio-mode-active) > .container:not(.audio-mode-only) .timeline-times > .video-duration:not(#_) {
+    border-radius: 0 6px 6px 0;
+    padding-left: 0;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .player-page:not(.audio-mode-active) > .container:not(.audio-mode-only) .timeline-times > .video-duration:not(#_)::before {
+    content: "/ ";
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* A YouTube video's seekbar preview (script.js): the storyboard picture for the time pointed at, in
+   the same box as a file's - shown once YouTube's storyboard has come in */
+.thumbnail-preview .yt-sb-frame {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 160px;
+  transform: translateY(-50%);
+  background-repeat: no-repeat;
+  background-color: #000;
+}
+.container.youtube .thumbnail-preview video { display: none; }
+.container.youtube.yt-has-preview .thumbnail-preview .yt-sb-frame { display: block; }
+.container.remote.youtube.yt-has-preview:not(.audio-mode-only) .video-timeline:hover .thumbnail-preview:not(#_),
+.container.remote.youtube.yt-has-preview:not(.audio-mode-only) .video-timeline.scrubbing .thumbnail-preview:not(#_) {
+  display: flex !important;
+}
+@media (hover: none) {
+  .container.remote.youtube.yt-has-preview .video-timeline:hover:not(.scrubbing) .thumbnail-preview:not(#_) { display: none !important; }
 }

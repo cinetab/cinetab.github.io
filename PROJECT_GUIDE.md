@@ -149,6 +149,15 @@ While YouTube answers, `youtube.js` shows shimmering placeholder rows (`.yt-skel
 - **Computers:** docked over the bottom of the video (centred on the picture, above the controls), pinned to the side (a column; with the panel open, the "rail": videos above the video, buttons below), or a floating window. The rail keeps its own grid - the later room layout rules exclude `.call-dock-rail`.
 - After v1.8.3, many overrides broke this (hiding the float button and resize grips on phones, a fixed "floating video card", a fixed bottom bar "independent of the saved dock", video-shrinking rules). They were removed; don't reintroduce dock rules without checking all of these modes with two people in a room.
 
+### Added in 2.1.0 (script.js unless noted)
+
+- **YouTube frame.** `.yt-mount iframe` always runs past the picture's box above and below (`--yt-bleed`), so YouTube's own title bar, "More videos" and logo stay cut off (also while paused). In Fit it is exactly as wide as the video (`--yt-ar`, from YouTube's oEmbed answer, `paintYouTubeShape()`), so the extra height never enlarges or crops the picture. Don't toggle the bleed per state: that made the picture jump.
+- **Media keys and lock screen.** While a YouTube video plays, `sessionKeeper` plays a silent sound so the browser gives this page (not YouTube's frame) the media keys, the lock screen and the notification. Previous / Next follow the player's own `.prev-track` / `.next-track` (`updateTrackActions()`).
+- **YouTube seekbar previews.** `CineYouTube.storyboard(id)` (youtube.js) gets YouTube's signed storyboard links from a Piped server and loads the sheets straight from `i.ytimg.com`; `.yt-sb-frame` in `.thumbnail-preview` shows the frame (`.yt-has-preview`).
+- **Video Up next.** `.player-page > .video-up-next`: from 90% to the end, centred on the video, in the space above it or under the title bar (phone sideways: top centre while the controls hide). It ignores the previous video's time until the new one's comes in.
+- **Player tour.** `startPlayerTour()`: steps whose target is on screen only; also from the command palette ("tour"). `cinetab:player-tour` remembers it was seen.
+- **Dialogs.** `playerAsk()` has one answer button; the × (or Esc) is "no".
+
 ### Style-sheet pitfalls
 
 - `style.css` has several layered "final" blocks for the same audio selectors. The rule that wins is often an *earlier* one with higher specificity (for example `.player-page:has(.container.audio-mode-only) .container.audio-mode-only …`), not the last one. Check computed styles in the browser before adding a rule.

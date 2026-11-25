@@ -7,7 +7,7 @@
   <meta name="description" content="Play any video from your computer in a browser tab and watch it together: share the tab with sound on Google Meet, Zoom or Teams, or invite friends to a private CineTab room with chat. MP4, MKV, AVI and more. Nothing is uploaded.">
   <meta name="theme-color" content="#0f0f11">
   <meta name="application-name" content="CineTab">
-  <meta name="version" content="2.0.0">
+  <meta name="version" content="2.1.0">
   <link rel="icon" href="logo.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
   <!-- ============ SEO ============ -->
@@ -53,7 +53,7 @@
       "applicationSubCategory": "Video player",
       "operatingSystem": "Windows, macOS, Linux, ChromeOS",
       "browserRequirements": "Works best in Google Chrome or Microsoft Edge on desktop",
-      "softwareVersion": "2.0.0",
+      "softwareVersion": "2.1.0",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -84,7 +84,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script>document.documentElement.classList.add("sidebar-preference-pending");</script>
-  <link rel="stylesheet" href="style.css?v=2.0.0">
+  <link rel="stylesheet" href="style.css?v=2.1.0">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -452,7 +452,7 @@
         </a>
         <p>Made for movie nights. Your files stay on your device.</p>
         <p class="footer-meta">
-          <span class="app-version" title="The version of CineTab you're using">v2.0.0</span>
+          <span class="app-version" title="The version of CineTab you're using">v2.1.0</span>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/releases" title="What's new in each version">Release notes</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io" title="CineTab's source code on GitHub"><i class="fa-brands fa-github"></i> GitHub</a>
           &middot; <a href="https://github.com/cinetab/cinetab.github.io/blob/main/LICENSE" title="CineTab is open source under the MIT License">MIT License</a>
@@ -588,7 +588,7 @@
           <div class="notice-text"><b class="convert-title">Making it playable</b><small class="convert-status">Starting&hellip;</small></div>
           <div class="notice-actions convert-actions">
             <button class="secondary-btn convert-skip-btn" title="Stop fixing the sound and watch the video silently" hidden>Play muted</button>
-            <button class="secondary-btn convert-cancel-btn" title="Stop converting and pick another file">Cancel</button>
+            <button class="secondary-btn convert-cancel-btn" title="Stop converting and pick another file" hidden>Cancel</button>
           </div>
           <div class="convert-progress"><div class="convert-progress-bar"></div></div>
           <p class="convert-reason" hidden></p>
@@ -639,6 +639,7 @@
             <dt><kbd>Shift</kbd>+<kbd>&lt;</kbd><kbd>&gt;</kbd></dt><dd>Slower / faster</dd>
             <dt><kbd>C</kbd></dt><dd>Subtitles on / off</dd>
             <dt><kbd>F</kbd></dt><dd>Fullscreen (or double-click the video)</dd>
+            <dt><kbd>T</kbd></dt><dd>The picture: Fit (all of it) / Fill (the screen, cropped)</dd>
             <dt><kbd>P</kbd></dt><dd>Picture-in-Picture</dd>
             <dt><kbd>A</kbd></dt><dd>Video / audio mode (stays for the next videos)</dd>
             <dt><kbd>I</kbd></dt><dd>Miniplayer on / off: the video goes on in a corner of the home page (video mode only)</dd>
@@ -942,7 +943,7 @@
         <input type="search" class="queue-add-input" placeholder="Paste YouTube link or search..." aria-label="Paste YouTube link or search">
         <button type="submit" class="queue-add-btn" title="Add to queue"><i class="fa-solid fa-plus"></i></button>
       </form>
-      <p class="room-section-title room-queue-title">Queue <span class="room-queue-count"></span></p>
+      <p class="room-section-title room-queue-title">Queue <span class="room-queue-count"></span><button type="button" class="room-queue-clear" title="Remove every video from the queue (the one playing keeps playing)" hidden><i class="fa-solid fa-trash-can"></i><span>Clear all</span></button></p>
       <ol class="room-queue"></ol>
       <!-- Nothing queued (or not YouTube): what the queue is, and how to fill it -->
       <div class="room-queue-empty" hidden>
@@ -1036,7 +1037,7 @@
         <p class="room-label">Avatar</p>
         <div class="room-avatar-grid"></div>
         <div class="room-sheet-actions">
-          <button type="button" class="room-small-btn room-sheet-cancel">Cancel</button>
+          <button type="button" class="room-small-btn room-sheet-cancel" hidden>Cancel</button>
           <button type="submit" class="room-small-btn primary">Save</button>
         </div>
       </div>
@@ -1074,7 +1075,7 @@
           <label class="room-check" title="Saves the code and password in this browser"><input type="checkbox" name="remember" checked> <span>Remember this room <small>One click to open it again (saves the code and password in this browser).</small></span></label>
           <div class="convert-actions">
             <button type="submit"><i class="fa-solid fa-door-open"></i> Create room</button>
-            <button type="button" class="secondary-btn room-cancel">Cancel</button>
+            <button type="button" class="secondary-btn room-cancel" hidden>Cancel</button>
           </div>
           <p class="privacy-note"><i class="fa-solid fa-lock"></i> Peer-to-peer and encrypted. Nothing is uploaded, and messages aren't stored.</p>
           <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
@@ -1099,7 +1100,7 @@
           <p class="room-error" hidden></p>
           <div class="convert-actions">
             <button type="submit"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
-            <button type="button" class="secondary-btn room-cancel">Cancel</button>
+            <button type="button" class="secondary-btn room-cancel" hidden>Cancel</button>
           </div>
           <p class="privacy-note"><i class="fa-solid fa-lock"></i> You connect directly to the host's browser, encrypted. The host can see your IP address, as on any video call.</p>
           <button type="button" class="room-link-btn room-check-network" title="See whether this network allows rooms (useful on campus, office or hotel Wi-Fi)"><i class="fa-solid fa-stethoscope"></i> Check my network</button>
@@ -1122,14 +1123,14 @@
   <input type="file" id="file-input" accept="video/*,audio/*,.mkv,.mka,.avi,.divx,.wmv,.wma,.asf,.flv,.f4v,.mov,.m4v,.ts,.m2ts,.mts,.mpg,.mpeg,.vob,.3gp,.ogv,.rm,.rmvb,.ac3,.dts,.aif,.aiff,.ape,.amr,.wv,.opus,.flac" hidden>
   <input type="file" id="subtitle-input" accept=".srt,.vtt" hidden>
 
-  <script src="tooltips.js?v=2.0.0"></script>
-  <script src="converter.js?v=2.0.0"></script>
-  <script src="script.js?v=2.0.0"></script>
-  <script src="history.js?v=2.0.0"></script>
-  <script src="youtube.js?v=2.0.0"></script>
+  <script src="tooltips.js?v=2.1.0"></script>
+  <script src="converter.js?v=2.1.0"></script>
+  <script src="script.js?v=2.1.0"></script>
+  <script src="history.js?v=2.1.0"></script>
+  <script src="youtube.js?v=2.1.0"></script>
   <script src="vendor/qrcode-generator.js"></script>
-  <script src="signaling.js?v=2.0.0"></script>
-  <script src="room.js?v=2.0.0"></script>
-  <script src="home.js?v=2.0.0"></script>
+  <script src="signaling.js?v=2.1.0"></script>
+  <script src="room.js?v=2.1.0"></script>
+  <script src="home.js?v=2.1.0"></script>
 </body>
 </html>

@@ -100,7 +100,8 @@ const together = {
 
 // Hide Controls on Idle (not while a menu or the settings sheet is open, or the timeline is
 // being dragged: they wait until it's closed)
-const controlsInUse = () => scrubbing || popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden;
+const controlsInUse = () => scrubbing || popupMenus.some(menu => menu.classList.contains("show")) || !playerSheet.hidden
+    || !!container.querySelector(".player-save-menu:not([hidden])") || !!document.querySelector(".player-tour");
 const hideControls = () => {
     if(together.stream ? together.stream.paused : mainVideo.paused) return;
     clearTimeout(idleTimer);
@@ -232,6 +233,12 @@ const savePosition = () => {
 
 // Home <-> Player views (one page, so the picked file never has to leave this document).
 // The offline build has no home page, only the player.
+// (someone new: nothing watched and no rooms when the page opened - opening the first video adds
+// it to the history before the player shows, so this is decided once, up front)
+let firstVisit = false;
+document.addEventListener("DOMContentLoaded", () => {
+    firstVisit = !(window.CineHistory && CineHistory.list().length) && !storage.get("cinetab:rooms");
+});
 const showPlayer = () => {
     if (!homePage) return;
     homePage.hidden = true;
@@ -239,55 +246,202 @@ const showPlayer = () => {
     document.body.classList.add("watching");
     if (together.onPlayer) together.onPlayer();
     if (location.hash !== "#watch") history.pushState(null, "", "#watch");
-    const hasWatchedBefore = !!(window.CineHistory && CineHistory.list().length);
-    const hasSavedRooms = !!storage.get("cinetab:rooms");
-    if (homePage && !hasWatchedBefore && !hasSavedRooms && !together.active() && storage.get("cinetab:player-tour") !== "done") {
+    if (homePage && firstVisit && !together.active() && storage.get("cinetab:player-tour") !== "done") {
         setTimeout(startPlayerTour, 450);
     }
 };
 
-const startPlayerTour = () => {
+// ---------- The player tour: shown once, the first time someone opens the player (and again from
+// the command palette: "Player tour"). A short welcome, then a spotlight on each part of the player
+// that is on screen right now - the video or the audio player, a computer or a phone - with a card
+// beside it pointing at it. Back / Next, the arrow keys, Esc to leave; the player's controls stay
+// up meanwhile.
+const startPlayerTour = (again = false) => {
     if (playerPage.hidden || document.querySelector(".player-tour")) return;
-    const steps = [
-        { target: ".player-search-btn", title: "Find something to watch", text: "Search YouTube or paste a video link. In a room, the host can play it for everyone." },
-        { target: ".player-queue-btn", title: "Build the queue", text: "Add YouTube videos and playlists, then choose what plays next." },
-        { target: ".share-help-btn", title: "Create or join a room", text: "Start a watch room or join a friend with their invite. Playback stays in sync." },
-        { target: ".room-tab-btn[data-tab='chat']", title: "Chat with your room", text: "Once you’re in a room, open Chat to message everyone while you watch." },
-        { target: ".room-tab-btn[data-tab='people']", title: "Invite friends", text: "In People, share the room code, QR code, or Copy invite link. Friends can join from any browser." }
-    ];
-    let index = 0;
-    const layer = document.createElement("div");
-    layer.className = "player-tour";
-    layer.innerHTML = '<div class="player-tour-card" role="dialog" aria-modal="true" aria-live="polite"><span class="player-tour-count"></span><button type="button" class="player-tour-skip">Skip tour</button><h2></h2><p></p><div class="player-tour-actions"><button type="button" class="player-tour-next">Next</button></div></div>';
-    document.body.append(layer);
-    const card = layer.querySelector(".player-tour-card");
-    const render = () => {
-        const step = steps[index];
-        const target = document.querySelector(step.target);
-        const box = target && target.getClientRects().length ? target.getBoundingClientRect() : null;
-        const focus = box || document.querySelector(".share-help-btn")?.getBoundingClientRect();
-        layer.style.setProperty("--tour-x", focus ? `${focus.left + focus.width / 2}px` : "50vw");
-        layer.style.setProperty("--tour-y", focus ? `${focus.top + focus.height / 2}px` : "50vh");
-        card.querySelector(".player-tour-count").textContent = `QUICK TOUR · ${index + 1} OF ${steps.length}`;
-        card.querySelector("h2").textContent = step.title;
-        card.querySelector("p").textContent = step.text;
-        const next = card.querySelector(".player-tour-next");
-        next.textContent = index === steps.length - 1 ? "Done" : "Next";
-        const cardRect = card.getBoundingClientRect();
-        const anchor = focus || { left: innerWidth / 2, right: innerWidth / 2, top: innerHeight / 2, bottom: innerHeight / 2, width: 0 };
-        const margin = 16;
-        let left = anchor.left + anchor.width / 2 - cardRect.width / 2;
-        left = Math.max(margin, Math.min(left, innerWidth - cardRect.width - margin));
-        let top = anchor.bottom + 14;
-        if (top + cardRect.height > innerHeight - margin) top = anchor.top - cardRect.height - 14;
-        top = Math.max(margin, Math.min(top, innerHeight - cardRect.height - margin));
-        card.style.left = `${left}px`;
-        card.style.top = `${top}px`;
-        next.focus();
+    const audio = () => container.classList.contains("audio-mode-only");
+    const touchOnly = matchMedia("(hover: none)").matches;
+    // (the first of these on screen: shown, sized, inside the window)
+    const visible = selectors => {
+        for (const selector of selectors) {
+            for (const node of document.querySelectorAll(selector)) {
+                if (node.closest("[hidden]") || !node.getClientRects().length) continue;
+                const r = node.getBoundingClientRect();
+                if (r.width < 4 || r.height < 2 || getComputedStyle(node).visibility === "hidden") continue;
+                if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
+                return node;
+            }
+        }
+        return null;
     };
-    const finish = () => { storage.set("cinetab:player-tour", "done"); layer.remove(); };
-    card.querySelector(".player-tour-next").addEventListener("click", () => index === steps.length - 1 ? finish() : (index++, render()));
-    card.querySelector(".player-tour-skip").addEventListener("click", finish);
+    const keyHint = text => touchOnly ? "" : text;
+    const all = [
+        { title: again ? "A quick tour of the player" : "Welcome to the CineTab player", icon: "fa-film",
+            text: "Here's where everything is - it takes half a minute. Use the arrow keys, or Back and Next." },
+        { targets: ["#audio-stage .ap-transport", ".player-center-controls"], title: "Play and pause", icon: "fa-play",
+            text: () => audio() ? "Play, pause, and skip between tracks."
+                : `Play, pause, and jump back or forward.${keyHint(" Space plays and pauses; the arrow keys jump and change the volume.")}` },
+        { targets: ["#audio-stage .ap-timeline", ".wrapper > .timeline-container .video-timeline"], title: "Jump anywhere", icon: "fa-arrows-left-right",
+            text: () => audio() ? "Drag along the bar, or click a point on it, to jump there."
+                : "Drag along the bar, or click a point on it. Click the time on the left to see how much is left." },
+        { targets: [".player-search-btn"], title: "Search", icon: "fa-magnifying-glass",
+            text: `Find YouTube videos, music and playlists, or paste a link.${keyHint(" Ctrl + K or / opens it from anywhere.")}` },
+        { targets: [".audio-queue-btn", ".player-queue-btn", ".room-tab-btn[data-tab='queue']"], title: "Your queue", icon: "fa-list-ol",
+            text: "Add videos and whole playlists, reorder them, and see what plays next." },
+        { targets: ["#audio-stage .player-save-btn", ".player-save-wrap:not([hidden]) .player-save-btn"], title: "Save it for later", icon: "fa-heart",
+            text: `Keep a video or its playlist on your home page.${keyHint(" Press S.")}` },
+        { targets: [".audio-mode-toggle"], title: "Video or audio", icon: "fa-headphones",
+            text: "Just listening? The audio player shows the artwork with big controls - music switches to it by itself." },
+        { targets: [".share-help-btn", ".room-tab-btn[data-tab='together']"], title: "Watch together", icon: "fa-users",
+            text: "Start a room and invite friends: everyone watches in sync, with chat and video calls." },
+        { targets: [".more-btn"], title: "More options", icon: "fa-ellipsis-vertical",
+            text: `Speed, subtitles, ambient light and more.${keyHint(" Press ? for every keyboard shortcut.")}` },
+        { title: "You're all set", icon: "fa-circle-check", last: true,
+            text: `Enjoy the show! To see this again, open search${keyHint(" (Ctrl + K)")} and type "tour".` }
+    ];
+    // (only the steps whose part of the player is on screen; the welcome and the end always)
+    const steps = all.filter(step => !step.targets || visible(step.targets));
+    let index = 0;
+
+    const layer = el("div", "player-tour");
+    const spot = el("div", "player-tour-spot");
+    const card = el("div", "player-tour-card");
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    card.setAttribute("aria-labelledby", "player-tour-title");
+    card.setAttribute("aria-describedby", "player-tour-text");
+    card.innerHTML = `
+        <span class="player-tour-arrow" aria-hidden="true"></span>
+        <div class="player-tour-head">
+            <span class="player-tour-icon" aria-hidden="true"><i class="fa-solid"></i></span>
+            <span class="player-tour-count"></span>
+            <button type="button" class="player-tour-skip" aria-label="Close the tour (Esc)" title="Close the tour (Esc)"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <h2 id="player-tour-title"></h2>
+        <p id="player-tour-text" aria-live="polite"></p>
+        <div class="player-tour-foot">
+            <div class="player-tour-dots" aria-hidden="true"></div>
+            <div class="player-tour-actions">
+                <button type="button" class="player-tour-back">Back</button>
+                <button type="button" class="player-tour-next">Next</button>
+            </div>
+        </div>`;
+    const dots = card.querySelector(".player-tour-dots");
+    steps.forEach(() => dots.append(el("i")));
+    layer.append(spot, card);
+    document.body.append(layer);
+    const back = card.querySelector(".player-tour-back");
+    const next = card.querySelector(".player-tour-next");
+    const skip = card.querySelector(".player-tour-skip");
+    const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // (the controls stay up during the tour)
+    const wake = () => {
+        container.classList.add("show-controls");
+        container.classList.remove("hide-cursor");
+    };
+    const place = () => {
+        const step = steps[index];
+        const target = step.targets ? visible(step.targets) : null;
+        const margin = 12, pad = 8, gap = 16;
+        const box = target ? target.getBoundingClientRect() : null;
+        if (box) {
+            spot.classList.remove("centre");
+            spot.style.left = `${Math.round(box.left - pad)}px`;
+            spot.style.top = `${Math.round(box.top - pad)}px`;
+            spot.style.width = `${Math.round(box.width + pad * 2)}px`;
+            spot.style.height = `${Math.round(box.height + pad * 2)}px`;
+            const round = parseFloat(getComputedStyle(target).borderRadius) || 0;
+            spot.style.borderRadius = round >= Math.min(box.width, box.height) / 2 - 1 ? "999px" : "16px";
+        } else {
+            spot.classList.add("centre");
+            spot.style.left = `${Math.round(innerWidth / 2)}px`;
+            spot.style.top = `${Math.round(innerHeight / 2)}px`;
+            spot.style.width = spot.style.height = "0px";
+        }
+        const w = card.offsetWidth, h = card.offsetHeight;
+        let left, top, side = "none";
+        if (!box) {
+            left = (innerWidth - w) / 2;
+            top = (innerHeight - h) / 2;
+        } else {
+            const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+            const free = { below: innerHeight - box.bottom - pad, above: box.top - pad, right: innerWidth - box.right - pad, left: box.left - pad };
+            if (free.below >= h + gap + margin) {
+                side = "below"; top = box.bottom + pad + gap; left = cx - w / 2;
+            } else if (free.above >= h + gap + margin) {
+                side = "above"; top = box.top - pad - gap - h; left = cx - w / 2;
+            } else if (free.left >= w + gap + margin) {
+                side = "left"; left = box.left - pad - gap - w; top = cy - h / 2;
+            } else if (free.right >= w + gap + margin) {
+                side = "right"; left = box.right + pad + gap; top = cy - h / 2;
+            } else {
+                left = (innerWidth - w) / 2; top = innerHeight - h - margin;
+            }
+            left = Math.max(margin, Math.min(left, innerWidth - w - margin));
+            top = Math.max(margin, Math.min(top, innerHeight - h - margin));
+            // (the arrow points at the middle of the part, wherever the card had to move to)
+            if (side === "below" || side === "above") card.style.setProperty("--arrow", `${Math.round(Math.max(24, Math.min(w - 24, cx - left)))}px`);
+            else if (side !== "none") card.style.setProperty("--arrow", `${Math.round(Math.max(24, Math.min(h - 24, cy - top)))}px`);
+        }
+        card.dataset.side = side;
+        card.style.left = `${Math.round(left)}px`;
+        card.style.top = `${Math.round(top)}px`;
+    };
+    const render = (dir = 1) => {
+        const step = steps[index];
+        wake();
+        card.querySelector(".player-tour-icon i").className = `fa-solid ${step.icon}`;
+        card.querySelector(".player-tour-count").textContent = index === 0 || step.last ? "Player tour" : `${index} of ${steps.length - 2}`;
+        card.querySelector("h2").textContent = step.title;
+        card.querySelector("p").textContent = typeof step.text === "function" ? step.text() : step.text;
+        [...dots.children].forEach((dot, i) => dot.classList.toggle("on", i === index));
+        card.classList.toggle("intro", index === 0);
+        back.textContent = index === 0 ? "Not now" : "Back";
+        next.textContent = index === 0 ? "Show me" : step.last ? "Done" : "Next";
+        skip.hidden = index === 0 || !!step.last;
+        place();
+        if (!calm()) card.animate([{ opacity: 0, translate: `${dir * 10}px 0` }, { opacity: 1, translate: "0 0" }], { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+        next.focus({ preventScroll: true });
+    };
+    const go = dir => {
+        if (dir > 0 && index === steps.length - 1) return finish();
+        if (dir < 0 && index === 0) return;
+        index += dir;
+        render(dir);
+    };
+    // (its keys go to the tour only, not to the player under it)
+    const keys = e => {
+        if (e.key === "Escape") finish();
+        else if (e.key === "ArrowRight") go(1);
+        else if (e.key === "ArrowLeft") go(-1);
+        else if (e.key === "Enter" || e.key === " ") {
+            if (card.contains(document.activeElement) && document.activeElement.tagName === "BUTTON") document.activeElement.click();
+            else go(1);
+        } else if (e.key === "Tab") {
+            // (Tab stays in the card)
+            const items = [...card.querySelectorAll("button:not([hidden])")];
+            const at = items.indexOf(document.activeElement);
+            items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length]?.focus();
+        } else return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    };
+    // (the parts move - the controls slide in, the window is resized: the spotlight follows)
+    const follow = setInterval(() => { wake(); place(); }, 250);
+    const finish = () => {
+        storage.set("cinetab:player-tour", "done");
+        clearInterval(follow);
+        window.removeEventListener("keydown", keys, true);
+        window.removeEventListener("resize", place);
+        layer.classList.add("leaving");
+        setTimeout(() => layer.remove(), calm() ? 0 : 220);
+        hideControls();
+    };
+    next.addEventListener("click", () => go(1));
+    back.addEventListener("click", () => index === 0 ? finish() : go(-1));
+    skip.addEventListener("click", finish);
+    window.addEventListener("keydown", keys, true);
+    window.addEventListener("resize", place);
     render();
 };
 
@@ -921,10 +1075,10 @@ const playerAsk = ({ icon = "fa-circle-question", title, text = "", yes = "OK", 
     words.append(el("b", null, title));
     if (text) words.append(el("small", null, text));
     const actions = el("div", "notice-actions");
-    const noBtn = el("button", "secondary-btn", no);
+    // (one button: the answer; the × at the top - or Esc - is "no")
     const yesBtn = el("button", danger ? "notice-danger-btn" : "", yes);
-    noBtn.type = yesBtn.type = "button";
-    actions.append(noBtn, yesBtn);
+    yesBtn.type = "button";
+    actions.append(yesBtn);
     scroll.append(iconBox, words, actions);
     box.append(close, scroll);
     layer.append(box);
@@ -937,7 +1091,6 @@ const playerAsk = ({ icon = "fa-circle-question", title, text = "", yes = "OK", 
         resolve(answer);
     };
     close.addEventListener("click", () => finish(false));
-    noBtn.addEventListener("click", () => finish(false));
     yesBtn.addEventListener("click", () => finish(true));
     const onKey = e => {
         if (e.key !== "Escape" || !layer.isConnected || done) return;
@@ -1443,6 +1596,54 @@ moreBtn.addEventListener("click", () => togglePopup(moreOptions));
 document.addEventListener("click", e => {
     if (!e.target.closest(".popup-menu-wrapper, .audio-settings-menu, .settings-btn, .player-sheet")) closePopups();
 });
+
+// A YouTube video's previews on the seekbar: YouTube's own storyboard - small pictures every few
+// seconds, on sheets (youtube.js CineYouTube.storyboard) - the one for the time pointed at
+const ytPreview = document.createElement("span");
+ytPreview.className = "yt-sb-frame";
+ytPreview.setAttribute("aria-hidden", "true");
+thumbnailPreview.prepend(ytPreview);
+const ytStoryboards = new Map();
+const ytStoryboard = id => {
+    if (!id || !window.CineYouTube || !CineYouTube.storyboard) return null;
+    if (!ytStoryboards.has(id)) {
+        ytStoryboards.set(id, null);
+        CineYouTube.storyboard(id).then(board => {
+            ytStoryboards.set(id, board || false);
+            if (board) board.sheets.slice(0, 2).forEach(src => { const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = src; });
+        }, () => ytStoryboards.set(id, false));
+    }
+    return ytStoryboards.get(id) || null;
+};
+// (fetched as a video starts, so it's there the first time the seekbar is pointed at)
+setInterval(() => {
+    const id = container.classList.contains("youtube") && !container.classList.contains("audio-mode-only") ? youTubeIdShown() : null;
+    container.classList.toggle("yt-has-preview", !!(id && ytStoryboard(id)));
+}, 600);
+const showYouTubePreview = e => {
+    const id = youTubeIdShown();
+    const board = ytStoryboard(id);
+    // (the length the seekbar shows - a YouTube video's, on your own or in a room)
+    const duration = shownTime.duration || mediaDuration();
+    if (!board || !Number.isFinite(duration) || duration <= 0) return;
+    const width = videoTimeline.clientWidth;
+    const offsetX = Math.min(width, Math.max(0, e.clientX - videoTimeline.getBoundingClientRect().left));
+    const time = offsetX / width * duration;
+    thumbnailPreview.style.left = `${Math.min(width - 80, Math.max(80, offsetX))}px`;
+    previewTime.innerText = formatTime(time);
+    const perSheet = board.cols * board.rows;
+    const frame = Math.min(board.count - 1, Math.max(0, Math.floor(time * 1000 / board.every)));
+    const sheet = board.sheets[Math.min(board.sheets.length - 1, Math.floor(frame / perSheet))];
+    const at = frame % perSheet;
+    // (each picture scaled to the box's 160px width)
+    const scale = 160 / board.w;
+    const h = Math.round(board.h * scale);
+    ytPreview.style.height = `${h}px`;
+    ytPreview.style.backgroundImage = `url("${sheet}")`;
+    ytPreview.style.backgroundSize = `${board.cols * 160}px ${board.rows * h}px`;
+    ytPreview.style.backgroundPosition = `-${(at % board.cols) * 160}px -${Math.floor(at / board.cols) * h}px`;
+};
+videoTimeline.addEventListener("mousemove", e => container.classList.contains("youtube") && showYouTubePreview(e));
 
 // Timeline Hover Live Preview & Seeking
 const showPreview = e => {
@@ -3230,6 +3431,11 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             // (not when you hid it yourself; and back in audio a moment after leaving it - one track
             // changing to the next - the panel is left as it was)
             const quickReturn = lastAudioExit && Date.now() - lastAudioExit.at < 8000;
+            // (a phone: the sheet was open - the player collapsed to its strip - and audio mode
+            // went for a moment as one track changed to the next: the sheet stays open)
+            if (lastAudioExit && lastAudioExit.extended && Date.now() - lastAudioExit.at < 3000 && matchMedia("(max-width: 900px)").matches) {
+                playerPage.classList.add("mobile-audio-extended");
+            }
             const wantPanel = quickReturn ? lastAudioExit.panelOpen : !together.audioPanelUserHidden;
             if (wantPanel && matchMedia("(min-width: 901px)").matches && !playerPage.classList.contains("room-open") && together.openQueue && (!together.audioPanelFits || together.audioPanelFits())) {
                 together.openQueue();
@@ -3270,9 +3476,10 @@ const youTubeIdShown = () => (together.solo && together.solo.active && together.
             cancelAnimationFrame(raf);
             if (isLocalAudio()) raf = requestAnimationFrame(draw);
         } else {
+            const wasExtended = playerPage.classList.contains("mobile-audio-extended");
             playerPage.classList.remove("mobile-audio-extended");
             if (audioMenuBackdrop) audioMenuBackdrop.hidden = true;
-            lastAudioExit = { at: Date.now(), panelOpen: playerPage.classList.contains("room-open") };
+            lastAudioExit = { at: Date.now(), panelOpen: playerPage.classList.contains("room-open"), extended: wasExtended };
             if (queueOpenedForAudio && !together.active() && together.hidePanel) together.hidePanel();
             queueOpenedForAudio = false;
             if (timelineContainer) restoreAudioEl(timelineContainer, timelineParent);
@@ -3437,18 +3644,21 @@ playerPage.addEventListener("scroll", () => {
     playerPage.addEventListener("touchcancel", resetPull, { passive: true });
 }
 
-// Previous / next on the lock screen: a YouTube playlist, Mix or Autoplay watched on your own
+// Previous / next - the keyboard's media keys, the lock screen, the notification: whatever the
+// player's own Previous / Next buttons do right now (a queue, a playlist, a Mix, a room's queue for
+// whoever may change it); not offered while they can't
 const trackActions = { previoustrack: null, nexttrack: null };
 const updateTrackActions = () => {
-    const solo = together.solo && together.solo.active && !together.active() ? together.solo : null;
-    [["previoustrack", -1], ["nexttrack", 1]].forEach(([action, n]) => {
-        const can = !!(solo && solo.canStep(n));
+    [["previoustrack", ".prev-track"], ["nexttrack", ".next-track"]].forEach(([action, selector]) => {
+        const button = container.querySelector(selector);
+        const can = !!button && !button.hidden && !button.disabled;
         if (trackActions[action] === can) return;
         trackActions[action] = can;
         try {
             navigator.mediaSession.setActionHandler(action, can ? () => {
                 mediaKeyAt = Date.now();
-                together.solo.step(n);
+                const now = container.querySelector(selector);
+                if (now && !now.hidden && !now.disabled) now.click();
             } : null);
         } catch (e) {}
     });
@@ -3506,6 +3716,49 @@ if ("mediaSession" in navigator) {
     ["play", "pause", "loadedmetadata", "ratechange", "seeked", "emptied"].forEach(type => mainVideo.addEventListener(type, updateMediaSession));
     // A room's YouTube video or stream has no events here; the position also drifts with time
     setInterval(updateMediaSession, 5000);
+}
+
+// YouTube plays inside YouTube's own frame, so the browser gave the media keys (a laptop's play /
+// pause / next keys), the lock screen and the phone's notification to YouTube's player there - which
+// ignores Next, and doesn't know about the queue. While a YouTube video plays, a silent sound plays
+// on this page too: the page is then the one the browser hands them to (our handlers above), and a
+// phone keeps the page going in the background (Background play's resume, youtube.js).
+const sessionKeeper = (() => {
+    if (!("mediaSession" in navigator)) return null;
+    // 6 seconds of silence (browsers leave sounds under 5 seconds out of their media controls)
+    const rate = 8000, seconds = 6, size = rate * seconds;
+    const wav = new DataView(new ArrayBuffer(44 + size));
+    const text = (at, value) => [...value].forEach((c, i) => wav.setUint8(at + i, c.charCodeAt(0)));
+    text(0, "RIFF"); wav.setUint32(4, 36 + size, true); text(8, "WAVE"); text(12, "fmt ");
+    wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+    wav.setUint32(24, rate, true); wav.setUint32(28, rate, true); wav.setUint16(32, 1, true); wav.setUint16(34, 8, true);
+    text(36, "data"); wav.setUint32(40, size, true);
+    for (let i = 0; i < size; i++) wav.setUint8(44 + i, 128);
+    const audio = document.createElement("audio");
+    audio.src = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.setAttribute("aria-hidden", "true");
+    return audio;
+})();
+const syncSessionKeeper = () => {
+    if (!sessionKeeper) return;
+    const youtube = container.classList.contains("youtube") && !playerPage.hidden || !!(together.soloMini && together.solo && together.solo.active);
+    const want = youtube && !mediaPaused();
+    if (want && sessionKeeper.paused) {
+        sessionKeeper.play().then(updateMediaSession, () => {});
+    } else if (!want && !sessionKeeper.paused) {
+        sessionKeeper.pause();
+        updateMediaSession();
+    }
+};
+if (sessionKeeper) {
+    setInterval(() => {
+        syncSessionKeeper();
+        updateTrackActions();
+    }, 700);
+    // (a first click or key on the page lets it start, where it couldn't before)
+    ["pointerdown", "keydown"].forEach(type => document.addEventListener(type, () => setTimeout(syncSessionKeeper, 300), { passive: true }));
 }
 
 // Playback Speed (presets, or any value from 0.25x to 4x; browsers mute audio outside that range)
@@ -3961,6 +4214,37 @@ together.pip = toggleCustomPiP;
 // runs past the picture's box above and below (.yt-crop, style.css): the video, centred in it,
 // stays where it was, and YouTube's bars fall outside, cut off. youtube.js and room.js call this:
 // `playing` false at a jump or while it loads, true once it plays.
+// The YouTube video's own shape (YouTube's oEmbed answer: 200 x 113 for 16:9, 200 x 150 for 4:3, an
+// upright one taller than wide), as --yt-ar on the player: style.css makes YouTube's frame exactly
+// as wide as the video, so running past the box above and below (to cut off YouTube's own bars)
+// never makes the video bigger - Fit shows all of it, nothing cut. Until it's known: 16:9.
+const ytShapes = new Map();
+let ytShapeFor = null;
+const paintYouTubeShape = () => {
+    const id = container.classList.contains("youtube") ? youTubeIdShown() : null;
+    if (id === ytShapeFor) return;
+    ytShapeFor = id;
+    const set = ratio => {
+        if (ytShapeFor !== id) return;
+        if (ratio) container.style.setProperty("--yt-ar", ratio.toFixed(4));
+        else container.style.removeProperty("--yt-ar");
+    };
+    if (!id) return set(null);
+    if (ytShapes.has(id)) return set(ytShapes.get(id));
+    set(null);
+    fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`)
+        .then(response => response.ok ? response.json() : null)
+        .catch(() => null)
+        .then(data => {
+            let ratio = data && data.width > 0 && data.height > 0 ? data.width / data.height : null;
+            // (its numbers are rounded - 200 x 113 for 16:9: the usual shapes, exactly)
+            if (ratio) ratio = [16 / 9, 4 / 3, 9 / 16, 3 / 4, 1, 21 / 9].find(shape => Math.abs(ratio / shape - 1) < 0.015) || ratio;
+            if (ratio && ratio > 0.3 && ratio < 4) ytShapes.set(id, ratio);
+            set(ytShapes.get(id) || null);
+        });
+};
+setInterval(paintYouTubeShape, 400);
+
 let ytCropTimer = null;
 const cropYouTube = playing => {
     clearTimeout(ytCropTimer);
@@ -4784,6 +5068,12 @@ document.addEventListener("keydown", e => {
             toggleFullscreen();
             break;
 
+        // T: the picture's shape - Fit (all of it) / Fill (cropped to the screen)
+        case "KeyT":
+            if (e.shiftKey || container.classList.contains("audio-mode-only")) break;
+            setAspect(container.classList.contains("aspect-fill") ? "fit" : "fill", true);
+            break;
+
         // M: your microphone on/off (in a room); Shift + M: the player's sound on/off, always
         case "KeyM":
             if (!e.shiftKey) {
@@ -4815,7 +5105,21 @@ document.addEventListener("keydown", e => {
         case "KeyS": {
             if (e.shiftKey) break;
             const save = container.querySelector(".player-save-wrap:not([hidden]) .player-save-btn");
-            if (save) save.click();
+            if (save) {
+                // (the controls hidden - the heart with them: they come up, and the heart lights up,
+                // so you see what S did)
+                if (!container.classList.contains("show-controls")) {
+                    container.classList.add("show-controls");
+                    container.classList.remove("hide-cursor");
+                    hideControls();
+                }
+                save.click();
+                save.classList.remove("save-flash");
+                void save.offsetWidth;
+                save.classList.add("save-flash");
+                clearTimeout(save.flashTimer);
+                save.flashTimer = setTimeout(() => save.classList.remove("save-flash"), 1300);
+            }
             else showFeedback("fa-heart", "Nothing to save here");
             break;
         }
@@ -5211,6 +5515,7 @@ const cmdPalette = (() => {
             { label: inRoom ? "The room's panel" : "Watch together", icon: "fa-users", keys: ["R"], words: "watch together room friends party panel chat invite", top: !inRoom, run: () => shareHelpBtn.click() },
             ...(together.roomCommands ? together.roomCommands().map((command, i) => ({ ...command, top: i < 3 })) : []),
             { label: "Keyboard shortcuts", icon: "fa-keyboard", keys: ["?"], words: "keyboard shortcuts keys help", run: toggleShortcuts },
+            { label: "Player tour", icon: "fa-route", words: "tour guide help tips walkthrough intro how to start", run: () => setTimeout(() => startPlayerTour(true), 150) },
             { label: "Back to home", icon: "fa-house", words: "home back dashboard exit", run: () => (playerHomeBtn || playerBackBtn).click() }
         ].filter(Boolean);
     };
@@ -5565,6 +5870,7 @@ const cmdPalette = (() => {
         setSearchPillMode(kind);
         showNote("");
         searchedFor = query;
+        resultChosen = -1;
         results.run(query, kind);
         syncClear();
         renderList();
@@ -5673,8 +5979,50 @@ const cmdPalette = (() => {
         if (note.classList.contains("error")) showNote("");
         renderAll();
     });
+    // The arrow keys: Up / Down go through YouTube's results while they show (Enter plays the one
+    // picked); Left / Right go through the Recently played and Saved cards - when nothing is typed,
+    // or a card is already picked, and no text is selected (then they move in the text as usual)
+    let resultChosen = -1;
+    const resultRows = () => [...resultsHost.querySelectorAll(".yt-result")].filter(row => row.getClientRects().length);
+    const markResult = () => {
+        resultRows().forEach((row, i) => {
+            row.classList.toggle("chosen", i === resultChosen);
+            row.setAttribute("aria-selected", String(i === resultChosen));
+        });
+        const row = resultRows()[resultChosen];
+        if (row) row.scrollIntoView({ block: "nearest" });
+    };
+    input.addEventListener("input", () => {
+        resultChosen = -1;
+        markResult();
+    });
     input.addEventListener("keydown", e => {
-        if ((e.key === "ArrowDown" || e.key === "ArrowUp") && items.length) {
+        if (e.altKey || e.ctrlKey || e.metaKey) return;
+        const vertical = e.key === "ArrowDown" || e.key === "ArrowUp";
+        const horizontal = e.key === "ArrowLeft" || e.key === "ArrowRight";
+        const rows = vertical && !resultsHost.hidden ? resultRows() : [];
+        if (vertical && rows.length) {
+            e.preventDefault();
+            resultChosen = resultChosen < 0
+                ? (e.key === "ArrowDown" ? 0 : rows.length - 1)
+                : (resultChosen + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+            markResult();
+            return;
+        }
+        const cards = items.map((item, i) => [item, i]).filter(([item]) => item.recent || item.saved).map(([, i]) => i);
+        const noSelection = input.selectionStart === input.selectionEnd;
+        const onCards = !input.value.trim() || (pickedWithKeys && cards.includes(chosen));
+        if (horizontal && !e.shiftKey && noSelection && onCards && cards.length) {
+            e.preventDefault();
+            const at = cards.indexOf(chosen);
+            const to = at < 0 ? 0 : (at + (e.key === "ArrowRight" ? 1 : -1) + cards.length) % cards.length;
+            pickedWithKeys = true;
+            chosen = cards[to];
+            markChosen();
+            body.querySelector(`#cmd-item-${chosen}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+            return;
+        }
+        if (vertical && items.length) {
             e.preventDefault();
             pickedWithKeys = true;
             chosen = (chosen + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
@@ -5686,7 +6034,12 @@ const cmdPalette = (() => {
         e.preventDefault();
         const ref = linkRef();
         if (ref) return pick(ref, "play");
+        // (a YouTube result picked with the arrow keys: Enter plays it - in a room too, where a click
+        // on the row adds it to the queue: its own Play now)
+        const pickedRow = !resultsHost.hidden && resultChosen >= 0 ? resultRows()[resultChosen] : null;
+        if (pickedRow) return (pickedRow.querySelector('[data-act="play"]') || pickedRow.querySelector(".yt-result-main"))?.click();
         const value = input.value.trim();
+        if (!value && items[chosen] && pickedWithKeys) return runItem(items[chosen]);
         if (!value) return;
         if (items[chosen] && (pickedWithKeys || !youtube())) return runItem(items[chosen]);
 
@@ -5927,4 +6280,105 @@ document.addEventListener("DOMContentLoaded", () => {
     CineSaved.onChange(render);
     setInterval(() => !playerPage.hidden && render(), 1000);
     render();
+});
+
+// ---------- Up next for the video (V-PC, V-PL - not an upright phone): in the last 10% of a video
+// with something after it in the queue, a pill with the next video's picture and title; a click
+// plays it. It shows from 90% of the way through to the end (back before 90%: gone; forward past it
+// again: back), whatever panels are open. Its width follows its title (up to 320px). Where it goes:
+// - a computer: centred on the video (the call dock's rule - a side panel open moves it with the
+//   video), in the empty space above the video when there is some; otherwise just under the title
+//   bar - also when the call's videos are a row above the video
+// - a phone held sideways: at the top centre of the picture while the controls are hidden; while
+//   they show, just under the title bar
+document.addEventListener("DOMContentLoaded", () => {
+    const topBar = container.querySelector(".top-bar");
+    const title = container.querySelector(".video-title");
+    if (!topBar || !title) return;
+    const holder = document.createElement("div");
+    holder.className = "video-up-next";
+    holder.hidden = true;
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "vp-next";
+    card.innerHTML = '<span class="vp-next-cover"><img alt="" /></span><span class="vp-next-text"><small>Up next</small><b></b></span><i class="fa-solid fa-forward-step" aria-hidden="true"></i>';
+    holder.append(card);
+    playerPage.append(holder);
+    card.addEventListener("click", e => {
+        e.stopPropagation();
+        const step = container.querySelector(".next-track");
+        if (step && !step.disabled) step.click();
+    });
+    // (its clicks don't reach the picture under it: no play / pause, no double-click fullscreen)
+    ["pointerdown", "dblclick"].forEach(type => holder.addEventListener(type, e => e.stopPropagation()));
+    const uprightPhone = matchMedia("(max-width: 900px) and (orientation: portrait)");
+    const phoneSideways = matchMedia("(max-width: 900px) and (orientation: landscape) and (pointer: coarse)");
+    const GAP = 16, H = 44, MAX_W = 320;
+    let key = "";
+    // (a part's top, as laid out - not where it is while sliding in or out with the controls)
+    const restingTop = node => {
+        let y = 0;
+        for (let n = node; n && n !== container; n = n.offsetParent) y += n.offsetTop;
+        return container.getBoundingClientRect().top + y;
+    };
+    const hide = () => {
+        if (!holder.hidden) holder.hidden = true;
+    };
+    // (what's playing: the room's or your own YouTube video, or a file)
+    const currentId = () => together.roomYouTube?.()?.video?.id || together.solo?.current?.video?.id
+        || (container.classList.contains("youtube") ? youTubeIdShown() : mainVideo.currentSrc) || "";
+    const watching = { id: null, at: 0, time: 0, duration: 0, fresh: false };
+    const render = () => {
+        if (playerPage.hidden || container.classList.contains("audio-mode-only") || uprightPhone.matches) return hide();
+        const next = together.upNext?.() || null;
+        const step = container.querySelector(".next-track");
+        const { time, duration } = shownTime;
+        // (a video just started: the time and length shown can still be the last video's - near its
+        // end - for a moment. Until this one's own have come in, it isn't late)
+        const id = currentId();
+        if (id !== watching.id) Object.assign(watching, { id, at: Date.now(), time, duration, fresh: false });
+        if (!watching.fresh && Date.now() - watching.at > 800 && (duration !== watching.duration || time < watching.time - 1)) watching.fresh = true;
+        const late = watching.fresh && Number.isFinite(duration) && duration > 0 && time >= duration * 0.9;
+        if (!next || !late || !step || step.disabled) return hide();
+        const nextKey = `${next.id}|${next.title}`;
+        if (nextKey !== key) {
+            key = nextKey;
+            card.querySelector("img").src = `https://i.ytimg.com/vi/${next.id}/mqdefault.jpg`;
+            card.querySelector("b").textContent = next.title || (next.music ? "Next track" : "Next video");
+            card.title = `Play next: ${next.title || "the next one"} (Shift + N)`;
+            card.setAttribute("aria-label", card.title);
+        }
+        const page = playerPage.getBoundingClientRect();
+        const pic = container.getBoundingClientRect();
+        if (pic.width < 160) return hide();
+        // (as wide as its title needs, never wider than the picture allows)
+        holder.style.maxWidth = `${Math.round(Math.min(MAX_W, pic.width - GAP * 2))}px`;
+        const wasHidden = holder.hidden;
+        holder.hidden = false;
+        const width = holder.offsetWidth;
+        // (centred on the video)
+        const cx = pic.left + pic.width / 2;
+        const barBottom = restingTop(topBar) + topBar.offsetHeight;
+        let cy;
+        if (phoneSideways.matches) {
+            // (the top centre of the picture; under the title bar while the controls show)
+            const controls = container.classList.contains("show-controls");
+            cy = (controls ? Math.max(barBottom, pic.top) + 8 : pic.top + 10) + H / 2;
+        } else {
+            // (the empty space above the video, when there is some and nothing else is in it - not
+            // the call's videos in a row above it; otherwise just under the title bar)
+            const above = pic.top - page.top;
+            const railAbove = playerPage.classList.contains("call-dock-rail");
+            cy = above >= H + GAP * 2 && !railAbove ? page.top + above / 2 : Math.max(barBottom, pic.top) + 8 + H / 2;
+        }
+        holder.style.left = `${Math.round(cx - width / 2 - page.left)}px`;
+        holder.style.top = `${Math.round(cy - H / 2 - page.top)}px`;
+        if (wasHidden && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            holder.animate([{ opacity: 0, translate: "0 -6px" }, { opacity: 1, translate: "0 0" }], { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+        }
+    };
+    setInterval(render, 300);
+    window.addEventListener("resize", render);
+    document.addEventListener("fullscreenchange", () => setTimeout(render, 60));
+    new MutationObserver(render).observe(container, { attributes: true, attributeFilter: ["class"] });
 });

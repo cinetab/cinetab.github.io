@@ -567,7 +567,14 @@
             if (window.CineToast) window.CineToast.dismiss("youtube-search-error");
             status.hidden = !message;
             if (!message) return;
-            if (kind === "busy") status.append(el("i", "fa-solid fa-circle-notch fa-spin"), " ");
+            // (searching: a light sweeping along a thin bar - the words are for screen readers only)
+            if (kind === "busy") {
+                const bar = el("span", "yt-loading-bar");
+                bar.setAttribute("aria-hidden", "true");
+                bar.append(el("i"));
+                status.append(bar, el("span", "yt-sr-only", message));
+                return;
+            }
             status.append(message);
             if (kind === "error") {
                 status.append(" ");
@@ -1511,5 +1518,47 @@
     together.step = n => together.solo.step(n);
     window.addEventListener("pagehide", () => solo.active && save());
 
-    window.CineYouTube = { parse, search, api, play, stop: () => stop(true), createResults, thumbOf, suggestedAfter, details, fullDescription, views, paintHeart };
+    // A video's storyboard - YouTube's little pictures for the seekbar, every couple of seconds on
+    // sheets of 5 x 5: { sheets, w, h, cols, rows, count, every (ms) }, or null. The links come from
+    // a Piped server (YouTube signs them, so they can't be made here) and load straight from
+    // YouTube's image server (i.ytimg.com), not through the Piped server's proxy.
+    const storyboards = new Map();
+    const storyboard = id => {
+        if (!YT_ID.test(id || "")) return Promise.resolve(null);
+        if (!storyboards.has(id)) storyboards.set(id, (async () => {
+            for (const base of pipedBases().slice(0, 4)) {
+                try {
+                    const data = await getJSON(`${base}/streams/${id}`, 6000);
+                    const levels = (data && data.previewFrames || []).filter(level => level && Array.isArray(level.urls) && level.urls.length
+                        && level.frameWidth > 0 && level.frameHeight > 0 && level.framesPerPageX > 0 && level.framesPerPageY > 0 && level.durationPerFrame > 0);
+                    if (!levels.length) continue;
+                    storage.set(PIPED_KEY, base);
+                    // (the sharpest that's still small: about 160px wide)
+                    const level = levels.reduce((best, l) => Math.abs(l.frameWidth - 160) < Math.abs(best.frameWidth - 160) ? l : best);
+                    const direct = url => {
+                        try {
+                            const u = new URL(url);
+                            const host = u.searchParams.get("host");
+                            if (host && /(^|\.)ytimg\.com$/.test(host)) {
+                                u.searchParams.delete("host");
+                                return `https://${host}${u.pathname}${u.search}`;
+                            }
+                            return /(^|\.)ytimg\.com$/.test(u.hostname) ? u.href : null;
+                        } catch (e) {
+                            return null;
+                        }
+                    };
+                    const sheets = level.urls.map(direct).filter(Boolean);
+                    if (sheets.length !== level.urls.length) continue;
+                    return { sheets, w: level.frameWidth, h: level.frameHeight, cols: level.framesPerPageX, rows: level.framesPerPageY,
+                        count: level.totalCount || sheets.length * level.framesPerPageX * level.framesPerPageY, every: level.durationPerFrame };
+                } catch (e) {}
+            }
+            storyboards.delete(id);
+            return null;
+        })());
+        return storyboards.get(id);
+    };
+
+    window.CineYouTube = { parse, search, api, play, stop: () => stop(true), createResults, thumbOf, suggestedAfter, details, fullDescription, views, paintHeart, storyboard };
 })();
